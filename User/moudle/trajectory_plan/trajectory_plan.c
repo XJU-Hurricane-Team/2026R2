@@ -22,7 +22,7 @@
  * @param a_max 最大加速度 (rad/s^2)
  * @param dt 控制周期时间 (s)
  */
-void t_trajectory_init(Trajectory *traj, float p_start, float p_goal, float v_max, float a_max, float dt) {
+void t_trajectory_init(Trajectory_Handler_t *traj, float p_start, float p_goal, float v_max, float a_max, float dt) {
     
     traj->p_start = p_start;
     traj->p_goal = p_goal;
@@ -78,7 +78,7 @@ void t_trajectory_init(Trajectory *traj, float p_start, float p_goal, float v_ma
  * @param w_des 输出：期望速度 (rad/s)
  * @return int 1: 运动未完成, 0: 运动完成
  */
-int t_trajectory_update(Trajectory *traj, float *p_des, float *w_des) {
+int t_trajectory_update(Trajectory_Handler_t *traj, float *p_des, float *w_des) {
     
     if (traj->state == FINISHED) {
         *p_des = traj->p_goal;

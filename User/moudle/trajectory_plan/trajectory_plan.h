@@ -47,10 +47,10 @@ typedef struct {
     TrajectoryState state; // 当前运动状态
     double current_time;   // 运动已进行时间 (s)
     int is_negative;       // 运动方向标记 (1或-1)
-} Trajectory;
+} Trajectory_Handler_t;
 
-void t_trajectory_init(Trajectory *traj, float p_start, float p_goal, float v_max, float a_max, float dt);
-int t_trajectory_update(Trajectory *traj, float *p_des, float *w_des);
+void t_trajectory_init(Trajectory_Handler_t *traj, float p_start, float p_goal, float v_max, float a_max, float dt);
+int t_trajectory_update(Trajectory_Handler_t *traj, float *p_des, float *w_des);
 float s_trajectory_update(float start_angle, float target_angle, float current_time, float total_time);
 
 #endif /* S_CURVE_PROGRAMING */

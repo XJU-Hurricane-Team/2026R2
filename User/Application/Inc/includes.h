@@ -20,7 +20,10 @@ extern "C" {
 #include "math.h"
 #include "arm_math.h"
 
+#include "MicroROSConfig.h"
+
 #include <stdio.h>
+#include <stdbool.h>
 
 void freertos_start(void);
 

@@ -167,7 +167,7 @@ int _write(int file, char *str, int len) {
  * @param len The string length.
  */
 int _read(int file, char *str, int len) {
-
+   
     if (file == 0) {
         for (int i = 0; i < len; ++i) {
 #ifdef STDIN_UART
@@ -179,7 +179,7 @@ int _read(int file, char *str, int len) {
         }
     }
 
-    return index;
+    return len;
 }
 
 #endif /* Compiler */
