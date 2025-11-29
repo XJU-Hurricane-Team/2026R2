@@ -46,6 +46,7 @@ void bsp_init(void) {
     system_clock_config();
     delay_init(180);
     usart1_init(4000000);
+    usart3_init(115200);
     led_init();
     key_init();
     RS485_Init();

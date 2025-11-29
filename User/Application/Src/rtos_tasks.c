@@ -29,19 +29,17 @@ unitree_motor_handle_t motor1 = {0};
 unitree_motor_handle_t motor2 = {0};
 dm_handle_t damiao = {0};
 
-float dm_pos = 0.0;
-float dm_pos_update = 0.0;
-
 ctrl_param_t param = {0, 1, 0, 0, 0, 3, 0.2};
 ctrl_param_t param2 = {1, 1, 0, 0, 0, 3, 0.2};
+float dm_pos = 0.0;
+float dm_w = 0.0;
 
 // 三电机的速度规划曲线结构体
-Trajectory_Handler_t t[3] = {[0 ... 2] = {.state = FINISHED}};
-
-arm_status_t arm_ctr_status = DEFAULT; //机械臂状态，false为初始态，true为准备态
+Trajectory_Handler_t traj[3] = {[0 ... 2] = {.state = FINISHED}};
 geometry_msgs__msg__Point pos;
 float angle[3] = {0.0, 0.0, 0.0};
 
+arm_handle_t myarm = {0};
 /*****************************************************************************/
 
 void subscription_callback(const void *msgin) {
@@ -62,13 +60,14 @@ void service_callback(const void *request_msg, void *response_msg) {
         (std_srvs__srv__SetBool_Response *)response_msg;
 
     if (req_in->data == false) {
-        switch (arm_ctr_status) {
+        switch (myarm.status) {
             case DEFAULT:
-                param.Pos = -8.1347;
-                param2.Pos = 0.0;
-                dm_pos = 0.0;
-                arm_action_set(t, motor1.Pos, motor2.Pos, damiao.position, param.Pos, param2.Pos, dm_pos);
-                arm_ctr_status = READY;
+                arm_pos_angle(0.0, 0.0, 0.0, angle);
+                param.Pos = -angle[2] * 6.33;
+                param2.Pos = -angle[1] * 6.33;
+                dm_pos = -angle[0];
+                arm_angle_drive(traj, &myarm, param.Pos, param2.Pos, dm_pos);
+                myarm.status = READY;
                 res_in->success = false;
                 break;
             case READY:
@@ -80,24 +79,25 @@ void service_callback(const void *request_msg, void *response_msg) {
                 break;
         }
     } else if (req_in->data == true) {
-        arm_ctrl(pos.x, pos.y, pos.z, angle);
+        arm_pos_angle(pos.x, pos.y, pos.z, angle);
         param.Pos = -angle[2] * 6.33;
         param2.Pos = -angle[1] * 6.33;
-        dm_pos = angle[0];
-        arm_ctr_status = CATCH;
-        arm_action_set(t, motor1.Pos, motor2.Pos, damiao.position, param.Pos, param2.Pos, dm_pos);
+        dm_pos = -angle[0];
+        myarm.status = CATCH;
+        arm_angle_drive(traj, &myarm, param.Pos, param2.Pos, dm_pos);
 
         param.Pos = 0.0;
         param2.Pos = 0.0;
         dm_pos = 0.0;
-        arm_ctr_status = PLACE;
-        arm_action_set(t, motor1.Pos, motor2.Pos, damiao.position, param.Pos, param2.Pos, dm_pos);
+        myarm.status = PLACE;
+        arm_angle_drive(traj, &myarm, param.Pos, param2.Pos, dm_pos);
 
-        param.Pos = -8.1347;
-        param2.Pos = 0.0;
-        dm_pos = 0.0;
-        arm_ctr_status = READY;
-        arm_action_set(t, motor1.Pos, motor2.Pos, damiao.position, param.Pos, param2.Pos, dm_pos);
+        arm_pos_angle(0.0, 0.0, 0.0, angle);
+        param.Pos = -angle[2] * 6.33;
+        param2.Pos = -angle[1] * 6.33;
+        dm_pos = -angle[0];
+        myarm.status = READY;
+        arm_angle_drive(traj, &myarm, param.Pos, param2.Pos, dm_pos);
 
         res_in->success = true;
     }
@@ -141,6 +141,11 @@ void start_task(void *pvParameters) {
 
     geometry_msgs__msg__Point__init(&pos);
 
+    myarm.motor1 = &motor1;
+    myarm.motor2 = &motor2;
+    myarm.motor3 = &damiao;
+    myarm.status = DEFAULT;
+
     vTaskDelete(start_task_handle);
     taskEXIT_CRITICAL();
 }
@@ -173,15 +178,15 @@ void motor_ctr_task(void *pvParameters) {
 
     while (1) {
 
-        t_trajectory_update(&t[0], &param.Pos, &param.W);
+        t_trajectory_update(&traj[0], &param.Pos, &param.W);
         unitree_send_data(&usart1_handle, &motor1, param);
         vTaskDelay(2);
-        t_trajectory_update(&t[1], &param2.Pos, &param2.W);
+        t_trajectory_update(&traj[1], &param2.Pos, &param2.W);
         unitree_send_data(&usart1_handle, &motor2, param2);
         vTaskDelay(3);
-        t_trajectory_update(&t[2], &dm_pos, &param2.W);
-        dm_mit_ctrl(&damiao, dm_pos, 0.0f, 1.8f, 0.1f, 0.0f);
-    }
+        t_trajectory_update(&traj[2], &dm_pos, &dm_w);
+        dm_mit_ctrl(&damiao, dm_pos, 0.0, 30.0, 0.01, 0.0);
+        }
 }
 
 /**
@@ -191,9 +196,10 @@ void motor_ctr_task(void *pvParameters) {
  */
 void arm_ctr_task(void *pvParameters) {
     UNUSED(pvParameters);
+    int res = 0;
 
     rmw_uros_set_custom_transport(
-        true, (void *)&usart1_handle, cubemx_transport_open,
+        true, (void *)&usart3_handle, cubemx_transport_open,
         cubemx_transport_close, cubemx_transport_write, cubemx_transport_read);
 
     rcl_allocator_t freeRTOS_allocator =
@@ -221,35 +227,21 @@ void arm_ctr_task(void *pvParameters) {
 
     allocator = rcl_get_default_allocator();
 
-    int res;
+
     //create init_options
-    res = rclc_support_init(&support, 0, NULL, &allocator);
-    if (res != RCL_RET_OK) {
-        printf("rclc_support_init failed: %d\n", res);
-        vTaskDelete(NULL);
-        return;
-    }
+    res |= rclc_support_init(&support, 0, NULL, &allocator);
+
 
     //create node
-    res = rclc_node_init_default(&node, "cubemx_node", "", &support);
-    if (res != RCL_RET_OK) {
-        printf("rclc_node_init_default failed: %d\n", res);
-        vTaskDelete(NULL);
-        return;
-    }
+    res |= rclc_node_init_default(&node, "cubemx_node", "", &support);
 
-    res = rclc_executor_init(&executor, &support.context, 2, &allocator);
-    if (res != RCL_RET_OK) {
-        printf("rclc_executor_init failed: %d\n", res);
-        vTaskDelete(NULL);
-        return;
-    }
+    res |= rclc_executor_init(&executor, &support.context, 2, &allocator);
 
     res = rclc_service_init_default(
         &service, &node, ROSIDL_GET_SRV_TYPE_SUPPORT(std_srvs, srv, SetBool),
         "arm_ctr_srv");
     if (res != RCL_RET_OK) {
-        printf("rclc_service_init_default failed: %d\n", res);
+        printf("rclc_init_default failed: %d\n", res);
         vTaskDelete(NULL);
         return;
     }
@@ -270,7 +262,6 @@ void arm_ctr_task(void *pvParameters) {
         rclc_executor_spin(&executor);
     }
 }
-
 
 void msg_rec_task(void *pvParameters) {
     UNUSED(pvParameters);

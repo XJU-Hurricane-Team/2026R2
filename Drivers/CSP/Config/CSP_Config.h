@@ -390,13 +390,13 @@
 
 // <e> USART3 (Universal asynchronous receiver transmitter)
 
-#define USART3_ENABLE 0 
+#define USART3_ENABLE 1
 
 #if USART3_ENABLE
 
 //   <o> USART3_TX Pin
 //       <0=>Not Used <1=>PB10 <2=>PC10 <3=>PD8 
-#define USART3_TX_ID 0
+#define USART3_TX_ID 1
 
 #if (USART3_TX_ID == 0)
 #define USART3_TX 0
@@ -418,7 +418,7 @@
 
 //   <o> USART3_RX Pin
 //       <0=>Not Used <1=>PB11 <2=>PC5 <3=>PC11 <4=>PD9 
-#define USART3_RX_ID 0
+#define USART3_RX_ID 1
 
 #if (USART3_RX_ID == 0)
 #define USART3_RX 0
@@ -479,7 +479,7 @@
 #endif  /* USART3_RTS_ID */
 
 //   <e> Enable USART3 Interrupt
-#define USART3_IT_ENABLE 0
+#define USART3_IT_ENABLE 1
 
 #if USART3_IT_ENABLE
 
@@ -494,7 +494,7 @@
 #endif /* USART3_IT_ENABLE */
 
 //   <e> Enable USART3 DMA RX
-#define USART3_RX_DMA             0
+#define USART3_RX_DMA             1
 
 #if USART3_RX_DMA
 
@@ -531,18 +531,18 @@
 
 //     <o> The size of Receive buf [byte]
 //     <i>  Using FIFO and Buf to implement high reliable UART Receive
-#define USART3_RX_DMA_BUF_SIZE    256
+#define USART3_RX_DMA_BUF_SIZE    1024
 
 //     <o> The size of Receive FIFO [byte] (Must be power of 2)
 //     <i>  Using FIFO and Buf to implement high reliable UART Receive
-#define USART3_RX_DMA_FIFO_SIZE   256
+#define USART3_RX_DMA_FIFO_SIZE   1024
 
 //   </e>
 
 #endif  /* USART3_RX_DMA */
 
 //   <e> Enable USART3 DMA TX
-#define USART3_TX_DMA             0
+#define USART3_TX_DMA             1
 
 #if USART3_TX_DMA
 
@@ -790,13 +790,13 @@
 
 // <e> UART5 (Universal synchronous asynchronous receiver transmitter)
 
-#define UART5_ENABLE 0 
+#define UART5_ENABLE 0
 
 #if UART5_ENABLE
 
 //   <o> UART5_TX Pin
 //       <0=>Not Used <1=>PB6 <2=>PB9 <3=>PB13 <4=>PC12 <5=>PE8 
-#define UART5_TX_ID 0
+#define UART5_TX_ID 2
 
 #if (UART5_TX_ID == 0)
 #define UART5_TX 0

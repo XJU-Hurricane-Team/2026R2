@@ -23,11 +23,12 @@
  * 
  */
 typedef struct {
-    void *motor1;
-    void *motor2;
-    void *motor3;
+    unitree_motor_handle_t *motor1;
+    unitree_motor_handle_t *motor2;
+    dm_handle_t *motor3;
 
-    bool status;
+    float end_pos[3];
+    int status;
 
 
 } arm_handle_t;
@@ -44,10 +45,12 @@ typedef enum {
 
 } arm_status_t;
 
-void arm_ctrl(float x1, float y1, float z1, float angle[3]);
-uint8_t arm_inverse_solution(float angle[3], float *x, float *y, float *z);
-int arm_action_set(Trajectory_Handler_t trajectory[3], float current_m1,float current_m2,
-                          float current_m3,float target_m1,float target_m2, float target_dm);
+void arm_pos_angle(float x1, float y1, float z1, float angle[3]);
+void arm_angle_pos(float input_angle1, float input_angle2, float input_angle3,
+                  float *x1, float *y1, float *z1);
+uint8_t arm_angle_pos_2(float input_angle1, float input_angle2,
+                       float input_angle3, float *x, float *y, float *z);
+int arm_angle_drive(Trajectory_Handler_t trajectory[3], arm_handle_t *myarm,float target_m1,float target_m2, float target_dm);
 
 #endif /* ROBOT_ARM */
 
