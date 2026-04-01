@@ -17,6 +17,8 @@ extern "C" {
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "event_groups.h"
+
 #include "math.h"
 #include "arm_math.h"
 

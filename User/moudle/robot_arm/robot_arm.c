@@ -2,8 +2,8 @@
  * @file robot_arm.c
  * @author czf,why
  * @brief 
- * @version 1.0
- * @date 2025-11-05
+ * @version 1.2
+ * @date 2025-11-30
  * 
  * 
  */
@@ -66,6 +66,15 @@ void arm_pos_angle(float x1, float y1, float z1, float angle[3]) {
     angle[2] = angle3 - angle[1] - ANGLE2_DEFAULT;
 }
 
+/**
+ * @brief 机械臂角度驱动：初始化轨迹规划。
+ * @param trajectory 轨迹句柄数组
+ * @param myarm 机械臂句柄
+ * @param target_m1 小臂电机1目标位置
+ * @param target_m2 大臂电机2目标位置
+ * @param target_dm 云台电机目标位置
+ * @return int 总是返回1 (成功启动)
+ */
 int arm_angle_drive(Trajectory_Handler_t trajectory[3], arm_handle_t *myarm,
                      float target_m1, float target_m2, float target_dm) {
 
@@ -76,10 +85,10 @@ int arm_angle_drive(Trajectory_Handler_t trajectory[3], arm_handle_t *myarm,
     t_trajectory_init(&trajectory[2], myarm->motor3->position, target_dm, 2, 4,
                       0.005);
 
-    while (!((trajectory[0].state == FINISHED) &&
-             (trajectory[1].state == FINISHED) &&
-             (trajectory[2].state == FINISHED)))
-        ;
+    // while (!((trajectory[0].state == FINISHED) &&
+    //          (trajectory[1].state == FINISHED) &&
+    //          (trajectory[2].state == FINISHED)))
+    //     ;
     return 1;
 }
 

@@ -25,6 +25,11 @@ void arm_ctr_task(void *pvParameters);
 static TaskHandle_t msg_rec_handle;
 void msg_rec_task(void *pvParameters);
 
+static TaskHandle_t arm_sequence_handle;
+void arm_sequence_task(void *pvParameters);
+
+EventGroupHandle_t arm_event_group;
+
 unitree_motor_handle_t motor1 = {0};
 unitree_motor_handle_t motor2 = {0};
 dm_handle_t damiao = {0};
@@ -40,70 +45,8 @@ geometry_msgs__msg__Point pos;
 float angle[3] = {0.0, 0.0, 0.0};
 
 arm_handle_t myarm = {0};
+
 /*****************************************************************************/
-
-void subscription_callback(const void *msgin) {
-    // Cast received message to used type
-    const geometry_msgs__msg__Point *msg =
-        (const geometry_msgs__msg__Point *)msgin;
-
-    pos.x = msg->x;
-    pos.y = msg->y;
-    pos.z = msg->z;
-}
-
-void service_callback(const void *request_msg, void *response_msg) {
-    // Cast messages to expected types
-    std_srvs__srv__SetBool_Request *req_in =
-        (std_srvs__srv__SetBool_Request *)request_msg;
-    std_srvs__srv__SetBool_Response *res_in =
-        (std_srvs__srv__SetBool_Response *)response_msg;
-
-    if (req_in->data == false) {
-        switch (myarm.status) {
-            case DEFAULT:
-                arm_pos_angle(0.0, 0.0, 0.0, angle);
-                param.Pos = -angle[2] * 6.33;
-                param2.Pos = -angle[1] * 6.33;
-                dm_pos = -angle[0];
-                arm_angle_drive(traj, &myarm, param.Pos, param2.Pos, dm_pos);
-                myarm.status = READY;
-                res_in->success = false;
-                break;
-            case READY:
-                res_in->success = true;
-                break;
-
-            default:
-                res_in->success = false;
-                break;
-        }
-    } else if (req_in->data == true) {
-        arm_pos_angle(pos.x, pos.y, pos.z, angle);
-        param.Pos = -angle[2] * 6.33;
-        param2.Pos = -angle[1] * 6.33;
-        dm_pos = -angle[0];
-        myarm.status = CATCH;
-        arm_angle_drive(traj, &myarm, param.Pos, param2.Pos, dm_pos);
-
-        param.Pos = 0.0;
-        param2.Pos = 0.0;
-        dm_pos = 0.0;
-        myarm.status = PLACE;
-        arm_angle_drive(traj, &myarm, param.Pos, param2.Pos, dm_pos);
-
-        arm_pos_angle(0.0, 0.0, 0.0, angle);
-        param.Pos = -angle[2] * 6.33;
-        param2.Pos = -angle[1] * 6.33;
-        dm_pos = -angle[0];
-        myarm.status = READY;
-        arm_angle_drive(traj, &myarm, param.Pos, param2.Pos, dm_pos);
-
-        res_in->success = true;
-    }
-
-    // Handle request message and set the response message values
-}
 
 /**
  * @brief FreeRTOS start up.
@@ -123,10 +66,13 @@ void start_task(void *pvParameters) {
     UNUSED(pvParameters);
     taskENTER_CRITICAL();
 
+    arm_event_group = xEventGroupCreate();
     xTaskCreate(task1, "task1", 128, NULL, 2, &task1_handle);
     xTaskCreate(motor_ctr_task, "motor_ctr_task", 128, NULL, 3, &task2_handle);
     xTaskCreate(arm_ctr_task, "arm_ctr_task", 3000, NULL, 3, &arm_ctrl_handle);
     xTaskCreate(msg_rec_task, "msg_rec_task", 128, NULL, 3, &msg_rec_handle);
+    xTaskCreate(arm_sequence_task, "arm_sequence_task", 256, NULL, 4,
+                &arm_sequence_handle);
 
     can1_init(1000, 350);
     can2_init(1000, 350);
@@ -150,43 +96,111 @@ void start_task(void *pvParameters) {
     taskEXIT_CRITICAL();
 }
 
-/**   
- * @brief Task1: Blink.
- *
- * @param pvParameters Start parameters.
- */
-void task1(void *pvParameters) {
-    UNUSED(pvParameters);
+void subscription_callback(const void *msgin) {
+    // Cast received message to used type
+    const geometry_msgs__msg__Point *msg =
+        (const geometry_msgs__msg__Point *)msgin;
 
-    LED0_OFF();
-    LED1_ON();
-
-    while (1) {
-        LED0_TOGGLE();
-        LED1_TOGGLE();
-        vTaskDelay(2000);
-    }
+    pos.x = msg->x;
+    pos.y = msg->y;
+    pos.z = msg->z;
 }
 
-/**
- * @brief Task2: print running time.
- *
- * @param pvParameters Start parameters.
- */
-void motor_ctr_task(void *pvParameters) {
+void service_callback(const void *request_msg, void *response_msg) {
+    // Cast messages to expected types
+    std_srvs__srv__SetBool_Request *req_in =
+        (std_srvs__srv__SetBool_Request *)request_msg;
+    std_srvs__srv__SetBool_Response *res_in =
+        (std_srvs__srv__SetBool_Response *)response_msg;
+
+    res_in->success = false;
+
+    if (req_in->data == false) {
+        switch (myarm.status) {
+            case DEFAULT:
+                myarm.status = MOVING_TO_READY;
+                xEventGroupSetBits(arm_event_group, EVENT_READY);
+                res_in->success = false;
+                break;
+            case READY:
+                res_in->success = true;
+                break;
+            default:
+                res_in->success = false;
+                break;
+        }
+    } else if (req_in->data == true) {
+        if (myarm.status == READY) {
+            // arm_pos_angle(pos.x, pos.y, pos.z, angle);
+            myarm.status = CATCH;
+            xEventGroupSetBits(arm_event_group, EVENT_CATCH);
+            res_in->success = true;
+        } else {
+            res_in->success = false;
+        }
+    }
+
+    // Handle request message and set the response message values
+}
+
+void arm_sequence_task(void *pvParameters) {
     UNUSED(pvParameters);
+    EventBits_t uxBits;
 
     while (1) {
 
-        t_trajectory_update(&traj[0], &param.Pos, &param.W);
-        unitree_send_data(&usart1_handle, &motor1, param);
-        vTaskDelay(2);
-        t_trajectory_update(&traj[1], &param2.Pos, &param2.W);
-        unitree_send_data(&usart1_handle, &motor2, param2);
-        vTaskDelay(3);
-        t_trajectory_update(&traj[2], &dm_pos, &dm_w);
-        dm_mit_ctrl(&damiao, dm_pos, 0.0, 30.0, 0.01, 0.0);
+        // 等待事件标志位
+        uxBits = xEventGroupWaitBits(
+            arm_event_group, EVENT_READY | EVENT_CATCH | EVENT_TRAJ_FINISHED,
+            pdTRUE,       // 接收到后清除标志位
+            pdFALSE,      // 等待任意一个标志位即可
+            portMAX_DELAY // 永久阻塞，直到接收到事件
+        );
+
+        // 恢复准备态
+        if (uxBits & EVENT_READY) {
+            arm_pos_angle(0.0, 0.0, 0.0, angle);
+            param.Pos = -angle[2] * 6.33;
+            param2.Pos = -angle[1] * 6.33;
+            dm_pos = -angle[0];
+            arm_angle_drive(traj, &myarm, param.Pos, param2.Pos, dm_pos);
         }
+
+        // 准备态到抓取态
+        else if (uxBits & EVENT_CATCH) {
+            arm_pos_angle(pos.x, pos.y, pos.z, angle);
+            param.Pos = -angle[2] * 6.33;
+            param2.Pos = -angle[1] * 6.33;
+            dm_pos = -angle[0];
+            arm_angle_drive(traj, &myarm, param.Pos, param2.Pos, dm_pos);
+
+        }
+        
+        // 抓取到放置
+        else if (uxBits & EVENT_PLACE) {
+            param.Pos = 0.0;
+            param2.Pos = 0.0;
+            dm_pos = 0.0;
+            arm_angle_drive(traj, &myarm, param.Pos, param2.Pos, dm_pos);
+
+        }
+
+        // 轨迹完成后动作规划
+        else if (uxBits & EVENT_TRAJ_FINISHED) {
+
+            if (myarm.status == MOVING_TO_READY) {
+                myarm.status = READY;
+            } else if (myarm.status == CATCH) {
+                // 抓取到放置
+                myarm.status = PLACE;
+                xEventGroupSetBits(arm_event_group, EVENT_PLACE);
+            } else if (myarm.status == PLACE) {
+                // 放置到准备
+                myarm.status = MOVING_TO_READY;
+                xEventGroupSetBits(arm_event_group, EVENT_READY);
+            }
+        }
+    }
 }
 
 /**
@@ -227,10 +241,8 @@ void arm_ctr_task(void *pvParameters) {
 
     allocator = rcl_get_default_allocator();
 
-
     //create init_options
     res |= rclc_support_init(&support, 0, NULL, &allocator);
-
 
     //create node
     res |= rclc_node_init_default(&node, "cubemx_node", "", &support);
@@ -263,6 +275,31 @@ void arm_ctr_task(void *pvParameters) {
     }
 }
 
+/**
+ * @brief Task2: print running time.
+ *
+ * @param pvParameters Start parameters.
+ */
+void motor_ctr_task(void *pvParameters) {
+    UNUSED(pvParameters);
+
+    while (1) {
+
+        t_trajectory_update(&traj[0], &param.Pos, &param.W);
+        unitree_send_data(&usart1_handle, &motor1, param);
+        vTaskDelay(2);
+        t_trajectory_update(&traj[1], &param2.Pos, &param2.W);
+        unitree_send_data(&usart1_handle, &motor2, param2);
+        vTaskDelay(3);
+        t_trajectory_update(&traj[2], &dm_pos, &dm_w);
+        dm_mit_ctrl(&damiao, dm_pos, 0.0, 30.0, 0.01, 0.0);
+        if ((traj[0].state == FINISHED) && (traj[1].state == FINISHED) &&
+            (traj[2].state == FINISHED) && (myarm.status != READY)) {
+            xEventGroupSetBits(arm_event_group, EVENT_TRAJ_FINISHED);
+        }
+    }
+}
+
 void msg_rec_task(void *pvParameters) {
     UNUSED(pvParameters);
 
@@ -270,6 +307,24 @@ void msg_rec_task(void *pvParameters) {
 
         unitree_receive_data(&usart1_handle);
         vTaskDelay(2);
+    }
+}
+
+/**   
+ * @brief Task1: Blink.
+ *
+ * @param pvParameters Start parameters.
+ */
+void task1(void *pvParameters) {
+    UNUSED(pvParameters);
+
+    LED0_OFF();
+    LED1_ON();
+
+    while (1) {
+        LED0_TOGGLE();
+        LED1_TOGGLE();
+        vTaskDelay(2000);
     }
 }
 
