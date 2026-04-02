@@ -96,7 +96,7 @@ extern uint32_t SystemCoreClock;
 
 //  <q>兼容旧版
 //  <i> 默认: 1
-#define configENABLE_BACKWARD_COMPATIBILITY       1
+#define configENABLE_BACKWARD_COMPATIBILITY       0
 
 //  <o>定义线程本地存储指针的个数
 #define configNUM_THREAD_LOCAL_STORAGE_POINTERS   0
@@ -120,7 +120,7 @@ extern uint32_t SystemCoreClock;
 #define configSUPPORT_DYNAMIC_ALLOCATION          1
 
 //  <o>堆内存总大小 [byte] <0-65535>
-#define configTOTAL_HEAP_SIZE                     ((size_t)1024*40)
+#define configTOTAL_HEAP_SIZE                     ((size_t)8192)
 
 //  <q>用户手动分配FreeRTOS内存堆
 //  <i> 默认: 0

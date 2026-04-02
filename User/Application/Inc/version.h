@@ -3,7 +3,7 @@
  * @author  Deadline039
  * @brief   Software versioning
  * @version 1.0
- * @date    2024-02-20
+ * @date    2026-03-17
  * @note    You should modify the verison when you are releasing.
  *          Include This file and use `get_version_major, get_version_minor,
  *          get_version_patch, get_version_info` to get the software version
@@ -13,9 +13,9 @@
 #ifndef __VERSION_H
 #define __VERSION_H
 
-#define VERSION_MAJOR 3 /* Major Version Number */
-#define VERSION_MINOR 3 /* Minjor Version Number */
-#define VERSION_PATCH 3 /* Patch Number */
+#define VERSION_MAJOR 1 /* Major Version Number */
+#define VERSION_MINOR 0 /* Minor Version Number */
+#define VERSION_PATCH 2 /* Patch Number */
 
 /* The information about this version, such as bug fix, new feature */
 #define VERSION_INFO  ""

@@ -1,99 +1,30 @@
 version: "4.1"
-name: arm_ctr
+name: g4_template
 type: ARM
-deviceName: STM32F429IGTx
-packDir: .pack/Keil/STM32F4xx_DFP.2.14.0
-srcDirs: []
+deviceName: STM32G474VETx
+packDir: .pack/Keil/STM32G4xx_DFP.1.6.0
+srcDirs:
+  - CubeMX/Core/Src
+  - CubeMX/Drivers/STM32G4xx_HAL_Driver/Src
 virtualFolder:
   name: <virtual_root>
   files: []
   folders:
     - name: Bsp
       files:
-        - path: Drivers/Bsp/core/bsp_core.c
-        - path: Drivers/Bsp/core/core_delay.c
-        - path: Drivers/Bsp/core/retarget_io.c
-        - path: Drivers/Bsp/key/key.c
-        - path: Drivers/Bsp/led/led.c
-        - path: Drivers/Bsp/bsp.c
-        - path: Drivers/Bsp/unitree_motor/unitree_motor.c
-        - path: Drivers/Bsp/unitree_motor/crc_ccitt.c
-        - path: Drivers/Bsp/Damiao-Motor/damiao.c
-        - path: Drivers/Bsp/can_list/can_list.c
+        - path: User/Bsp/core_delay/core_delay.c
+        - path: User/Bsp/bsp.c
+        - path: User/Bsp/syscalls/syscalls.c
+        - path: User/Bsp/can_list/can_list.c
+        - path: User/Bsp/DJI-Motor/dji_bldc_motor.c
+        - path: User/Bsp/usart_ex/usart_ex.c
       folders: []
     - name: Application
       files:
-        - path: User/Application/Src/main.c
-        - path: User/Application/Src/stm32f4xx_it.c
         - path: User/Application/Src/rtos_tasks.c
-        - path: User/Utils/buffer_append/buffer_append.c
-        - path: User/Utils/ring_fifo/ring_fifo.c
-        - path: User/moudle/robot_arm/robot_arm.c
-        - path: User/moudle/trajectory_plan/trajectory_plan.c
+        - path: User/Application/Src/chassis.c
+        - path: User/Application/Src/msg_process.c
       folders: []
-    - name: Drivers
-      files: []
-      folders:
-        - name: HAL_Driver
-          files:
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_cortex.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_dma.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_flash.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_gpio.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_rcc.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_uart.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_i2c.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_adc.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_adc_ex.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_can.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_crc.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_cryp.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_cryp_ex.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_dac.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_dac_ex.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_eth.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_exti.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_iwdg.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_pwr.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_rtc.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_rtc_ex.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_sram.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_tim.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_usart.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_wwdg.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_ll_fmc.c
-            - path: Drivers/STM32_HAL_Driver/Src/stm32f4xx_hal_spi.c
-          folders: []
-        - name: CMSIS
-          files:
-            - path: Drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates/system_stm32f4xx.c
-          folders:
-            - name: Startup
-              files:
-                - path: Drivers/CMSIS/Device/ST/STM32F4xx/Source/Templates/gcc/startup_stm32f429xx.s
-              folders: []
-        - name: CSP
-          files:
-            - path: Drivers/CSP/UART_STM32F4xx.c
-            - path: Drivers/CSP/CAN_STM32F4xx.c
-            - path: Drivers/CSP/ETH_STM32F4xx.c
-            - path: Drivers/CSP/I2C_STM32F4xx.c
-            - path: Drivers/CSP/RTC_STM32F4xx.c
-            - path: Drivers/CSP/SPI_STM32F4xx.c
-          folders: []
-        - name: CMSIS_DSP
-          files:
-            - path: Drivers/CMSIS-DSP/1.16.2/Source/CommonTables/CommonTables.c
-            - path: Drivers/CMSIS-DSP/1.16.2/Source/FastMathFunctions/FastMathFunctions.c
-            - path: Drivers/CMSIS-DSP/1.16.2/Source/BasicMathFunctions/BasicMathFunctions.c
-          folders: []
     - name: Middlewares
       files: []
       folders:
@@ -102,92 +33,94 @@ virtualFolder:
           folders:
             - name: Core
               files:
-                - path: Middlewares/FreeRTOS/croutine.c
-                - path: Middlewares/FreeRTOS/event_groups.c
-                - path: Middlewares/FreeRTOS/list.c
-                - path: Middlewares/FreeRTOS/queue.c
-                - path: Middlewares/FreeRTOS/stream_buffer.c
-                - path: Middlewares/FreeRTOS/tasks.c
-                - path: Middlewares/FreeRTOS/timers.c
+                - path: User/Middlewares/FreeRTOS/croutine.c
+                - path: User/Middlewares/FreeRTOS/event_groups.c
+                - path: User/Middlewares/FreeRTOS/list.c
+                - path: User/Middlewares/FreeRTOS/queue.c
+                - path: User/Middlewares/FreeRTOS/stream_buffer.c
+                - path: User/Middlewares/FreeRTOS/tasks.c
+                - path: User/Middlewares/FreeRTOS/timers.c
               folders: []
             - name: Portable
               files:
-                - path: Middlewares/FreeRTOS/portable/MemMang/heap_4.c
-                - path: Middlewares/FreeRTOS/portable/GCC/ARM_CM4F/port.c
+                - path: User/Middlewares/FreeRTOS/portable/MemMang/heap_4.c
+                - path: User/Middlewares/FreeRTOS/portable/GCC/ARM_CM4F/port.c
               folders: []
-        - name: microros
-          files:
-            - path: Middlewares/microros_humble/extra_sources/custom_memory_manager.c
-            - path: Middlewares/microros_humble/extra_sources/microros_allocators.c
-            - path: Middlewares/microros_humble/extra_sources/microros_time.c
-            - path: Middlewares/microros_humble/extra_sources/dma_transport.c
-          folders: []
-    - name: Docs
-      files: []
-      folders: []
     - name: Utils
       files:
         - path: User/Utils/ring_fifo/ring_fifo.c
+        - path: User/Utils/pid/pid.c
+      folders: []
+    - name: CMSIS
+      files: []
+      folders:
+        - name: startup
+          files:
+            - path: CubeMX/Drivers/CMSIS/Device/ST/STM32G4xx/Source/gcc/startup_stm32g474xx.s
+          folders: []
+    - name: Modules
+      files:
+        - path: User/Modules/chassis_calculations/chassis_calculations.c
+        - path: User/Modules/omni_wheels/omni_wheels.c
+        - path: User/Modules/remote_ctrl/remote_ctrl.c
+        - path: User/Modules/logger/logger.c
+        - path: User/Modules/message-protocol/msg_protocol.c
       folders: []
 dependenceList: []
-outDir: build
+outDir: Build
 miscInfo:
-  uid: 79fc74fce1d9114baae8bea0ffac81a4
+  uid: 3ed39775033b15d9f7370659c253fbbe
 targets:
   Debug:
     cppPreprocessAttrs:
       defineList:
         - USE_HAL_DRIVER
         - DEBUG
-        - STM32F429xx
+        - STM32G474xx
       incList:
         - .
-        - Drivers/CMSIS/Core/Include
-        - Drivers/STM32_HAL_Driver/Inc
-        - Drivers/CMSIS/Device/ST/STM32F4xx/Include
-        - Drivers/CSP/Config
-        - Drivers/Bsp
+        - User/Bsp
         - User/Application/Inc
         - User/Utils
-        - Middlewares/FreeRTOS/include
-        - Middlewares/FreeRTOS/portable/GCC/ARM_CM4F
-        - User/moudle
-        - Drivers/CMSIS-DSP/1.16.2/Include
-        - Middlewares/microros_humble/libmicroros/microros_include
-        - Middlewares/microros_humble/extra_sources
-      libList:
-        - Middlewares/microros_humble/libmicroros
+        - User/Middlewares/FreeRTOS/include
+        - User/Middlewares/FreeRTOS/portable/GCC/ARM_CM4F
+        - CubeMX/Core/Inc
+        - CubeMX/Drivers/STM32G4xx_HAL_Driver/Inc
+        - CubeMX/Drivers/CMSIS/Include
+        - CubeMX/Drivers/CMSIS/Device/ST/STM32G4xx/Include
+        - User/Modules
+      libList: []
     excludeList:
-      - <virtual_root>/Drivers/CSP/ETH_STM32F4xx.c
-      - <virtual_root>/Drivers/CSP/I2C_STM32F4xx.c
-      - <virtual_root>/Drivers/CSP/RTC_STM32F4xx.c
-      - <virtual_root>/Drivers/CSP/SPI_STM32F4xx.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_adc_ex.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_adc.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_crc.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_cryp_ex.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_cryp.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_dac_ex.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_dac.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_eth.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_exti.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_i2c_ex.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_i2c.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_i2s_ex.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_iwdg.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_rtc_ex.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_rtc.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_sram.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_tim_ex.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_tim.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_usart.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_wwdg.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_ll_fmc.c
-      - <virtual_root>/Drivers/HAL_Driver/stm32f4xx_hal_spi.c
-      - <virtual_root>/Drivers/CMSIS_DSP/arm_common_tables.c
-      - <virtual_root>/Drivers/CMSIS_DSP/arm_const_structs.c
-      - <virtual_root>/Drivers/CMSIS_DSP/arm_mve_tables.c
-      - <virtual_root>/Application/s_curve_programing.c
+      - <virtual_root>/Drivers/CSP/CAN_STM32G4xx.c
+      - <virtual_root>/Drivers/CSP/I2C_STM32G4xx.c
+      - <virtual_root>/Drivers/CSP/SPI_STM32G4xx.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_adc_ex.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_adc.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_crc_ex.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_cryp_ex.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_cryp.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_dac_ex.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_dac.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_dma_ex.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_exti.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_hrtim.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_iwdg.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_qspi.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_rtc_ex.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_rtc.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_sram.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_tim_ex.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_tim.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_usart_ex.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_usart.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_wwdg.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_ll_fmc.c
+      - <virtual_root>/Drivers/CSP/RTC_STM32G4xx.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_spi_ex.c
+      - <virtual_root>/Drivers/HAL_Driver/stm32g4xx_hal_spi.c
+      - CubeMX/Core/Src/Backup
+      - CubeMX/Core/Src/sysmem.c
+      - CubeMX/Core/Src/syscalls.c
     toolchain: GCC
     toolchainConfigMap:
       AC6:
@@ -203,10 +136,9 @@ targets:
           beforeBuildTasks: []
           c/cpp-compiler:
             CXX_FLAGS: -Wno-padded -Wno-unsafe-buffer-usage -Wno-reserved-identifier -Wno-missing-noreturn -Wno-covered-switch-default -Wno-switch-enum -Wno-missing-prototypes -Wno-newline-eof -Wno-gnu-pointer-arith -Wno-declaration-after-statement -Wno-sign-conversion -Wno-implicit-int-conversion -Wno-double-promotion -Wno-missing-field-initializers -Wno-self-assign -Wno-extra-semi-stmt -Wno-missing-variable-declarations -Wno-cast-align -Wno-implicit-float-conversion -Wno-missing-braces -Wno-cast-qual -Wno-format-nonliteral -Wno-gnu-binary-literal
-            C_FLAGS: -Wno-padded -Wno-unsafe-buffer-usage -Wno-reserved-identifier -Wno-missing-noreturn -Wno-covered-switch-default -Wno-switch-enum -Wno-missing-prototypes -Wno-newline-eof -Wno-gnu-pointer-arith -Wno-declaration-after-statement -Wno-sign-conversion -Wno-implicit-int-conversion -Wno-double-promotion -Wno-missing-field-initializers -Wno-self-assign -Wno-extra-semi-stmt -Wno-missing-variable-declarations -Wno-cast-align -Wno-implicit-float-conversion -Wno-missing-braces -Wno-cast-qual -Wno-format-nonliteral -Wno-gnu-binary-literal
+            C_FLAGS: -Wno-padded -Wno-unsafe-buffer-usage -Wno-reserved-identifier -Wno-missing-noreturn -Wno-covered-switch-default -Wno-switch-enum -Wno-missing-prototypes -Wno-newline-eof -Wno-gnu-pointer-arith -Wno-declaration-after-statement -Wno-sign-conversion -Wno-implicit-int-conversion -Wno-double-promotion -Wno-missing-field-initializers -Wno-self-assign -Wno-extra-semi-stmt -Wno-missing-variable-declarations -Wno-cast-align -Wno-implicit-float-conversion -Wno-missing-braces -Wno-cast-qual -Wno-format-nonliteral -Wno-gnu-binary-literal -Wno-invalid-utf8
             language-c: c11
             language-cpp: c++11
-            link-time-optimization: true
             one-elf-section-per-function: true
             optimization: level-0
             short-enums#wchar: true
@@ -222,15 +154,8 @@ targets:
             - id: 1
               isChecked: true
               mem:
-                size: "0x00030000"
+                size: "0x00020000"
                 startAddr: "0x20000000"
-              noInit: false
-              tag: IRAM
-            - id: 2
-              isChecked: true
-              mem:
-                size: "0x00010000"
-                startAddr: "0x10000000"
               noInit: false
               tag: IRAM
           ROM:
@@ -238,7 +163,7 @@ targets:
               isChecked: true
               isStartup: true
               mem:
-                size: "0x00100000"
+                size: "0x00080000"
                 startAddr: "0x08000000"
               tag: IROM
         useCustomScatterFile: false
@@ -249,29 +174,32 @@ targets:
         options:
           version: 5
           afterBuildTasks: []
-          asm-compiler: {}
+          asm-compiler:
+            ASM_FLAGS: ""
           beforeBuildTasks: []
           c/cpp-compiler:
+            CXX_FLAGS: ""
+            C_FLAGS: ""
             language-c: c11
             language-cpp: c++11
             one-elf-section-per-data: true
             one-elf-section-per-function: true
-            optimization: level-0
+            optimization: level-debug
             warnings: all-warnings
           global:
             $float-abi-type: hard
-            arm-thumb-mode: thumb
+            misc-control: ""
             not-use-syscalls: true
             output-debug-info: enable
             use-newlib-nano: true
           linker:
             $outputTaskExcludes:
               - .bin
-            $toolName: auto
-            LIB_FLAGS: -lm -lmicroros
+            LD_FLAGS: ""
+            LIB_FLAGS: -lm
             output-format: elf
             remove-unused-input-sections: true
-        scatterFilePath: STM32F429XX_FLASH.ld
+        scatterFilePath: .\CubeMX\Drivers\CMSIS\Device\ST\STM32G4xx\Source\ld\STM32G474XX_FLASH.ld
         storageLayout:
           RAM: []
           ROM: []
@@ -281,16 +209,11 @@ targets:
         baseAddr: ""
         bin: ""
         cpuInfo:
-          cpuName: STM32F429IG
+          cpuName: STM32G474VE
           vendor: ST
         otherCmds: ""
         proType: 1
         speed: 8000
-      OpenOCD:
-        baseAddr: "0x08000000"
-        bin: ""
-        interface: stlink
-        target: stm32f4x
       STLink:
         address: "0x08000000"
         bin: ""
@@ -301,4 +224,4 @@ targets:
         resetMode: default
         runAfterProgram: true
         speed: 4000
-    uploader: JLink
+    uploader: STLink
