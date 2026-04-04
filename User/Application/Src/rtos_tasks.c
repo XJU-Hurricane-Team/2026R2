@@ -14,11 +14,10 @@ void start_task(void *pvParameters);
 static TaskHandle_t task1_handle;
 void task1(void *pvParameters);
 
-static TaskHandle_t task2_handle;
-void task2(void *pvParameters);
+static TaskHandle_t arm_ctrl_task_handle;
+void arm_ctrl_task(void *pvParameters);
 
-static TaskHandle_t task3_handle;
-void task3(void *pvParameters);
+static RobotArm g_robot_arm;
 
 
 /*****************************************************************************/
@@ -43,10 +42,11 @@ void start_task(void *pvParameters) {
 
     chassis_init();
     msg_process_init();
+    robot_arm_system_init(&g_robot_arm);
 
     xTaskCreate(task1, "task1", 128, NULL, 2, &task1_handle);
-    xTaskCreate(task2, "task2", 128, NULL, 2, &task2_handle);
-    xTaskCreate(task3, "task3", 128, NULL, 2, &task3_handle);
+    xTaskCreate(arm_ctrl_task, "arm_ctrl_task", 256, NULL, 2,
+                &arm_ctrl_task_handle);
     vTaskDelete(start_task_handle);
     taskEXIT_CRITICAL();
 }
@@ -70,35 +70,11 @@ void task1(void *pvParameters) {
 }
 
 /**
- * @brief Task2: print running time and received data.
+ * @brief Arm control test task: scan key and run two-point arm test.
  *
  * @param pvParameters Start parameters.
  */
-void task2(void *pvParameters) {
-    UNUSED(pvParameters);
-
-    uint8_t buf[20] = {0};
-
-    while (1) {
-        uint32_t len = uart_dmarx_read(&huart1, buf, sizeof(buf) - 1);
-        if (len > 0) {
-            buf[len] = '\0';
-            uart_printf(&huart1, "Received: %s.\n", buf);
-        } else {
-            printf(
-                "STM32F4xx FreeRTOS project template.Running time: %u ms. \n",
-                xTaskGetTickCount());
-        }
-        vTaskDelay(1000);
-    }
-}
-
-/**
- * @brief Task3: Scan the key and print which key pressed.
- *
- * @param pvParameters Start parameters.
- */
-void task3(void *pvParameters) {
+void arm_ctrl_task(void *pvParameters) {
     UNUSED(pvParameters);
 
     key_press_t key = KEY_NO_PRESS;
@@ -106,26 +82,26 @@ void task3(void *pvParameters) {
     while (1) {
         key = key_scan(0);
         switch (key) {
-            case WKUP_PRESS: {
-                printf("Wake Up Pressed. \n");
-            } break;
-
             case KEY0_PRESS: {
-                printf("KEY0 Pressed. \n");
+                robot_arm_set_target(&g_robot_arm, 0.0f, 0.0f, 0.0f);
+                g_robot_arm.arm_motion_active = 0;
             } break;
 
             case KEY1_PRESS: {
-                printf("KEY1 Pressed. \n");
+                robot_arm_set_target(&g_robot_arm, 160.0f, 90.0f, 0.0f);
+                g_robot_arm.arm_motion_active = 0;
             } break;
 
             case KEY2_PRESS: {
-                printf("KEY2 Pressed. \n");
-                
+                robot_arm_set_target(&g_robot_arm, 220.0f, 120.0f, 0.0f);
+                g_robot_arm.arm_motion_active = 0;
             } break;
 
             default: {
             } break;
         }
+
+        robot_arm_test_update(&g_robot_arm);
 
         vTaskDelay(10);
     }

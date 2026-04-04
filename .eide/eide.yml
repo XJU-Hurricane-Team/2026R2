@@ -18,12 +18,14 @@ virtualFolder:
         - path: User/Bsp/can_list/can_list.c
         - path: User/Bsp/DJI-Motor/dji_bldc_motor.c
         - path: User/Bsp/usart_ex/usart_ex.c
+        - path: User/Bsp/Damiao-Motor/damiao.c
       folders: []
     - name: Application
       files:
         - path: User/Application/Src/rtos_tasks.c
         - path: User/Application/Src/chassis.c
         - path: User/Application/Src/msg_process.c
+        - path: User/Modules/robot_arm/robot_arm.c
       folders: []
     - name: Middlewares
       files: []
@@ -46,10 +48,18 @@ virtualFolder:
                 - path: User/Middlewares/FreeRTOS/portable/MemMang/heap_4.c
                 - path: User/Middlewares/FreeRTOS/portable/GCC/ARM_CM4F/port.c
               folders: []
+        - name: CMSIS_DSP
+          files:
+            - path: User/Middlewares/CMSIS_DSP/1.16.2/Source/BasicMathFunctions/BasicMathFunctions.c
+            - path: User/Middlewares/CMSIS_DSP/1.16.2/Source/CommonTables/CommonTables.c
+            - path: User/Middlewares/CMSIS_DSP/1.16.2/Source/FastMathFunctions/FastMathFunctions.c
+          folders: []
     - name: Utils
       files:
         - path: User/Utils/ring_fifo/ring_fifo.c
         - path: User/Utils/pid/pid.c
+        - path: User/Utils/trajectory_plan/trajectory_plan.c
+        - path: User/Utils/buffer_append/buffer_append.c
       folders: []
     - name: CMSIS
       files: []
@@ -89,7 +99,11 @@ targets:
         - CubeMX/Drivers/CMSIS/Include
         - CubeMX/Drivers/CMSIS/Device/ST/STM32G4xx/Include
         - User/Modules
-      libList: []
+        - User/Middlewares/microros_humble/extra_sources
+        - User/Middlewares/microros_humble/libmicroros/microros_include
+        - User/Middlewares/CMSIS_DSP/1.16.2/Include
+      libList:
+        - User/Middlewares/microros_humble/libmicroros
     excludeList:
       - <virtual_root>/Drivers/CSP/CAN_STM32G4xx.c
       - <virtual_root>/Drivers/CSP/I2C_STM32G4xx.c
@@ -121,6 +135,8 @@ targets:
       - CubeMX/Core/Src/Backup
       - CubeMX/Core/Src/sysmem.c
       - CubeMX/Core/Src/syscalls.c
+    settings:
+      debugger: cortex-debug
     toolchain: GCC
     toolchainConfigMap:
       AC6:
