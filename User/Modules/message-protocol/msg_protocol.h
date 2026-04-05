@@ -66,7 +66,6 @@
 typedef enum {
     MSG_RC_TO_MASTER = 0x00U, /*!< 遥控发送到主控板消息 */
     MSG_MASTER_TO_RC,      /*!< 主控发送到遥控器消息 */
-    MSG_MASTER_TO_SLAVE,      /*!< 主控发送到从控消息 */
     MSG_NUC_TO_MASTER,        /*!< 小电脑发送到主控消息 */
 
     MSG_ID_RESERVE_LEN /*!< 保留位, 用于定义数据长度 */

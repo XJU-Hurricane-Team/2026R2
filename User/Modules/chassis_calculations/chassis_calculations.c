@@ -113,8 +113,10 @@ static float compute_dt_sec(uint32_t now_tick) {
 
     delta_tick = now_tick - g_plan.last_tick;
     g_plan.last_tick = now_tick;
-    /* FreeRTOS 系统节拍固定为 1ms/tick， dt 直接按毫秒换算为秒 */
-    dt = (float)delta_tick * 0.001f;
+    // /* FreeRTOS 系统节拍固定为 1ms/tick， dt 直接按毫秒换算为秒 */
+    // dt = (float)delta_tick * 0.001f;
+    /* 按 FreeRTOS 实际 tick 周期换算 dt，避免系统 tick 频率变化导致加速度失真 */
+    dt = (float)delta_tick * ((float)portTICK_PERIOD_MS * 0.001f);
     if (dt <= 0.0f || dt > MAX_DT_SEC) {
         return 0.0f;
     }

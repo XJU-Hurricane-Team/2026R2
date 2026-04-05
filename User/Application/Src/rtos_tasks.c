@@ -14,9 +14,6 @@ void start_task(void *pvParameters);
 static TaskHandle_t task1_handle;
 void task1(void *pvParameters);
 
-static TaskHandle_t task2_handle;
-void task2(void *pvParameters);
-
 static TaskHandle_t task3_handle;
 void task3(void *pvParameters);
 
@@ -41,15 +38,17 @@ void start_task(void *pvParameters) {
     UNUSED(pvParameters);
     taskENTER_CRITICAL();
 
+    log_init(LOG_DEBUG);
     chassis_init();
     msg_process_init();
 
     xTaskCreate(task1, "task1", 128, NULL, 2, &task1_handle);
-    xTaskCreate(task2, "task2", 128, NULL, 2, &task2_handle);
     xTaskCreate(task3, "task3", 128, NULL, 2, &task3_handle);
     vTaskDelete(start_task_handle);
     taskEXIT_CRITICAL();
 }
+
+char buf[256];
 
 /**
  * @brief Task1: Blink.
@@ -60,38 +59,14 @@ void task1(void *pvParameters) {
     UNUSED(pvParameters);
     LED0_OFF();
     LED1_ON();
-
+    
     while (1) {
         LED0_TOGGLE();
         LED1_TOGGLE();
-        
         vTaskDelay(1000);
     }
 }
 
-/**
- * @brief Task2: print running time and received data.
- *
- * @param pvParameters Start parameters.
- */
-void task2(void *pvParameters) {
-    UNUSED(pvParameters);
-
-    uint8_t buf[20] = {0};
-
-    while (1) {
-        uint32_t len = uart_dmarx_read(&huart1, buf, sizeof(buf) - 1);
-        if (len > 0) {
-            buf[len] = '\0';
-            uart_printf(&huart1, "Received: %s.\n", buf);
-        } else {
-            printf(
-                "STM32F4xx FreeRTOS project template.Running time: %u ms. \n",
-                xTaskGetTickCount());
-        }
-        vTaskDelay(1000);
-    }
-}
 
 /**
  * @brief Task3: Scan the key and print which key pressed.

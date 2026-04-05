@@ -44,6 +44,19 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 
+volatile uint32_t g_fault_hfsr __attribute__((section(".noinit")));
+volatile uint32_t g_fault_cfsr __attribute__((section(".noinit")));
+volatile uint32_t g_fault_mmfar __attribute__((section(".noinit")));
+volatile uint32_t g_fault_bfar __attribute__((section(".noinit")));
+volatile uint32_t g_fault_afsr __attribute__((section(".noinit")));
+volatile uint32_t g_fault_ipsr __attribute__((section(".noinit")));
+
+static inline void fault_debug_break_if_attached(void) {
+  if ((CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) != 0U) {
+    __BKPT(0);
+  }
+}
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -98,6 +111,14 @@ void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
 
+  g_fault_hfsr = SCB->HFSR;
+  g_fault_cfsr = SCB->CFSR;
+  g_fault_mmfar = SCB->MMFAR;
+  g_fault_bfar = SCB->BFAR;
+  g_fault_afsr = SCB->AFSR;
+  g_fault_ipsr = __get_IPSR();
+  fault_debug_break_if_attached();
+
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
@@ -112,6 +133,14 @@ void HardFault_Handler(void)
 void MemManage_Handler(void)
 {
   /* USER CODE BEGIN MemoryManagement_IRQn 0 */
+
+  g_fault_hfsr = SCB->HFSR;
+  g_fault_cfsr = SCB->CFSR;
+  g_fault_mmfar = SCB->MMFAR;
+  g_fault_bfar = SCB->BFAR;
+  g_fault_afsr = SCB->AFSR;
+  g_fault_ipsr = __get_IPSR();
+  fault_debug_break_if_attached();
 
   /* USER CODE END MemoryManagement_IRQn 0 */
   while (1)
@@ -128,6 +157,14 @@ void BusFault_Handler(void)
 {
   /* USER CODE BEGIN BusFault_IRQn 0 */
 
+  g_fault_hfsr = SCB->HFSR;
+  g_fault_cfsr = SCB->CFSR;
+  g_fault_mmfar = SCB->MMFAR;
+  g_fault_bfar = SCB->BFAR;
+  g_fault_afsr = SCB->AFSR;
+  g_fault_ipsr = __get_IPSR();
+  fault_debug_break_if_attached();
+
   /* USER CODE END BusFault_IRQn 0 */
   while (1)
   {
@@ -142,6 +179,14 @@ void BusFault_Handler(void)
 void UsageFault_Handler(void)
 {
   /* USER CODE BEGIN UsageFault_IRQn 0 */
+
+  g_fault_hfsr = SCB->HFSR;
+  g_fault_cfsr = SCB->CFSR;
+  g_fault_mmfar = SCB->MMFAR;
+  g_fault_bfar = SCB->BFAR;
+  g_fault_afsr = SCB->AFSR;
+  g_fault_ipsr = __get_IPSR();
+  fault_debug_break_if_attached();
 
   /* USER CODE END UsageFault_IRQn 0 */
   while (1)
@@ -245,31 +290,17 @@ void DMA1_Channel4_IRQHandler(void)
 }
 
 /**
-  * @brief This function handles DMA1 channel5 global interrupt.
+  * @brief This function handles DMA1 channel7 global interrupt.
   */
-void DMA1_Channel5_IRQHandler(void)
+void DMA1_Channel7_IRQHandler(void)
 {
-  /* USER CODE BEGIN DMA1_Channel5_IRQn 0 */
+  /* USER CODE BEGIN DMA1_Channel7_IRQn 0 */
 
-  /* USER CODE END DMA1_Channel5_IRQn 0 */
+  /* USER CODE END DMA1_Channel7_IRQn 0 */
   HAL_DMA_IRQHandler(&hdma_usart2_rx);
-  /* USER CODE BEGIN DMA1_Channel5_IRQn 1 */
+  /* USER CODE BEGIN DMA1_Channel7_IRQn 1 */
 
-  /* USER CODE END DMA1_Channel5_IRQn 1 */
-}
-
-/**
-  * @brief This function handles DMA1 channel6 global interrupt.
-  */
-void DMA1_Channel6_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMA1_Channel6_IRQn 0 */
-
-  /* USER CODE END DMA1_Channel6_IRQn 0 */
-  HAL_DMA_IRQHandler(&hdma_usart2_tx);
-  /* USER CODE BEGIN DMA1_Channel6_IRQn 1 */
-
-  /* USER CODE END DMA1_Channel6_IRQn 1 */
+  /* USER CODE END DMA1_Channel7_IRQn 1 */
 }
 
 /**
@@ -323,7 +354,10 @@ void USART1_IRQHandler(void)
 void USART2_IRQHandler(void)
 {
   /* USER CODE BEGIN USART2_IRQn 0 */
-
+  if (__HAL_UART_GET_FLAG(&huart2, UART_FLAG_IDLE)) {
+      __HAL_UART_CLEAR_IDLEFLAG(&huart2);
+      uart_dmarx_idle_callback(&huart2);
+  }
   /* USER CODE END USART2_IRQn 0 */
   HAL_UART_IRQHandler(&huart2);
   /* USER CODE BEGIN USART2_IRQn 1 */
@@ -402,6 +436,20 @@ void LPUART1_IRQHandler(void)
   /* USER CODE BEGIN LPUART1_IRQn 1 */
 
   /* USER CODE END LPUART1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles DMA1 channel8 global interrupt.
+  */
+void DMA1_Channel8_IRQHandler(void)
+{
+  /* USER CODE BEGIN DMA1_Channel8_IRQn 0 */
+
+  /* USER CODE END DMA1_Channel8_IRQn 0 */
+  HAL_DMA_IRQHandler(&hdma_usart2_tx);
+  /* USER CODE BEGIN DMA1_Channel8_IRQn 1 */
+
+  /* USER CODE END DMA1_Channel8_IRQn 1 */
 }
 
 /* USER CODE BEGIN 1 */
