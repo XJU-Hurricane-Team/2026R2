@@ -18,6 +18,7 @@ extern "C" {
 /* FreeRTOS头文件 */
 #include "FreeRTOS.h"
 #include "task.h"
+#include "event_groups.h"
 
 /* C库文件 */
 #include <stdio.h>
@@ -32,6 +33,8 @@ extern "C" {
 #include "message-protocol/msg_protocol.h"
 #include "logger/logger.h"  
 
+
+#include "robot_arm/robot_arm.h"
 
 typedef enum {
     NUC_RX_MODE_CTRL = 0, /*!< 接收控制指令 (v/yaw/vw)，默认 */

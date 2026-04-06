@@ -14,6 +14,10 @@ void start_task(void *pvParameters);
 static TaskHandle_t task1_handle;
 void task1(void *pvParameters);
 
+static TaskHandle_t arm_ctrl_task_handle;
+void arm_ctrl_task(void *pvParameters);
+
+static RobotArm g_robot_arm;
 static TaskHandle_t task3_handle;
 void task3(void *pvParameters);
 
@@ -41,8 +45,11 @@ void start_task(void *pvParameters) {
     log_init(LOG_DEBUG);
     chassis_init();
     msg_process_init();
+    robot_arm_system_init(&g_robot_arm);
 
     xTaskCreate(task1, "task1", 128, NULL, 2, &task1_handle);
+    xTaskCreate(arm_ctrl_task, "arm_ctrl_task", 256, NULL, 2,
+                &arm_ctrl_task_handle);
     xTaskCreate(task3, "task3", 128, NULL, 2, &task3_handle);
     vTaskDelete(start_task_handle);
     taskEXIT_CRITICAL();
@@ -67,13 +74,12 @@ void task1(void *pvParameters) {
     }
 }
 
-
 /**
- * @brief Task3: Scan the key and print which key pressed.
+ * @brief Arm control test task: scan key and run two-point arm test.
  *
  * @param pvParameters Start parameters.
  */
-void task3(void *pvParameters) {
+void arm_ctrl_task(void *pvParameters) {
     UNUSED(pvParameters);
 
     key_press_t key = KEY_NO_PRESS;
@@ -81,26 +87,26 @@ void task3(void *pvParameters) {
     while (1) {
         key = key_scan(0);
         switch (key) {
-            case WKUP_PRESS: {
-                printf("Wake Up Pressed. \n");
-            } break;
-
             case KEY0_PRESS: {
-                printf("KEY0 Pressed. \n");
+                robot_arm_set_target(&g_robot_arm, 0.0f, 0.0f, 0.0f);
+                g_robot_arm.arm_motion_active = 0;
             } break;
 
             case KEY1_PRESS: {
-                printf("KEY1 Pressed. \n");
+                robot_arm_set_target(&g_robot_arm, 160.0f, 90.0f, 0.0f);
+                g_robot_arm.arm_motion_active = 0;
             } break;
 
             case KEY2_PRESS: {
-                printf("KEY2 Pressed. \n");
-                
+                robot_arm_set_target(&g_robot_arm, 220.0f, 120.0f, 0.0f);
+                g_robot_arm.arm_motion_active = 0;
             } break;
 
             default: {
             } break;
         }
+
+        robot_arm_test_update(&g_robot_arm);
 
         vTaskDelay(10);
     }
