@@ -70,7 +70,7 @@ extern "C" {
 
 // <h> USART2 Configuration
 //   <e> USART2_TX_DMA               Enable USART2 TX DMA
-#define USART2_TX_DMA           0
+#define USART2_TX_DMA           1
 
 #ifdef USART2_TX_DMA
 //   <o> USART2_TX_DMA_BUF_SIZE      USART2 TX DMA Buffer Size <8-4096:8>
@@ -79,7 +79,7 @@ extern "C" {
 #endif /* USART2_TX_DMA */
 
 //   <e> USART2_RX_DMA               Enable USART2 RX DMA
-#define USART2_RX_DMA           0
+#define USART2_RX_DMA           1
 
 #ifdef USART2_RX_DMA
 //   <o> USART2_RX_DMA_BUF_SIZE      USART2 RX DMA Buffer Size <8-4096:8>
@@ -177,6 +177,8 @@ int uart_printf(UART_HandleTypeDef *huart, const char *__format, ...);
 int uart_scanf(UART_HandleTypeDef *huart, const char *__format, ...);
 
 uint32_t uart_dmarx_read(UART_HandleTypeDef *huart, void *buf, size_t len);
+uint32_t uart_dmarx_read_raw_buf(UART_HandleTypeDef *huart, void *buf,
+                                 size_t len);
 uint8_t uart_dmarx_resize_fifo(UART_HandleTypeDef *huart, uint32_t buf_size,
                                uint32_t fifo_size);
 uint32_t uart_dmarx_get_buf_size(UART_HandleTypeDef *huart);

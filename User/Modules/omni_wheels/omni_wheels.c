@@ -9,6 +9,8 @@
 #include "omni_wheels.h"
 #include <math.h>
 
+/* ======================================================= 全向轮底盘相关函数 ======================================================= */
+
 /**
  * @brief 世界坐标系速度向车身坐标系速度转换
  * @param speed 指向底盘线速度结构体的指针
@@ -43,12 +45,12 @@ void omni_wheels_resolve(const chassis_speed_t *chassis_speed, volatile float *o
     // 设4个全向轮分别安装在四个角, 每个轮子的法线与坐标轴成 45 度角 (即 𝛑/4)。
     // COS(45°) = SIN(45°) ≈ 0.707 (通过 sqrt(2)/2 计算)。
     // 在全向轮等效速度模型中, 要将底盘的线速度(Vx, Vy)投影到每个轮子的法线上。
-    // 此外, 底盘旋转(Vw)使得每个轮子产生一个切向线速度, 大小为 Vw * 旋转半径(R)。  实际待定
+    // 此外, 底盘旋转(Vw)使得每个轮子产生一个切向线速度, 大小为 Vw * 旋转半径(R)。输出轴逆时针转动
 
-    float v1 =  SQRT2_2 * vx - SQRT2_2 * vy + vw * CHASSIS_RADIUS; // 轮1：右上 (前偏右)
-    float v2 =  SQRT2_2 * vx + SQRT2_2 * vy - vw * CHASSIS_RADIUS; // 轮2：左上 (前偏左)
-    float v3 = -SQRT2_2 * vx + SQRT2_2 * vy - vw * CHASSIS_RADIUS; // 轮3：左下 (后偏左)
-    float v4 = -SQRT2_2 * vx - SQRT2_2 * vy + vw * CHASSIS_RADIUS; // 轮4：右下 (后偏右)
+    float v1 = -SQRT2_2 * vx - SQRT2_2 * vy + vw * CHASSIS_RADIUS; // 轮1：右上 (前偏右)
+    float v2 =  SQRT2_2 * vx - SQRT2_2 * vy + vw * CHASSIS_RADIUS; // 轮2：左上 (前偏左)
+    float v3 =  SQRT2_2 * vx + SQRT2_2 * vy + vw * CHASSIS_RADIUS; // 轮3：左下 (后偏左)
+    float v4 = -SQRT2_2 * vx + SQRT2_2 * vy + vw * CHASSIS_RADIUS; // 轮4：右下 (后偏右)
 
     /* 转化为RPM */ 
     out_wheel_rpm[0] = MPS_TO_RPM(v1);
@@ -62,9 +64,9 @@ void omni_wheels_resolve(const chassis_speed_t *chassis_speed, volatile float *o
  * @param ch_tgt 目标宏观速度
  * @param motor_handle 电机句柄数组指针
  * @param s_planner S曲线规划器数组指针
- * @param motor_pid PID控制数组指针
+ * @param dji_3508_speed_pid PID控制数组指针
  */
-void omni_wheels_drive(const chassis_speed_t *ch_tgt, dji_motor_handle_t *motor_handle, pid_t *motor_pid)
+void omni_wheels_drive(const chassis_speed_t *ch_tgt, dji_motor_handle_t *motor_handle, pid_t *dji_3508_speed_pid)
 {
    
     float wheel_rpm[4] = {0}; 
@@ -76,7 +78,7 @@ void omni_wheels_drive(const chassis_speed_t *ch_tgt, dji_motor_handle_t *motor_
     for(int i = 0; i < 4; i++) {
         // 通过PID将平滑后的目标转速计算为期望的电机控制电流
         float real_rpm = motor_handle[i].speed_rpm;
-        float calc_current = pid_calc(&motor_pid[i], wheel_rpm[i], real_rpm);
+        float calc_current = pid_calc(&dji_3508_speed_pid[i], wheel_rpm[i], real_rpm);
         motor_out_current[i] = (int16_t)calc_current;
     }
 
@@ -105,3 +107,4 @@ void omni_wheels_forward(const dji_motor_handle_t *motor_handle, chassis_speed_t
     chassis_speed->target_speed.vy = (-v1 + v2 + v3 - v4) / (4.0f * SQRT2_2);
     chassis_speed->target_speed.vw = ( v1 - v2 - v3 + v4) / (4.0f * CHASSIS_RADIUS);
 }
+

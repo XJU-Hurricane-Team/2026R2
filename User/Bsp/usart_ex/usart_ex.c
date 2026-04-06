@@ -147,9 +147,16 @@ void uart_ex_init(UART_HandleTypeDef *huart) {
         if (uart_rx_fifo != NULL) {
             uart_rx_fifo->recv_buf = malloc(uart_rx_fifo->buf_size);
             uart_rx_fifo->rx_fifo_buf = malloc(uart_rx_fifo->fifo_size);
+            if ((uart_rx_fifo->recv_buf == NULL) ||
+                (uart_rx_fifo->rx_fifo_buf == NULL)) {
+                Error_Handler();
+            }
             uart_rx_fifo->rx_fifo =
                 ring_fifo_init(uart_rx_fifo->rx_fifo_buf,
                                uart_rx_fifo->fifo_size, RF_TYPE_STREAM);
+            if (uart_rx_fifo->rx_fifo == NULL) {
+                Error_Handler();
+            }
 
             __HAL_UART_ENABLE_IT(huart, UART_IT_IDLE);
             __HAL_UART_CLEAR_IDLEFLAG(huart);
@@ -166,6 +173,9 @@ void uart_ex_init(UART_HandleTypeDef *huart) {
         uart_tx_buf_t *uart_tx_buf = uart_tx_identify(huart);
         if (uart_tx_buf != NULL) {
             uart_tx_buf->send_buf = malloc(uart_tx_buf->buf_size);
+            if (uart_tx_buf->send_buf == NULL) {
+                Error_Handler();
+            }
         }
     } else {
         Error_Handler();
@@ -467,6 +477,32 @@ uint32_t uart_dmarx_read(UART_HandleTypeDef *huart, void *buf,
     }
 
     return ring_fifo_read(uart_rx_fifo->rx_fifo, buf, buf_size);
+}
+
+/**
+ * @brief Read from UART DMA raw receive buffer directly.
+ *
+ * @param huart The handle of UART
+ * @param[out] buf The data buf which receive the data from the raw recv_buf.
+ * @param max_len The max length to copy.
+ * @return The length that be copied.
+ */
+uint32_t uart_dmarx_read_raw_buf(UART_HandleTypeDef *huart, void *buf,
+                                 size_t max_len) {
+    if ((buf == NULL) || (max_len == 0)) {
+        return 0;
+    }
+    
+    uart_rx_fifo_t *uart_rx_fifo = uart_rx_identify(huart);
+
+    if ((uart_rx_fifo == NULL) || (uart_rx_fifo->recv_buf == NULL)) {
+        return 0;
+    }
+
+    uint32_t copy_len = (max_len > uart_rx_fifo->buf_size) ? uart_rx_fifo->buf_size : max_len;
+    memcpy(buf, uart_rx_fifo->recv_buf, copy_len);
+
+    return copy_len;
 }
 
 /**

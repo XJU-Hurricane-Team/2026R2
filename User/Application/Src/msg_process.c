@@ -8,7 +8,8 @@
 
 #include "includes.h"
 
-#define REMOTE_UART_HANDLE &huart2
+#define REMOTE_UART_HANDLE &huart1
+#define NUC_UART_HANDLE    &huart5
 #define REMOTE_SEND_PERIOD 100 /* 数据上报周期，单位: ms */
 
 static TaskHandle_t msg_polling_task_handle;
@@ -38,6 +39,7 @@ static void nuc_msg_callback(uint32_t msg_length, uint8_t msg_id_type,
             g_nuc_ctrl_data.v = 1000.0f * temp_data.v;
             g_nuc_ctrl_data.vw = temp_data.vw;
             g_nuc_ctrl_data.yaw = temp_data.yaw;
+            g_nuc_ctrl_data.lift = temp_data.lift;
             break;
         }
         case NUC_RX_MODE_POSE: {
@@ -71,6 +73,7 @@ void msg_polling_task(void *pvParameters) {
     while (1) {
         message_polling_data();
 
+
         vTaskDelay(5);
     }
 }
@@ -81,8 +84,11 @@ void msg_polling_task(void *pvParameters) {
  */
 void msg_process_init(void) {
     BaseType_t task_create_res = pdFAIL;
+
     /* 消息轮询任务初始化 */
     task_create_res = xTaskCreate(msg_polling_task, "msg_polling_task", 256,
                                   NULL, 4, &msg_polling_task_handle);
     configASSERT(task_create_res == pdPASS);
+
+
 }

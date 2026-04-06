@@ -1,3 +1,11 @@
+ /**
+ * @file    omni_wheels.h
+ * @author  Dominate0017
+ * @brief   全向轮运动学模块
+ * @version 0.1
+ * @date    2026-04-2
+ */
+
 #ifndef OMNI_WHEELS_H
 #define OMNI_WHEELS_H
 
@@ -30,7 +38,8 @@ typedef struct {
 // 底盘各量纲所需的速度
 typedef struct {
     chassis_slope_t target_speed;      /* 量纲：规划后小车整体速度，单位m/s */
-    float target_rpm[4];               /* 量纲：规划后每个轮子的转速，单位rpm */  
+    float target_rpm[4];               /* 量纲：规划后每个轮子的转速，单位rpm */ 
+    float target_2006_rpm;      /* 量纲：2006目标转速，单位rpm */
 } chassis_speed_t;
 
 extern volatile float wheel_rpm[4]; // 4个轮子的转子转速 (rpm)
@@ -53,9 +62,9 @@ void omni_wheels_resolve(const chassis_speed_t *chassis_speed, volatile float *o
  * @brief 综合控制接口：逆解算 + PID + 输出控制电流
  * @param ch_tgt 目标宏观速度
  * @param motor_handle 电机句柄数组指针
- * @param motor_pid PID控制数组指针
+ * @param dji_3508_speed_pid PID控制数组指针
  */
-void omni_wheels_drive(const chassis_speed_t *ch_tgt, dji_motor_handle_t *motor_handle, pid_t *motor_pid);
+void omni_wheels_drive(const chassis_speed_t *ch_tgt, dji_motor_handle_t *motor_handle, pid_t *dji_3508_speed_pid);
 
 /**
  * @brief 将4个车轮的转子实际转速正解算为底盘的宏观实际速度
