@@ -64,9 +64,9 @@ void omni_wheels_resolve(const chassis_speed_t *chassis_speed, volatile float *o
  * @param ch_tgt 目标宏观速度
  * @param motor_handle 电机句柄数组指针
  * @param s_planner S曲线规划器数组指针
- * @param dji_3508_pid PID控制数组指针
+ * @param dji_3508_speed_pid PID控制数组指针
  */
-void omni_wheels_drive(const chassis_speed_t *ch_tgt, dji_motor_handle_t *motor_handle, pid_t *dji_3508_pid)
+void omni_wheels_drive(const chassis_speed_t *ch_tgt, dji_motor_handle_t *motor_handle, pid_t *dji_3508_speed_pid)
 {
    
     float wheel_rpm[4] = {0}; 
@@ -78,7 +78,7 @@ void omni_wheels_drive(const chassis_speed_t *ch_tgt, dji_motor_handle_t *motor_
     for(int i = 0; i < 4; i++) {
         // 通过PID将平滑后的目标转速计算为期望的电机控制电流
         float real_rpm = motor_handle[i].speed_rpm;
-        float calc_current = pid_calc(&dji_3508_pid[i], wheel_rpm[i], real_rpm);
+        float calc_current = pid_calc(&dji_3508_speed_pid[i], wheel_rpm[i], real_rpm);
         motor_out_current[i] = (int16_t)calc_current;
     }
 
@@ -108,4 +108,3 @@ void omni_wheels_forward(const dji_motor_handle_t *motor_handle, chassis_speed_t
     chassis_speed->target_speed.vw = ( v1 - v2 - v3 + v4) / (4.0f * CHASSIS_RADIUS);
 }
 
-/* ======================================================= 达妙电机控制 =======================================================*/

@@ -2,7 +2,7 @@
  * @file    chassis.c
  * @author  Dominate0017
  * @brief   底盘控制任务
- * @version 0.2
+ * @version 0.3
  * @date    2026-04-5
  */
 
@@ -41,7 +41,9 @@ typedef struct {
 typedef struct {
     chassis_mode_t mode;                    /* 底盘模式：手动/自动 */
     chassis_speed_t chassis_speed;          /* 底盘各个量纲的速度 */
+    float g_current_rotor_degree[4];        /* 当前输出轴角度 */
     bool world_cordinate;                   /* 是否开启世界坐标系   ture:开启 false:关闭 */
+    bool degree_lock;                       /* 防止任务中多次记录角度     ture:锁定 false:不锁定 */
     bool halt;                              /* 是否自锁     ture:自锁 false:不自锁 */ 
 
     lift_state_t lift_state;                 /* 达妙状态 */
@@ -51,11 +53,13 @@ typedef struct {
 static chassis_handle_t chassis_handle = {
     .mode = CHASSIS_MODE_MANUAL,
     .chassis_speed = {
-        .target_speed.vx = 0,
-        .target_speed.vy = 0,
-        .target_speed.vw = 0,
+        .target_speed.vx = 0.0f,
+        .target_speed.vy = 0.0f,
+        .target_speed.vw = 0.0f,
+        .target_2006_rpm = 0.0f
     },
     .world_cordinate = false,
+    .degree_lock = false,
     .halt = false,
     .lift_state = LIFT_STATE_NORMAL,
     .lift_fsm = {0, 0, 0}
@@ -64,14 +68,15 @@ static chassis_handle_t chassis_handle = {
 static dji_motor_handle_t dji_3508_handle[4];
 static dji_motor_handle_t dji_2006_handle;
 static dm_handle_t dm_motor_handle[2];
-static pid_t dji_3508_pid[4];
+static pid_t dji_3508_speed_pid[4];
+static pid_t dji_3508_pos_pid[4];
 static pid_t dji_2006_pid;
-
-static float target_2006_rpm = 0.0f; // 2006电机目标速度
 
 static void chassis_tasks_init(void);
 static void chassis_bottom_init(void);
 static void chassis_switch_mode(uint8_t key, remote_key_event_t event);
+static void chassis_halt_degree_update(void);
+static void chassis_pid_clear_state(pid_t *pid);
 
 static TaskHandle_t chassis_mode_task_handle;
 void chassis_mode_task(void *pvParameters);
@@ -84,7 +89,6 @@ static bool get_front_photoelectric(void) {
 static bool get_rear_photoelectric(void) {
     return HAL_GPIO_ReadPin(SENSOR_GPIO_PORT, REAR_SENSOR_PIN);
 }
-// ---------------------------------------------------------------
 
 /**
  * @brief 任务一：底盘模式控制任务：选择手动/自动/抬升序列模式
@@ -114,7 +118,7 @@ void chassis_mode_task(void *pvParameters) {
 
         switch (chassis_handle.mode) {
             case CHASSIS_MODE_MANUAL: {
-                target_2006_rpm = 0.0f; // 手动模式下保证2006不转
+                chassis_handle.chassis_speed.target_2006_rpm = 0.0f; // 手动模式下保证2006不转
                 float target_x = g_remote_ctrl_data.rs[0];
                 float target_y = g_remote_ctrl_data.rs[1];
                 float target_yaw = g_remote_ctrl_data.rs[2];
@@ -136,12 +140,13 @@ void chassis_mode_task(void *pvParameters) {
             }
 
             case CHASSIS_MODE_AUTO: {
-                target_2006_rpm = 0.0f; // 自动巡航模式下保证2006不转
+                chassis_handle.chassis_speed.target_2006_rpm = 0.0f; // 自动巡航模式下保证2006不转
                 float vx = g_nuc_ctrl_data.v * cosf(g_nuc_ctrl_data.yaw);
                 float vy = g_nuc_ctrl_data.v * sinf(g_nuc_ctrl_data.yaw);
                 float vw = g_nuc_ctrl_data.vw;
 
                 if (chassis_handle.halt) {
+
                     vx = 0.0f;
                     vy = 0.0f;
                     vw = 0.0f;
@@ -154,7 +159,7 @@ void chassis_mode_task(void *pvParameters) {
 
             case CHASSIS_MODE_LIFT_SEQ: {
                 float target_x = 0.0f, target_y = 0.0f, target_yaw = 0.0f;
-                target_2006_rpm = 0.0f;                                     /* 默认在此模式中不转，只有在特定步段才驱动 */ 
+                chassis_handle.chassis_speed.target_2006_rpm = 0.0f;         /* 默认在此模式中不转，只有在特定步段才驱动 */ 
 
                 /* 上升序列 */
                 if (chassis_handle.lift_fsm.action == 1) {
@@ -175,9 +180,9 @@ void chassis_mode_task(void *pvParameters) {
                     }                                                       /* 底盘悬空 */  
                     else if (chassis_handle.lift_fsm.step == 2) {
                         target_y = 0.0f;                                    /* 底盘无速度 */
-                        target_2006_rpm = 1000.0f;                          /* 用2006缓慢向前 */
+                        chassis_handle.chassis_speed.target_2006_rpm = 1000.0f;                          /* 用2006缓慢向前 */
                         if(get_rear_photoelectric() == true) {              /* 后光电感应到台阶边缘，停止前进，车子进入下降标志位(实际杆子上升) */ 
-                            target_2006_rpm = 0.0f;                         /* 2006停止运转 */
+                            chassis_handle.chassis_speed.target_2006_rpm= 0.0f;                         /* 2006停止运转 */
                             chassis_handle.lift_fsm.step = 3;
                             chassis_handle.lift_state = LIFT_STATE_DOWN;    /* 杆子上升（达妙恢复到30°） */ 
                             chassis_handle.lift_fsm.timer = xTaskGetTickCount();
@@ -210,9 +215,9 @@ void chassis_mode_task(void *pvParameters) {
                         }
                     } else if (chassis_handle.lift_fsm.step == 2) {         /* 前半段底盘接触台阶，为了统一，不用底盘缓慢移动，用2006 */   
                         target_y = 0.0f;                                    /* 车身悬空时底盘不再响应正常速度 */
-                        target_2006_rpm = -1000.0f;                         /* 仅用2006向后倒退 */
+                        chassis_handle.chassis_speed.target_2006_rpm = -1000.0f;                         /* 仅用2006向后倒退 */
                         if (get_front_photoelectric() == false) {           /* 前光电感应到台阶边缘，停止后退，车子进入下降标志位 */
-                            target_2006_rpm = 0.0f;                         /* 2006停止运转 */
+                            chassis_handle.chassis_speed.target_2006_rpm = 0.0f;                         /* 2006停止运转 */
                             chassis_handle.lift_state = LIFT_STATE_DOWN;    /* 车子下降（达妙恢复30°收起位置） */  
                             chassis_handle.lift_fsm.timer = xTaskGetTickCount();
                             chassis_handle.lift_fsm.step = 3;
@@ -250,23 +255,51 @@ void chassis_driver_task(void *pvParameters)
 {
     (void)pvParameters; 
     int16_t motor_out_current[4] = {0};
+    bool halt_last = chassis_handle.halt;
 
     while(1) {
-        omni_wheels_resolve((const chassis_speed_t*)&chassis_handle.chassis_speed, (volatile float*)chassis_handle.chassis_speed.target_rpm);
-        
-        for(int i = 0; i < 4; i++) {
-            float real_rpm = dji_3508_handle[i].speed_rpm;
-            float target_rpm = chassis_handle.chassis_speed.target_rpm[i]; 
-            float calc_current = pid_calc(&dji_3508_pid[i], target_rpm, real_rpm);
-            motor_out_current[i] = (int16_t)calc_current;
+        if (chassis_handle.halt != halt_last) {
+            /* 模式切换沿触发时清零 PID 内部状态，避免跨模式继承积分和误差历史 */
+            for (int i = 0; i < 4; i++) {
+                chassis_pid_clear_state(&dji_3508_speed_pid[i]);
+                chassis_pid_clear_state(&dji_3508_pos_pid[i]);
+            }
+
+            if (chassis_handle.halt) {
+                chassis_handle.degree_lock = false;
+            }
+            halt_last = chassis_handle.halt;
         }
 
+        if(!chassis_handle.halt) {
+            chassis_handle.degree_lock = false;             
+            omni_wheels_resolve((const chassis_speed_t*)&chassis_handle.chassis_speed, (volatile float*)chassis_handle.chassis_speed.target_rpm);
+
+            for(int i = 0; i < 4; i++) {
+                float real_rpm = dji_3508_handle[i].speed_rpm;
+                float target_rpm = chassis_handle.chassis_speed.target_rpm[i]; 
+                float calc_current = pid_calc(&dji_3508_speed_pid[i], target_rpm, real_rpm);
+                motor_out_current[i] = (int16_t)calc_current;
+            }
+        } else {
+            chassis_halt_degree_update();
+            for (int i = 0; i < 4; i++) {
+                float target_degree = chassis_handle.g_current_rotor_degree[i];
+                float measure_degree = dji_3508_handle[i].rotor_degree;
+                float target_rpm = pid_calc(&dji_3508_pos_pid[i], target_degree, measure_degree);
+                float measure_rpm = dji_3508_handle[i].speed_rpm;
+                float calc_current = pid_calc(&dji_3508_speed_pid[i], target_rpm, measure_rpm);
+                motor_out_current[i] = (int16_t)calc_current;
+            }
+        }
+
+        /* 3508 主控电机 PID 计算与 CAN 下发 */
         dji_motor_set_current(CHASSIS_CAN_SELECT, DJI_MOTOR_GROUP1, motor_out_current[0], 
                               motor_out_current[1], motor_out_current[2], motor_out_current[3]);
-        
+
         /* 2006 辅控电机 PID 计算与 CAN 下发 (使用 0x1FF 即 DJI_MOTOR_GROUP2) */
         float real_2006_rpm = dji_2006_handle.speed_rpm;
-        int16_t motor_2006_out = (int16_t)pid_calc(&dji_2006_pid, target_2006_rpm, real_2006_rpm);
+        int16_t motor_2006_out = (int16_t)pid_calc(&dji_2006_pid, chassis_handle.chassis_speed.target_2006_rpm, real_2006_rpm);
         dji_motor_set_current(CHASSIS_CAN_SELECT, DJI_MOTOR_GROUP2, motor_2006_out, 0, 0, 0);
 
         /* 达妙伺服电机位置持续高频发包控制（MIT 模式） */
@@ -319,9 +352,11 @@ static void chassis_switch_mode(uint8_t key, remote_key_event_t event) {
             if (chassis_handle.halt) {
                 log_message(LOG_INFO, "Release chassis halt. ");
                 chassis_handle.halt = false;
+                chassis_handle.degree_lock = false;
             } else {
                 log_message(LOG_INFO, "Set chassis halt. ");
                 chassis_handle.halt = true;
+                chassis_handle.degree_lock = false;
             }
         } break;
 
@@ -403,7 +438,8 @@ static void chassis_bottom_init(void){
 
     /* DJI电机PID初始化 */
     for(int i = 0; i < 4; i++) {
-        pid_init(&dji_3508_pid[i], 16384.0f, 800.0f, 0.0f, 20000.0f, DELTA_PID, 1.48f, 0.2f, 0.0f);
+        pid_init(&dji_3508_speed_pid[i], 16384.0f, 800.0f, 0.0f, 20000.0f, DELTA_PID, 1.48f, 0.2f, 0.0f);
+        pid_init(&dji_3508_pos_pid[i], 3000.0f, 800.0f, 0.0f, 360.0f, DELTA_PID, 120.0f, 0.2f, 1.5f);
     }
     pid_init(&dji_2006_pid, 10000.0f, 500.0f, 0.0f, 15000.0f, DELTA_PID, 2.0f, 0.1f, 0.0f);
     
@@ -439,4 +475,36 @@ static void chassis_tasks_init(void) {
         return;
     }                
 
+}
+
+/* ==================================================== 其他功能函数 ==================================================== */
+/**
+ * @brief 更新自锁时的轮子角度，进入自锁时记录当前轮子角度并锁定，退出自锁时解锁
+ * @note 该函数仅在底盘进入自锁状态的第一周期被调用一次，确保在自锁过程中目标角度保持不变
+ */
+
+static void chassis_halt_degree_update(void) {
+    if (chassis_handle.halt && !chassis_handle.degree_lock) {
+        for (int i = 0; i < 4; i++) {
+            chassis_handle.g_current_rotor_degree[i] = dji_3508_handle[i].rotor_degree;
+        }
+        chassis_handle.degree_lock = true;
+    }
+}
+
+static void chassis_pid_clear_state(pid_t *pid) {
+    pid->iout = 0.0f;
+    pid->pos_out = 0.0f;
+
+#if PID_USE_DELTA_PID
+    pid->err[0] = 0.0f;
+    pid->err[1] = 0.0f;
+    pid->err[2] = 0.0f;
+    pid->delta_u = 0.0f;
+    pid->delta_out = 0.0f;
+    pid->delta_lastout = 0.0f;
+#else
+    pid->err[0] = 0.0f;
+    pid->err[1] = 0.0f;
+#endif
 }
