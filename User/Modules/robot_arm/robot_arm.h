@@ -50,13 +50,13 @@ typedef struct {
 	// 机械臂轨迹规划
 	float arm_start_pos[3]; // 机械臂三轴起始位置
 	float arm_goal_pos[3];  // 机械臂三轴目标位置
-	Trajectory arm_traj[3]; // 机械臂三轴梯形轨迹
+	Trajectory_Handler_t arm_traj[3]; // 机械臂三轴梯形轨迹
 	uint8_t arm_motion_active;         // 机械臂运动是否激活标志
 
 	// 电机轨迹规划
 	float dm_start_pos[4];   // 四个电机起始位置
 	float dm_goal_pos[4];    // 四个电机目标位置
-	Trajectory dm_traj[4];   // 四个电机梯形轨迹
+	Trajectory_Handler_t dm_traj[4];   // 四个电机梯形轨迹
 	uint8_t dm_motion_active;          // 电机运动是否激活标志
 
 	// 状态管理

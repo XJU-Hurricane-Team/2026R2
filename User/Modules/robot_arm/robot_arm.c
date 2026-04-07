@@ -38,7 +38,7 @@
  * @param goal 目标位置数组
  * @param count 轨迹/位置的个数
  */
-static void traj_group_reset(Trajectory *traj, float *start, float *goal, int count) {
+static void traj_group_reset(Trajectory_Handler_t *traj, float *start, float *goal, int count) {
     for (int i = 0; i < count; i++) {
         start[i] = 0.0f;
         goal[i] = 0.0f;
@@ -58,7 +58,7 @@ static void traj_group_reset(Trajectory *traj, float *start, float *goal, int co
  * @param[out] w_des 期望速度输出数组
  * @return 运动状态综合标志 (0:所有轨迹完成, 非0:至少有一条还在运动)
  */
-static uint8_t traj_update_all(Trajectory *traj, int count, float *p_des, float *w_des) {
+static uint8_t traj_update_all(Trajectory_Handler_t *traj, int count, float *p_des, float *w_des) {
     uint8_t running = 0;
 
     for (int i = 0; i < count; i++) {

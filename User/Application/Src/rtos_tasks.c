@@ -18,9 +18,6 @@ static TaskHandle_t arm_ctrl_task_handle;
 void arm_ctrl_task(void *pvParameters);
 
 static RobotArm g_robot_arm;
-static TaskHandle_t task3_handle;
-void task3(void *pvParameters);
-
 
 /*****************************************************************************/
 
@@ -50,12 +47,10 @@ void start_task(void *pvParameters) {
     xTaskCreate(task1, "task1", 128, NULL, 2, &task1_handle);
     xTaskCreate(arm_ctrl_task, "arm_ctrl_task", 256, NULL, 2,
                 &arm_ctrl_task_handle);
-    xTaskCreate(task3, "task3", 128, NULL, 2, &task3_handle);
     vTaskDelete(start_task_handle);
     taskEXIT_CRITICAL();
 }
 
-char buf[256];
 
 /**
  * @brief Task1: Blink.
@@ -66,7 +61,7 @@ void task1(void *pvParameters) {
     UNUSED(pvParameters);
     LED0_OFF();
     LED1_ON();
-    
+
     while (1) {
         LED0_TOGGLE();
         LED1_TOGGLE();
