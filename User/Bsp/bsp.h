@@ -21,6 +21,8 @@ extern "C" {
 #include "./DJI-Motor/dji_bldc_motor.h"
 #include "./Damiao-Motor/damiao.h"
 #include "./buffer_append/buffer_append.h"
+#include "./pid/pid.h"
+#include "trajectory_plan/trajectory_plan.h"
 
 
 void bsp_init(void);

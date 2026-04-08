@@ -1,6 +1,21 @@
 {
     "version": "0.2.0",
     "configurations": [
+        {
+            "cwd": "${workspaceRoot}",
+            "type": "cortex-debug",
+            "request": "launch",
+            "name": "Debug: OpenOCD",
+            "servertype": "openocd",
+            "executable": "Build/Debug/g4_template.elf",
+            "runToEntryPoint": "main",
+            "configFiles": [
+                "interface/stlink.cfg",
+                "target/stm32g4x.cfg"
+            ],
+            "toolchainPrefix": "arm-none-eabi",
+            "svdFile": ".pack/Keil/STM32G4xx_DFP.1.6.0/CMSIS/SVD/STM32G474.svd"
+        },
         
         {
             "cwd": "${workspaceRoot}",

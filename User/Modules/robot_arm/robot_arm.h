@@ -2,8 +2,8 @@
  * @file robot_arm.h
  * @author xinglu
  * @brief 机械臂驱动模块
- * @version 1.4
- * @date 2026-04-06
+ * @version 1.5
+ * @date 2026-04-08
  */
 
 #ifndef ROBOT_ARM
@@ -11,7 +11,6 @@
 
 #include <cubemx.h>
 #include "./Damiao-Motor/damiao.h"
-#include "./trajectory_plan/trajectory_plan.h"
 #include "arm_math.h"
 
 /**
@@ -35,6 +34,14 @@ typedef enum {
 	EVENT_TRAJ_FINISHED = 3,   // 轨迹完成事件
 } arm_event_t;
 
+/**
+ * @brief 机械臂控制目标类型
+ */
+typedef enum {
+	ARM_TARGET_CARTESIAN = 0,  // 末端位置目标(y/z/pitch)
+	ARM_TARGET_JOINT = 1       // 关节角目标(joint1/2/3)
+} arm_target_mode_t;
+
 typedef struct {
 	dm_handle_t damiao_1;          
 	dm_handle_t damiao_2;             
@@ -45,12 +52,13 @@ typedef struct {
 	float arm_target_y;         // 机械臂目标Y坐标
 	float arm_target_z;         // 机械臂目标Z坐标
 	float arm_target_pitch;     // 机械臂目标俯仰角
+	float arm_joint_target[3];  // 机械臂三个关节目标角
 
 	// 机械臂轨迹规划
 	float arm_start_pos[3]; 	// 机械臂三轴起始位置
 	float arm_goal_pos[3];  	// 机械臂三轴目标位置
-	Trajectory arm_traj[3]; 	// 机械臂三轴梯形轨迹
 	uint8_t arm_motion_active;  // 机械臂运动是否激活标志
+	arm_target_mode_t target_mode; // 当前目标模式
 
 	// 状态管理
 	arm_status_t status;        // 当前机械臂状态
@@ -58,13 +66,14 @@ typedef struct {
 
 // 初始化和更新函数
 void robot_arm_system_init(RobotArm *arm);
-void traj_group_reset(Trajectory *traj, float *start, float *goal, int count);
 void robot_arm_update(RobotArm *arm);
 
 // 运动控制函数
 void arm_pos_angle(float y1, float z1, float pitch_angle, float angle[3]);
 void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]);
 void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch);
+void robot_arm_set_joint_target(RobotArm *arm, float joint1, float joint2,
+								float joint3);
 
 #endif /* ROBOT_ARM */
 
