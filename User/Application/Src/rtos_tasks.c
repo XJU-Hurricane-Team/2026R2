@@ -17,7 +17,22 @@ void task1(void *pvParameters);
 static TaskHandle_t arm_ctrl_task_handle;
 void arm_ctrl_task(void *pvParameters);
 
-static RobotArm g_robot_arm;
+RobotArm g_robot_arm;
+
+/* Simple target point type used by the test sequence */
+typedef struct {
+    float y;
+    float z;
+    float pitch;
+} target_point_t;
+
+/* Four test points: origin + three targets */
+static const target_point_t target_points[4] = {
+    {139.95f, 102.70f, 0.0f},   /* zero point */
+    {300.0f,  102.70f, 0.0f},   /* test point 1 */
+    {300.0f,  300.0f,  0.0f},   /* test point 2 */
+    {500.0f,  500.0f,  90.0f},   /* test point 3 */
+};
 
 /*****************************************************************************/
 
@@ -45,12 +60,11 @@ void start_task(void *pvParameters) {
     robot_arm_system_init(&g_robot_arm);
 
     xTaskCreate(task1, "task1", 128, NULL, 2, &task1_handle);
-    xTaskCreate(arm_ctrl_task, "arm_ctrl_task", 256, NULL, 2,
+    xTaskCreate(arm_ctrl_task, "arm_ctrl_task", 512, NULL, 2,
                 &arm_ctrl_task_handle);
     vTaskDelete(start_task_handle);
     taskEXIT_CRITICAL();
 }
-
 
 /**
  * @brief Task1: Blink.
@@ -69,40 +83,60 @@ void task1(void *pvParameters) {
     }
 }
 
-/**
- * @brief Arm control test task: scan key and run two-point arm test.
- *
- * @param pvParameters Start parameters.
- */
 void arm_ctrl_task(void *pvParameters) {
     UNUSED(pvParameters);
 
     key_press_t key = KEY_NO_PRESS;
+    const float joint_step = 0.10f;
+
+    uint8_t index = -1;
+
+    float joint_target[3] = {0.0f, 0.0f, 0.0f};
+    robot_arm_set_joint_target(&g_robot_arm, joint_target[0],
+                                joint_target[1], joint_target[2]);
+    g_robot_arm.arm_motion_active = 0;
 
     while (1) {
         key = key_scan(0);
         switch (key) {
             case KEY0_PRESS: {
-                robot_arm_set_target(&g_robot_arm, 0.0f, 0.0f, 0.0f);
+                joint_target[0] += joint_step;
+                robot_arm_set_joint_target(&g_robot_arm, joint_target[0],
+                                           joint_target[1], joint_target[2]);
                 g_robot_arm.arm_motion_active = 0;
             } break;
 
             case KEY1_PRESS: {
-                robot_arm_set_target(&g_robot_arm, 160.0f, 90.0f, 0.0f);
+                joint_target[1] += joint_step;
+                robot_arm_set_joint_target(&g_robot_arm, joint_target[0],
+                                           joint_target[1], joint_target[2]);
                 g_robot_arm.arm_motion_active = 0;
             } break;
 
             case KEY2_PRESS: {
-                robot_arm_set_target(&g_robot_arm, 220.0f, 120.0f, 0.0f);
+                joint_target[2] += joint_step;
+                robot_arm_set_joint_target(&g_robot_arm, joint_target[0],
+                                           joint_target[1], joint_target[2]);
                 g_robot_arm.arm_motion_active = 0;
             } break;
 
-            default: {
+            case WKUP_PRESS: {
+                index = (index + 1) % 4;
+                robot_arm_set_target(&g_robot_arm, target_points[index].y,
+                                     target_points[index].z,
+                                     target_points[index].pitch);
+                                     
+                joint_target[0] = target_points[index].y;
+                joint_target[1] = target_points[index].z;
+                joint_target[2] = target_points[index].pitch;
+
+                g_robot_arm.arm_motion_active = 0;
             } break;
+
+            default: break;
         }
 
-        robot_arm_test_update(&g_robot_arm);
-
+        robot_arm_update(&g_robot_arm);
         vTaskDelay(10);
     }
 }

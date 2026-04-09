@@ -19,6 +19,7 @@ virtualFolder:
         - path: User/Bsp/DJI-Motor/dji_bldc_motor.c
         - path: User/Bsp/usart_ex/usart_ex.c
         - path: User/Bsp/Damiao-Motor/damiao.c
+        - path: User/Bsp/servo/servo.c
       folders: []
     - name: Application
       files:
@@ -83,6 +84,7 @@ virtualFolder:
         - path: User/Modules/remote_ctrl/remote_ctrl.c
         - path: User/Modules/logger/logger.c
         - path: User/Modules/message-protocol/msg_protocol.c
+        - path: User/Modules/catch_head/catch_head.c
       folders: []
 dependenceList: []
 outDir: Build
@@ -235,6 +237,11 @@ targets:
         otherCmds: ""
         proType: 1
         speed: 8000
+      OpenOCD:
+        baseAddr: "0x08000000"
+        bin: ""
+        interface: stlink
+        target: stm32g4x
       STLink:
         address: "0x08000000"
         bin: ""
@@ -245,4 +252,4 @@ targets:
         resetMode: default
         runAfterProgram: true
         speed: 4000
-    uploader: STLink
+    uploader: JLink
