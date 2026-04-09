@@ -1,7 +1,7 @@
 /**
  * @file robot_arm.h
  * @author xinglu
- * @brief »úĞµ±ÛÇı¶¯Ä£¿é
+ * @brief æœºæ¢°è‡‚é©±åŠ¨æ¨¡å—
  * @version 1.5
  * @date 2026-04-08
  */
@@ -14,32 +14,32 @@
 #include "arm_math.h"
 
 /**
- * @brief »úĞµ±Û×´Ì¬¶¨Òå
+ * @brief æœºæ¢°è‡‚çŠ¶æ€å®šä¹‰
  */
 typedef enum {
-	ARM_DEFAULT = 0,           // Ä¬ÈÏ×´Ì¬
-	ARM_MOVING_TO_READY = 1,   // ÒÆ¶¯µ½×¼±¸Î»ÖÃ
-	ARM_READY = 2,             // ×¼±¸¾ÍĞ÷
-	ARM_CATCHING = 3,          // ×¥È¡¶¯×÷
-	ARM_PLACING = 4,           // ·ÅÖÃ¶¯×÷
+	ARM_DEFAULT = 0,           // é»˜è®¤çŠ¶æ€
+	ARM_MOVING_TO_READY = 1,   // ç§»åŠ¨åˆ°å‡†å¤‡ä½ç½®
+	ARM_READY = 2,             // å‡†å¤‡å°±ç»ª
+	ARM_CATCHING = 3,          // æŠ“å–åŠ¨ä½œ
+	ARM_PLACING = 4,           // æ”¾ç½®åŠ¨ä½œ
 } arm_status_t;
 
 /**
- * @brief »úĞµ±ÛÊÂ¼ş±êÖ¾¶¨Òå
+ * @brief æœºæ¢°è‡‚äº‹ä»¶æ ‡å¿—å®šä¹‰
  */
 typedef enum {
-	EVENT_READY = 0,           // ×¼±¸Î»ÖÃÊÂ¼ş
-	EVENT_CATCH = 1,           // ×¥È¡ÊÂ¼ş
-	EVENT_PLACE = 2,           // ·ÅÖÃÊÂ¼ş
-	EVENT_TRAJ_FINISHED = 3,   // ¹ì¼£Íê³ÉÊÂ¼ş
+	EVENT_READY = 0,           // å‡†å¤‡ä½ç½®äº‹ä»¶
+	EVENT_CATCH = 1,           // æŠ“å–äº‹ä»¶
+	EVENT_PLACE = 2,           // æ”¾ç½®äº‹ä»¶
+	EVENT_TRAJ_FINISHED = 3,   // è½¨è¿¹å®Œæˆäº‹ä»¶
 } arm_event_t;
 
 /**
- * @brief »úĞµ±Û¿ØÖÆÄ¿±êÀàĞÍ
+ * @brief æœºæ¢°è‡‚æ§åˆ¶ç›®æ ‡ç±»å‹
  */
 typedef enum {
-	ARM_TARGET_CARTESIAN = 0,  // Ä©¶ËÎ»ÖÃÄ¿±ê(y/z/pitch)
-	ARM_TARGET_JOINT = 1       // ¹Ø½Ú½ÇÄ¿±ê(joint1/2/3)
+	ARM_TARGET_CARTESIAN = 0,  // æœ«ç«¯ä½ç½®ç›®æ ‡(y/z/pitch)
+	ARM_TARGET_JOINT = 1       // å…³èŠ‚è§’ç›®æ ‡(joint1/2/3)
 } arm_target_mode_t;
 
 typedef struct {
@@ -48,27 +48,27 @@ typedef struct {
 	dm_handle_t damiao_3;             
 	dm_handle_t damiao_4;              
 
-	// Ä¿±êÎ»ÖÃĞÅÏ¢
-	float arm_target_y;         // »úĞµ±ÛÄ¿±êY×ø±ê
-	float arm_target_z;         // »úĞµ±ÛÄ¿±êZ×ø±ê
-	float arm_target_pitch;     // »úĞµ±ÛÄ¿±ê¸©Ñö½Ç
-	float arm_joint_target[3];  // »úĞµ±ÛÈı¸ö¹Ø½ÚÄ¿±ê½Ç
+	// ç›®æ ‡ä½ç½®ä¿¡æ¯
+	float arm_target_y;         // æœºæ¢°è‡‚ç›®æ ‡Yåæ ‡
+	float arm_target_z;         // æœºæ¢°è‡‚ç›®æ ‡Zåæ ‡
+	float arm_target_pitch;     // æœºæ¢°è‡‚ç›®æ ‡ä¿¯ä»°è§’
+	float arm_joint_target[3];  // æœºæ¢°è‡‚ä¸‰ä¸ªå…³èŠ‚ç›®æ ‡è§’
 
-	// »úĞµ±Û¹ì¼£¹æ»®
-	float arm_start_pos[3]; 	// »úĞµ±ÛÈıÖáÆğÊ¼Î»ÖÃ
-	float arm_goal_pos[3];  	// »úĞµ±ÛÈıÖáÄ¿±êÎ»ÖÃ
-	uint8_t arm_motion_active;  // »úĞµ±ÛÔË¶¯ÊÇ·ñ¼¤»î±êÖ¾
-	arm_target_mode_t target_mode; // µ±Ç°Ä¿±êÄ£Ê½
+	// æœºæ¢°è‡‚è½¨è¿¹è§„åˆ’
+	float arm_start_pos[3]; 	// æœºæ¢°è‡‚ä¸‰è½´èµ·å§‹ä½ç½®
+	float arm_goal_pos[3];  	// æœºæ¢°è‡‚ä¸‰è½´ç›®æ ‡ä½ç½®
+	uint8_t arm_motion_active;  // æœºæ¢°è‡‚è¿åŠ¨æ˜¯å¦æ¿€æ´»æ ‡å¿—
+	arm_target_mode_t target_mode; // å½“å‰ç›®æ ‡æ¨¡å¼
 
-	// ×´Ì¬¹ÜÀí
-	arm_status_t status;        // µ±Ç°»úĞµ±Û×´Ì¬
+	// çŠ¶æ€ç®¡ç†
+	arm_status_t status;        // å½“å‰æœºæ¢°è‡‚çŠ¶æ€
 } RobotArm;
 
-// ³õÊ¼»¯ºÍ¸üĞÂº¯Êı
+// åˆå§‹åŒ–å’Œæ›´æ–°å‡½æ•°
 void robot_arm_system_init(RobotArm *arm);
 void robot_arm_update(RobotArm *arm);
 
-// ÔË¶¯¿ØÖÆº¯Êı
+// è¿åŠ¨æ§åˆ¶å‡½æ•°
 void arm_pos_angle(float y1, float z1, float pitch_angle, float angle[3]);
 void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]);
 void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch);

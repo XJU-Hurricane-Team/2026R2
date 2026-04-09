@@ -27,6 +27,7 @@ virtualFolder:
         - path: User/Application/Src/chassis.c
         - path: User/Application/Src/msg_process.c
         - path: User/Modules/robot_arm/robot_arm.c
+        - path: User/Application/Src/microros_ctrl.c
       folders: []
     - name: Middlewares
       files: []
@@ -54,6 +55,13 @@ virtualFolder:
             - path: User/Middlewares/CMSIS_DSP/1.16.2/Source/BasicMathFunctions/BasicMathFunctions.c
             - path: User/Middlewares/CMSIS_DSP/1.16.2/Source/CommonTables/CommonTables.c
             - path: User/Middlewares/CMSIS_DSP/1.16.2/Source/FastMathFunctions/FastMathFunctions.c
+          folders: []
+        - name: MicroRos
+          files:
+            - path: User/Middlewares/microros_humble/extra_sources/custom_memory_manager.c
+            - path: User/Middlewares/microros_humble/extra_sources/dma_transport.c
+            - path: User/Middlewares/microros_humble/extra_sources/microros_allocators.c
+            - path: User/Middlewares/microros_humble/extra_sources/microros_time.c
           folders: []
     - name: Utils
       files:
@@ -192,12 +200,9 @@ targets:
         options:
           version: 5
           afterBuildTasks: []
-          asm-compiler:
-            ASM_FLAGS: ""
+          asm-compiler: {}
           beforeBuildTasks: []
           c/cpp-compiler:
-            CXX_FLAGS: ""
-            C_FLAGS: ""
             language-c: c11
             language-cpp: c++11
             one-elf-section-per-data: true
@@ -206,15 +211,15 @@ targets:
             warnings: all-warnings
           global:
             $float-abi-type: hard
-            misc-control: ""
+            arm-thumb-mode: thumb
             not-use-syscalls: true
             output-debug-info: enable
             use-newlib-nano: true
           linker:
             $outputTaskExcludes:
               - .bin
-            LD_FLAGS: ""
-            LIB_FLAGS: -lm
+            $toolName: auto
+            LIB_FLAGS: -lm -lmicroros
             output-format: elf
             remove-unused-input-sections: true
         scatterFilePath: .\CubeMX\Drivers\CMSIS\Device\ST\STM32G4xx\Source\ld\STM32G474XX_FLASH.ld

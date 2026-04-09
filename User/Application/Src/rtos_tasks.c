@@ -75,7 +75,7 @@ void task1(void *pvParameters) {
     UNUSED(pvParameters);
     LED0_OFF();
     LED1_ON();
-    
+
     while (1) {
         LED0_TOGGLE();
         LED1_TOGGLE();
