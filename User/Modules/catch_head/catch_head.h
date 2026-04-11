@@ -1,7 +1,7 @@
 /**
  * @file catch_head.c
  * @author xinglu
- * @brief ??????
+ * @brief 矛头夹取模块
  * @version 1.1
  * @date 2026-04-11
  */
@@ -24,7 +24,7 @@
 #define DM_SPEED 0.6f
 
 /**
- * @brief DJI ???????????
+ * @brief DJI 电机夹取关节控制结构体
  */
 typedef struct {
 	dji_motor_handle_t *motor_handle;
@@ -37,8 +37,8 @@ typedef struct {
 } catch_head_dji_joint_t;
 
 /**
- * @brief DM ???????????
- * @note ???????????????
+ * @brief DM 电机执行关节控制结构体
+ * @note 主要用于夹取机构的位姿切换控制
  */
 typedef struct {
 	dm_handle_t *motor_handle;
@@ -47,20 +47,20 @@ typedef struct {
 } catch_head_dm_joint_t;
 
 /**
- * @brief ???????????
- * @note ??????????
+ * @brief 舵机执行关节控制结构体
+ * @note 用于控制夹爪开合状态
  */
 typedef struct {
 	servo_t *servo_handle;
 	uint8_t target_index;
 } catch_head_servo_joint_t;
 
-void catch_head_init(void);   //???????
-void catch_head(void);        // ??????????
+void catch_head_init(void);   //初始化夹取模块
+void catch_head(void);        // 夹取模块周期更新函数
 
-void catch_head_on_key(key_press_t key); //????????????? DJI ???DM ???????
+void catch_head_on_key(key_press_t key); //调试接口：通过按键循环切换 DJI 电机、DM 电机和舵机目标
 
-// ???????
+// 目标位设置函数
 void catch_head_set_dji_target(uint8_t target_index);
 void catch_head_set_dm_target(uint8_t target_index);
 void catch_head_set_servo_target(uint8_t target_index);
