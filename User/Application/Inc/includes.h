@@ -32,6 +32,7 @@ extern "C" {
 #include "remote_ctrl/remote_ctrl.h"
 #include "message-protocol/msg_protocol.h"
 #include "logger/logger.h"  
+#include "microros_ctrl.h"
 
 
 #include "robot_arm/robot_arm.h"

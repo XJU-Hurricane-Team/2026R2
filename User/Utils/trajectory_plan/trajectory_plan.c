@@ -1,17 +1,14 @@
 /**
- * @file s_curve_programing.c
- * @author meiwenhuaqingnian
+ * @file trajectory_plan.c
+ * @author whyyy
  * @brief 
- * @version 0.1
- * @date 2025-11-09
+ * @version 0.2
+ * @date 2026-3-31
  * 
  * 
  */
-#include "./trajectory_plan/trajectory_plan.h"
+#include "trajectory_plan/trajectory_plan.h"
 
-
-// PI 
-#define PI 3.1415926535
 
 /**
  * @brief 初始化梯形轨迹，计算关键时间参数
@@ -22,7 +19,7 @@
  * @param a_max 最大加速度 (rad/s^2)
  * @param dt 控制周期时间 (s)
  */
-void t_trajectory_init(Trajectory *traj, float p_start, float p_goal, float v_max, float a_max, float dt) {
+void t_trajectory_init(Trajectory_Handler_t *traj, float p_start, float p_goal, float v_max, float a_max, float dt) {
     
     traj->p_start = p_start;
     traj->p_goal = p_goal;
@@ -55,14 +52,13 @@ void t_trajectory_init(Trajectory *traj, float p_start, float p_goal, float v_ma
         traj->tv = 0.0; // 无匀速时间
         
     } else {
-        // --- 梯形运动 (可以达到v_max) ---
-        
+        // 梯形运动 (可以达到v_max)
         // 计算匀速时间 Tv
         float p_uniform = D - 2.0 * traj->p_accel;
         traj->tv = p_uniform / traj->v_max;
     }
     
-    // 计算总时间
+  
     traj->total_time = 2.0 * traj->ta + traj->tv;
     
     // 三角形运动下调整 p_accel
@@ -78,7 +74,7 @@ void t_trajectory_init(Trajectory *traj, float p_start, float p_goal, float v_ma
  * @param w_des 输出：期望速度 (rad/s)
  * @return int 1: 运动未完成, 0: 运动完成
  */
-int t_trajectory_update(Trajectory *traj, float *p_des, float *w_des) {
+int t_trajectory_update(Trajectory_Handler_t *traj, float *p_des, float *w_des) {
     
     if (traj->state == FINISHED) {
         *p_des = traj->p_goal;
@@ -99,8 +95,8 @@ int t_trajectory_update(Trajectory *traj, float *p_des, float *w_des) {
     }
 
     float t = traj->current_time;
-    float a = traj->a_max; // 加速度绝对值
-    float v = traj->v_max; // 速度绝对值
+    float a = traj->a_max; 
+    float v = traj->v_max;
     float Ta = traj->ta;
     float Tv = traj->tv;
     float P_accel = traj->p_accel;
@@ -120,15 +116,15 @@ int t_trajectory_update(Trajectory *traj, float *p_des, float *w_des) {
         *w_des = v * traj->is_negative;
 
     } else {
-        // 减速阶段: 计算剩余时间 T_rem，以 T_rem 的 t^2 形式靠近终点
+        // 减速阶段: 计算剩余时间 T_rem
         traj->state = DECELERATING;
         float T_rem = traj->total_time - t; // 剩余时间
         
-        // 减速阶段的位置公式 (从终点反算)
+        // 减速阶段的位置公式
         float p_rem = 0.5 * a * T_rem * T_rem;
         *p_des = traj->p_goal - p_rem * traj->is_negative;
         
-        // 减速阶段的速度公式 (速度为负或正，但绝对值减小)
+        // 减速阶段的速度公式
         *w_des = a * T_rem * traj->is_negative; 
     }
     
@@ -137,28 +133,3 @@ int t_trajectory_update(Trajectory *traj, float *p_des, float *w_des) {
 
 
 
-/**
- * @brief s型路径规划（未测试）
- * 
- * @param start_angle 
- * @param target_angle 
- * @param current_time 
- * @param total_time 
- * @return float 
- */
-float s_trajectory_update(float start_angle, float target_angle, float current_time, float total_time) {
-    float normalized_time = current_time / total_time;
-    
-    // 使用5次多项式生成S曲线
-    float t = normalized_time;
-    float t2 = t * t;
-    float t3 = t2 * t;
-    float t4 = t3 * t;
-    float t5 = t4 * t;
-    
-    // 5次多项式系数，保证起点和终点的速度、加速度为0
-    float position = start_angle + (target_angle - start_angle) * 
-                     (10 * t3 - 15 * t4 + 6 * t5);
-    
-    return position;
-}
