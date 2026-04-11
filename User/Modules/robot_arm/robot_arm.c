@@ -4,21 +4,23 @@
  * @brief 机械臂驱动模块
  *
  * @note 核心流程：目标位置 -> 逆向运动学 -> 梯形轨迹规划 -> CAN MIT控制 -> 反馈闭环
- * @version 1.5
- * @date 2026-04-08
+ * @version 1.6
+ * @date 2026-04-11
  */
 
 #include "robot_arm/robot_arm.h"
 
 #define ARM_1           450.0f
 #define ARM_2           450.0f
-#define ARM_3           105.0f // 吸盘电机轴心到吸盘作用点的直线距离
-#define DEFAULT_ANGLE_1 0.16f
-#define DEFAULT_ANGLE_2 0.34f 
-#define DEFAULT_ANGLE_3 0.92f
-#define DEFAULT_X       139.95f
-#define DEFAULT_Z       102.70f
-#define DM_SPEED        0.3f
+#define ARM_3           105.0f            
+#define DEFAULT_ANGLE_1 0.1645f
+#define DEFAULT_ANGLE_2 0.1747f 
+#define DEFAULT_ANGLE_3 0.9155f
+#define DEFAULT_X       0.0f
+#define DEFAULT_Z       0.0f
+#define DEFAULT_ARM_1_2 66.5f
+#define DEFAULT_ARM3_X  85.72f    // ARM3和吸盘的直线距离
+#define DM_SPEED        0.4f
 
 /**
  * @brief 初始化机械臂系统：电机、CAN、轨迹、状态
@@ -123,7 +125,7 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
     dm_pos_speed_ctrl(&arm->damiao_1, joint_des[0], DM_SPEED);
     dm_pos_speed_ctrl(&arm->damiao_2, -joint_des[0], DM_SPEED);
     dm_pos_speed_ctrl(&arm->damiao_3, joint_des[1], DM_SPEED);
-    dm_pos_speed_ctrl(&arm->damiao_4, joint_des[2], DM_SPEED);
+    dm_pos_speed_ctrl(&arm->damiao_4, joint_des[2], 0.8);
 }
 
 /**
@@ -148,7 +150,7 @@ void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3]) {
     z = z1 + DEFAULT_Z;
 
     // 2. 姿态解耦，求腕关节坐标
-    x_w = x - ARM_3 * cosf(pitch_angle);
+    x_w = x - ARM_3 * cosf(pitch_angle) - (DEFAULT_ARM3_X - DEFAULT_ARM_1_2) * cosf(pitch_angle);
     z_w = z - ARM_3 * sinf(pitch_angle);
     m_2 = x_w * x_w + z_w * z_w;
     arm_sqrt_f32(m_2, &m);
@@ -158,7 +160,7 @@ void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3]) {
     arm_sqrt_f32(1 - b * b, &b2);
     arm_atan2_f32(b2, b, &angle1_1);
     arm_atan2_f32(z_w, x_w, &angle1_2);
-    angle[0] = DEFAULT_ANGLE_1 +angle1_2 + angle1_1 - (PI / 2.0f);
+    angle[0] = DEFAULT_ANGLE_1 + PI/2 - angle1_1 - angle1_2;
 
     // 4. 求小臂角度
     a = (ARM_1 * ARM_1 + ARM_2 * ARM_2 - m_2) / (2 * ARM_1 * ARM_2);
@@ -166,6 +168,20 @@ void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3]) {
     arm_atan2_f32(a2, a, &angle2_inner);
     angle[1] = angle2_inner - DEFAULT_ANGLE_2;
 
+    if (x_w >= 0) {
+
+        // 第一象限：保持原有的几何构型解
+        angle[0] = DEFAULT_ANGLE_1 + PI/2 - angle1_1 - angle1_2;
+        angle[1] = angle2_inner - DEFAULT_ANGLE_2;
+    } else {
+
+        // 第二象限：切换到另一个解
+        // 1. 大臂角度的 - angle1_1 变号为 + angle1_1
+        angle[0] = DEFAULT_ANGLE_1 + PI/2 + angle1_1 - angle1_2;
+        // 2. 小臂弯曲方向反转！
+        angle[1] = 2 * PI - (DEFAULT_ANGLE_2 - angle2_inner); 
+    }
+
     // 5. 求吸盘角度
-    angle[2] = pitch_angle - angle[0] - angle[1] - DEFAULT_ANGLE_3 + (PI / 2.0f);
+    angle[2] = - pitch_angle - angle[0] + angle[1] + DEFAULT_ANGLE_3;
 }

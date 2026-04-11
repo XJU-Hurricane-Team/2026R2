@@ -28,10 +28,10 @@ typedef struct {
 
 /* Four test points: origin + three targets */
 static const target_point_t target_points[4] = {
-    {139.95f, 102.70f, 0.0f},   /* zero point */
-    {300.0f,  102.70f, 0.0f},   /* test point 1 */
-    {300.0f,  300.0f,  0.0f},   /* test point 2 */
-    {500.0f,  500.0f,  90.0f},   /* test point 3 */
+    {139.95f, 102.70f, 0.9155f},   /* zero point */
+    {450.0f,  356.0f, -PI/2.0},  
+    {500.0f,  300.0f, 0.0f},   
+    {-450.0f,  356.0f, -PI/2.0},   
 };
 
 /*****************************************************************************/

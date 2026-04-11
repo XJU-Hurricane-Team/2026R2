@@ -2,8 +2,8 @@
  * @file robot_arm.h
  * @author xinglu
  * @brief 机械臂驱动模块
- * @version 1.5
- * @date 2026-04-08
+ * @version 1.6
+ * @date 2026-04-11
  */
 
 #ifndef ROBOT_ARM
