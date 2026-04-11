@@ -2,6 +2,17 @@
 
 2026 赛季 R2 控制工程，基于 STM32G4 + FreeRTOS。
 
+### 开发提交流程要求：
+
+1. 克隆 main 分支在本地
+2. 在本地修改开发时，另行创建开发分支，如`git checkout -b chassis`，避免在主分支上直接开发。
+3. 提交代码时，只提交自己创建的分支，如`git push origin chassis`。
+4. 提交完成后，仓库云端应有main,chassis两个分支，将chassis合并至main分支
+5. 删除云端和本地的chassis分支。
+6. 下次开发时pull最新main分支，再创建分支进行开发。
+
+**禁止直接在main分支上修改，提交**
+
 ## 功能
 
 - 底盘控制：手动/自动/抬升序列模式
