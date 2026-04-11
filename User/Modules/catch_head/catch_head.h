@@ -31,7 +31,7 @@ typedef struct {
 	float reduction_ratio;
 	pid_t angle_pid;
 	pid_t speed_pid;
-	Trajectory trajectory;
+	Trajectory_Handler_t trajectory;
 	float target_angle_deg[CATCH_HEAD_DJI_TARGET_COUNT];
 	uint8_t target_index;
 } catch_head_dji_joint_t;
