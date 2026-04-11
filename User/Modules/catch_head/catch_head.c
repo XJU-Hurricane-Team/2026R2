@@ -1,14 +1,14 @@
 /**
  * @file catch_head.c
  * @author xinglu
- * @brief ??????
+ * @brief 矛头夹取模块
  * @version 1.1
  * @date 2026-04-11
  */
 
 #include "catch_head.h"
 
-/* ?????????????? */
+/* 夹取推球电机及其双环控制关节 */
 static dji_motor_handle_t s_catch_rod_motor;
 static catch_head_dji_joint_t s_catch_rod_joint = {
 	.motor_handle = &s_catch_rod_motor,
@@ -17,7 +17,7 @@ static catch_head_dji_joint_t s_catch_rod_joint = {
 	.target_index = 0,
 };
 
-/* ????? DM ?????????? */
+/* 夹取机构的 DM 执行电机及目标位管理 */
 static dm_handle_t s_dm_motor;
 static catch_head_dm_joint_t s_dm_joint = {
 	.motor_handle = &s_dm_motor,
@@ -25,27 +25,27 @@ static catch_head_dm_joint_t s_dm_joint = {
 	.target_index = 0,
 };
 
-/* ???????????? */
+/* 夹爪开合舵机及目标位管理 */
 static servo_t s_gripper_servo;
 static catch_head_servo_joint_t s_gripper_joint = {
 	.servo_handle = &s_gripper_servo,
 	.target_index = 0,
 };
 
-/* ????????????????????? */
+/* 模块就绪标志，避免初始化失败后继续执行控制 */
 static uint8_t s_ready = 0;
 
 /**
- * @brief ???????
- * @note ?? TIM1 CH1 ?????????????????
+ * @brief 初始化夹爪舵机
+ * @note 使用 TIM1 CH1 作为舵机输出通道，并配置上下限脉宽
  */
 void catch_head_servo_init(void) {
 	servo_init(&s_gripper_servo, &htim1, TIM_CHANNEL_1, 1400, 1908);
 }
 
 /**
- * @brief ??????????????
- * @note ?? DJI ???DM ???PID ?????????
+ * @brief 初始化夹取相关电机及控制参数
+ * @note 包括 DJI 电机、DM 电机、PID 参数和默认目标状态
  */
 void catch_head_motor_init(void) {
 	if (dji_motor_init(&s_catch_rod_motor, DJI_M2006, CAN_Motor1_ID,
@@ -77,8 +77,8 @@ void catch_head_motor_init(void) {
 }
 
 /**
- * @brief ??????????
- * @note ?????????????????
+ * @brief 夹取模块总初始化入口
+ * @note 先清除就绪标志，再初始化舵机和电机
  */
 void catch_head_init(void) {
 	s_ready = 0;
@@ -88,8 +88,8 @@ void catch_head_init(void) {
 }
 
 /**
- * @brief ????????
- * @note DJI ???????? + ??/???????DM ??????????
+ * @brief 夹取模块周期更新
+ * @note DJI 电机采用轨迹规划 + 角度/速度双环控制，DM 电机采用位置速度控制
  */
 void catch_head(void) {
 	if (s_ready == 0) {
@@ -125,8 +125,8 @@ void catch_head(void) {
 }
 
 /**
- * @brief ???????????
- * @note KEY0/1/2 ???? DJI ???DM ??????????
+ * @brief 调试接口：按键事件处理
+ * @note KEY0/1/2 分别切换 DJI 电机、DM 电机和舵机的目标状态
  */
 void catch_head_on_key(key_press_t key) {
 	if (s_ready == 0) {
@@ -152,8 +152,8 @@ void catch_head_on_key(key_press_t key) {
 }
 
 /**
- * @brief ?? DJI ????????
- * @note ???????????????????????
+ * @brief 设置 DJI 电机目标角度索引
+ * @note 会重新初始化轨迹，使当前角度平滑过渡到目标角度
  */
 void catch_head_set_dji_target(uint8_t target_index) {
 	if (s_catch_rod_joint.motor_handle == NULL) {
@@ -169,7 +169,7 @@ void catch_head_set_dji_target(uint8_t target_index) {
 }
 
 /**
- * @brief ?? DM ????????
+ * @brief 设置 DM 电机目标位置索引
  */
 void catch_head_set_dm_target(uint8_t target_index) {
 	if (s_dm_joint.motor_handle == NULL) {
@@ -181,8 +181,8 @@ void catch_head_set_dm_target(uint8_t target_index) {
 }
 
 /**
- * @brief ????????
- * @note target_index == 0 ??????? 0 ?????
+ * @brief 设置舵机开合状态
+ * @note target_index == 0 时关闭夹爪，非 0 时打开夹爪
  */
 void catch_head_set_servo_target(uint8_t target_index) {
 	if (s_gripper_joint.servo_handle == NULL || s_gripper_joint.servo_handle->htim == NULL) {
