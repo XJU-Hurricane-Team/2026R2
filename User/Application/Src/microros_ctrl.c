@@ -107,6 +107,7 @@ int microros_init(void) {
     // /* 注册日志的发送接收函数 */
     // log_register_output_callback(microros_log_msg_cb, microros_log_data_cb);
 
+
     return res;
 }
 
