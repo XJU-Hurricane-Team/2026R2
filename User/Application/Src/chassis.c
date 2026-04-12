@@ -192,12 +192,12 @@ void chassis_mode_task(void *pvParameters) {
             case CHASSIS_MODE_AUTO: {
                 chassis_handle.chassis_speed.target_2006_rpm =
                     0.0f; // 自动巡航模式下保证2006不转
-                float vx = g_nuc_ctrl_data.v * cosf(g_nuc_ctrl_data.yaw);
-                float vy = g_nuc_ctrl_data.v * sinf(g_nuc_ctrl_data.yaw);
-                float vw = g_nuc_ctrl_data.vw;
-                chassis_handle.chassis_speed.target_speed.vx = vx;
-                chassis_handle.chassis_speed.target_speed.vy = vy;
-                chassis_handle.chassis_speed.target_speed.vw = vw;
+                // float vx = g_nuc_ctrl_data.v * cosf(g_nuc_ctrl_data.yaw);
+                // float vy = g_nuc_ctrl_data.v * sinf(g_nuc_ctrl_data.yaw);
+                // float vw = g_nuc_ctrl_data.vw;
+                chassis_handle.chassis_speed.target_speed.vx = nav_pram.linear_x;
+                chassis_handle.chassis_speed.target_speed.vy = nav_pram.linear_y;
+                chassis_handle.chassis_speed.target_speed.vw = nav_pram.angular_z;
                 break;
             }
 

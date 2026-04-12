@@ -17,6 +17,7 @@ extern "C" {
 #endif /* __cplusplus */
 
 #include "custom_nav_msgs/msg/speed_heading.h"
+extern custom_nav_msgs__msg__SpeedHeading nav_pram;
 
 int microros_init(void);
 
