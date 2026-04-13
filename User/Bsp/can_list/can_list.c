@@ -410,6 +410,9 @@ void can_list_polling_task(void *args) {
         }
         id = rx_header.Identifier;
 
+        if (table->len == 0) {
+            continue;
+        }
         node = table->table[id % table->len];
 
         while ((node != NULL) && (node->id) != (id & node->id_mask)) {

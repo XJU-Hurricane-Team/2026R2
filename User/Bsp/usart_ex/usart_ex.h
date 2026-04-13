@@ -116,7 +116,7 @@ extern "C" {
 
 // <h> UART4 Configuration
 //   <e> UART4_TX_DMA                Enable UART4 TX DMA
-#define UART4_TX_DMA            0
+#define UART4_TX_DMA            1
 
 #ifdef UART4_TX_DMA
 //   <o> UART4_TX_DMA_BUF_SIZE       UART4 TX DMA Buffer Size  <8-4096:8>
@@ -125,13 +125,13 @@ extern "C" {
 #endif /* UART4_TX_DMA */
 
 //   <e> UART4_RX_DMA                Enable UART4 RX DMA
-#define UART4_RX_DMA            0
+#define UART4_RX_DMA            1
 
 #ifdef UART4_RX_DMA
 //   <o> UART4_RX_DMA_BUF_SIZE       UART4 RX DMA Buffer Size  <8-4096:8>
-#define UART4_RX_DMA_BUF_SIZE   256
+#define UART4_RX_DMA_BUF_SIZE   1024
 //   <o> UART4_RX_DMA_FIFO_SIZE      UART4 RX DMA FIFO Size    <8-4096:8>
-#define UART4_RX_DMA_FIFO_SIZE  256
+#define UART4_RX_DMA_FIFO_SIZE  1024
 //   </e> UART4_RX_DMA
 #endif /* UART4_RX_DMA */
 

@@ -13,7 +13,7 @@
 #include <string.h>
 
 /* 遥控器数据 */
-remote_ctrl_data_t g_remote_ctrl_data;
+remote_ctrl_data_t g_remote_ctrl_data = {0};
 
 /* 18 个按键, 3 个事件 */
 static remote_key_callback_t key_callback[REMOTE_KEY_NUM][REMOTE_KEY_EVENT_NUM];

@@ -19,6 +19,7 @@ extern "C" {
 #include "main.h"
 #include "stm32g4xx_hal_conf.h"
 #include "stm32g4xx_it.h"
+#include "tim.h"
 #include "usart.h"
 
 #ifdef __cplusplus

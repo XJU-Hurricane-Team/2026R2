@@ -1,6 +1,7 @@
 {
     "version": "0.2.0",
     "configurations": [
+
         {
             "cwd": "${workspaceRoot}",
             "type": "cortex-debug",
@@ -10,10 +11,12 @@
             "executable": "Build/Debug/g4_template.elf",
             "runToEntryPoint": "main",
             "configFiles": [
-                "interface/stlink.cfg",
+                "interface/cmsis-dap.cfg",
                 "target/stm32g4x.cfg"
             ],
             "toolchainPrefix": "arm-none-eabi",
+            "gdbPath": "gdb-multiarch",  // <==== 必须用这个！它不排斥 ROS
+            "serverpath": "/home/whyyy/openocd-xpack/bin/openocd",
             "svdFile": ".pack/Keil/STM32G4xx_DFP.1.6.0/CMSIS/SVD/STM32G474.svd"
         },
         
@@ -24,14 +27,15 @@
             "name": "Debug: JLINK",
             "servertype": "jlink",
             "interface": "swd",
-            "executable": "build/Debug/g4_template.elf",
+            "executable": "Build/Debug/g4_template.elf",
             "runToEntryPoint": "main",
             "device": "STM32G474VE",
-            "svdFile": ".pack/Keil/STM32G4xx_DFP.1.6.0/CMSIS/SVD/STM32G474.svd",
+            "toolchainPrefix": "arm-none-eabi",
             "liveWatch": {
                 "enabled": true,
-                "samplesPerSecond": 20
-            }
+                "samplesPerSecond": 4
+            },
+            "svdFile": ".pack/Keil/STM32G4xx_DFP.1.6.0/CMSIS/SVD/STM32G474.svd"
         }
     ]
 }

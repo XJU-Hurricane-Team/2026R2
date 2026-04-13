@@ -50,7 +50,7 @@ typedef enum {
 } can_selected_t;
 
 /* Wait for can tx mailbox empty times. */
-#define CAN_SEND_TIMEOUT        1000
+#define CAN_SEND_TIMEOUT        1500
 
 /* 需要手动说明CAN的使能状态 */
 #define CAN1_ENABLE 0   

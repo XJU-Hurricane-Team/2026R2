@@ -17,6 +17,9 @@ void task1(void *pvParameters);
 static TaskHandle_t arm_ctrl_task_handle;
 void arm_ctrl_task(void *pvParameters);
 
+static TaskHandle_t nav_task_handle;
+void nav_task(void *pvParameters);
+
 RobotArm g_robot_arm;
 
 /* Simple target point type used by the test sequence */
@@ -28,10 +31,10 @@ typedef struct {
 
 /* Four test points: origin + three targets */
 static const target_point_t target_points[4] = {
-    {139.95f, 102.70f, 0.9155f},   /* zero point */
-    {450.0f,  356.0f, -PI/2.0},  
-    {500.0f,  300.0f, 0.0f},   
-    {-450.0f,  356.0f, -PI/2.0},   
+    {139.95f, 102.70f, 0.9155f}, /* zero point */
+    {450.0f, 356.0f, -PI / 2.0},
+    {500.0f, 300.0f, 0.0f},
+    {-450.0f, 356.0f, -PI / 2.0},
 };
 
 /*****************************************************************************/
@@ -41,7 +44,7 @@ static const target_point_t target_points[4] = {
  *
  */
 void freertos_start(void) {
-    xTaskCreate(start_task, "start_task", 128, NULL, 2, &start_task_handle);
+    xTaskCreate(start_task, "start_task", 256, NULL, 2, &start_task_handle);
     vTaskStartScheduler();
 }
 
@@ -57,12 +60,18 @@ void start_task(void *pvParameters) {
     log_init(LOG_DEBUG);
     chassis_init();
     msg_process_init();
-    robot_arm_system_init(&g_robot_arm);
+    // robot_arm_system_init(&g_robot_arm);
 
     xTaskCreate(task1, "task1", 128, NULL, 2, &task1_handle);
     xTaskCreate(arm_ctrl_task, "arm_ctrl_task", 512, NULL, 2,
                 &arm_ctrl_task_handle);
-    vTaskDelete(start_task_handle);
+
+    if (xTaskCreate(nav_task, "nav_task", 128*10, NULL, 3, &nav_task_handle) !=
+        pdPASS) {
+        Error_Handler();
+    }
+
+    vTaskDelete(NULL);
     taskEXIT_CRITICAL();
 }
 
@@ -92,8 +101,8 @@ void arm_ctrl_task(void *pvParameters) {
     uint8_t index = -1;
 
     float joint_target[3] = {0.0f, 0.0f, 0.0f};
-    robot_arm_set_joint_target(&g_robot_arm, joint_target[0],
-                                joint_target[1], joint_target[2]);
+    robot_arm_set_joint_target(&g_robot_arm, joint_target[0], joint_target[1],
+                               joint_target[2]);
     g_robot_arm.arm_motion_active = 0;
 
     while (1) {
@@ -125,7 +134,7 @@ void arm_ctrl_task(void *pvParameters) {
                 robot_arm_set_target(&g_robot_arm, target_points[index].y,
                                      target_points[index].z,
                                      target_points[index].pitch);
-                                     
+
                 joint_target[0] = target_points[index].y;
                 joint_target[1] = target_points[index].z;
                 joint_target[2] = target_points[index].pitch;
@@ -133,7 +142,8 @@ void arm_ctrl_task(void *pvParameters) {
                 g_robot_arm.arm_motion_active = 0;
             } break;
 
-            default: break;
+            default:
+                break;
         }
 
         robot_arm_update(&g_robot_arm);

@@ -15,7 +15,9 @@
 void bsp_init(void) {
     uart_ex_init(&huart1);
     uart_ex_init(&huart2);
-    can_list_add_can(can1_selected, 4, 0);
+    uart_ex_init(&huart4);
+    can_list_add_can(can1_selected, 4, 4);
+    can_list_add_can(can2_selected, 4, 4);
 }
 
 #ifdef USE_FULL_ASSERT
