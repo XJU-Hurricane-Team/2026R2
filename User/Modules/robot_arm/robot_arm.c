@@ -4,8 +4,8 @@
  * @brief 机械臂驱动模块
  *
  * @note 核心流程：目标位置 -> 逆向运动学 -> 梯形轨迹规划 -> CAN MIT控制 -> 反馈闭环
- * @version 1.6
- * @date 2026-04-11
+ * @version 1.7
+ * @date 2026-04-13
  */
 
 #include "robot_arm/robot_arm.h"
@@ -45,14 +45,7 @@ void robot_arm_system_init(RobotArm *arm) {
     arm->arm_target_y = 0.0f;
     arm->arm_target_z = 0.0f;
     arm->arm_target_pitch = 0.0f;
-    arm->arm_joint_target[0] = 0.0f;
-    arm->arm_joint_target[1] = 0.0f;
-    arm->arm_joint_target[2] = 0.0f;
 
-    for (int i = 0; i < 3; i++) {
-        arm->arm_start_pos[i] = 0.0f;
-        arm->arm_goal_pos[i] = 0.0f;
-    }
     arm->arm_motion_active = 0;
     arm->target_mode = ARM_TARGET_CARTESIAN;
 
@@ -75,7 +68,7 @@ void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch) {
 }
 
 /**
- * @brief 设置机械臂关节角目标
+ * @brief 设置机械臂关节角目标（调试使用，正常情况不调用此函数）
  *
  * @param arm 机械臂结构体指针
  * @param joint1 关节1目标角(rad)
@@ -131,7 +124,7 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
 /**
  * @brief 输入指定的末端位置和吸盘姿态，计算 3 个电机的关节角度
  * @note 单位：长度(mm)，角度(rad)
- *
+ * @note 传入的x1,z1为相对于基座的坐标
  * @param x1 目标末端的水平前向坐标 (沿X轴)
  * @param z1 目标末端的垂直坐标
  * @param pitch_angle 吸盘末端期望的绝对俯仰角
@@ -176,10 +169,8 @@ void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3]) {
     } else {
 
         // 第二象限：切换到另一个解
-        // 1. 大臂角度的 - angle1_1 变号为 + angle1_1
         angle[0] = DEFAULT_ANGLE_1 + PI/2 + angle1_1 - angle1_2;
-        // 2. 小臂弯曲方向反转！
-        angle[1] = 2 * PI - (DEFAULT_ANGLE_2 - angle2_inner); 
+        angle[1] = 2 * PI + (DEFAULT_ANGLE_2 - angle2_inner); 
     }
 
     // 5. 求吸盘角度

@@ -1,9 +1,9 @@
 /**
- * @file catch_head.c
+ * @file catch_head.h
  * @author xinglu
  * @brief 矛头夹取模块
- * @version 1.1
- * @date 2026-04-11
+ * @version 1.2
+ * @date 2026-04-13
  */
 
 #ifndef __CATCH_HEAD_H
@@ -24,7 +24,7 @@
 #define DM_SPEED 0.6f
 
 /**
- * @brief DJI 电机夹取关节控制结构体
+ * @brief DJI 电机旋转关节控制结构体
  */
 typedef struct {
 	dji_motor_handle_t *motor_handle;

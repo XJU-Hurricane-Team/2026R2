@@ -21,6 +21,7 @@
 #include "dma.h"
 #include "fdcan.h"
 #include "usart.h"
+#include "tim.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
@@ -96,6 +97,7 @@ int main(void)
   MX_FDCAN3_Init();
   MX_LPUART1_UART_Init();
   MX_USART2_UART_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   bsp_init();
   freertos_start();
