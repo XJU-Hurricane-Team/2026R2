@@ -2,8 +2,8 @@
  * @file    servo.h
  * @author  xinglu
  * @brief   servo control.
- * @version 1.0
- * @date    2026-04-05
+ * @version 1.1
+ * @date    2026-04-13
  */
 
 #ifndef __SERVO_H
@@ -13,8 +13,7 @@
 
 typedef enum {
     SERVO_OPEN = 0,
-    SERVO_CATCH = 1,
-    SERVO_CLOSE = 2,
+    SERVO_CLOSE = 1,
 } servo_state_t;
 
 typedef struct {

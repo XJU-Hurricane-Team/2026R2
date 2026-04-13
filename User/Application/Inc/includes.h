@@ -34,7 +34,7 @@ extern "C" {
 #include "logger/logger.h"  
 #include "microros_ctrl.h"
 
-
+#include "catch_head/catch_head.h"
 #include "robot_arm/robot_arm.h"
 
 typedef enum {
@@ -61,6 +61,7 @@ extern nuc_ctrl_data_t g_nuc_ctrl_data;
 extern nuc_rx_mode_t g_nuc_rx_mode;
 
 void chassis_init(void);
+void catch_init(void);
 void msg_process_init(void);
 
 void freertos_start(void);

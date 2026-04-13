@@ -2,8 +2,9 @@
  * @file robot_arm.h
  * @author xinglu
  * @brief 机械臂驱动模块
- * @version 1.6
- * @date 2026-04-11
+ * 
+ * @version 1.7
+ * @date 2026-04-13
  */
 
 #ifndef ROBOT_ARM
@@ -14,7 +15,7 @@
 #include "arm_math.h"
 
 /**
- * @brief 机械臂状态定义
+ * @brief 机械臂状态定义，为上位机预留的接口
  */
 typedef enum {
 	ARM_DEFAULT = 0,           // 默认状态
@@ -25,7 +26,7 @@ typedef enum {
 } arm_status_t;
 
 /**
- * @brief 机械臂事件标志定义
+ * @brief 机械臂事件标志定义，为上位机预留的接口
  */
 typedef enum {
 	EVENT_READY = 0,           // 准备位置事件
@@ -55,8 +56,6 @@ typedef struct {
 	float arm_joint_target[3];  // 机械臂三个关节目标角
 
 	// 机械臂轨迹规划
-	float arm_start_pos[3]; 	// 机械臂三轴起始位置
-	float arm_goal_pos[3];  	// 机械臂三轴目标位置
 	uint8_t arm_motion_active;  // 机械臂运动是否激活标志
 	arm_target_mode_t target_mode; // 当前目标模式
 

@@ -2,8 +2,8 @@
  * @file    servo.c
  * @author  xinglu
  * @brief   servo control.
- * @version 1.0
- * @date    2026-04-05
+ * @version 1.1
+ * @date    2026-04-13
  */
 
 #include "servo.h"
@@ -11,7 +11,7 @@
 /**
  * @brief 初始化舵机实例并启动 PWM
  *
- * 在给定的 `htim`/`channel` 上启动 PWM，并将舵机初始化为关闭位置。
+ * 启动 PWM，并将舵机初始化为关闭位置。
  */
 void servo_init(servo_t *srv, TIM_HandleTypeDef *htim, uint32_t channel,
                 uint16_t open_pulse_us, uint16_t close_pulse_us) {
