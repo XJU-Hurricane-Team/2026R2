@@ -4,23 +4,61 @@
  * @brief 机械臂驱动模块
  *
  * @note 核心流程：目标位置 -> 逆向运动学 -> 梯形轨迹规划 -> CAN MIT控制 -> 反馈闭环
- * @version 1.7
- * @date 2026-04-13
+ * @version 1.8
+ * @date 2026-04-15
  */
 
-#include "robot_arm/robot_arm.h"
+#include "includes.h"
 
-#define ARM_1           450.0f
-#define ARM_2           450.0f
-#define ARM_3           105.0f            
-#define DEFAULT_ANGLE_1 0.1645f
-#define DEFAULT_ANGLE_2 0.1747f 
-#define DEFAULT_ANGLE_3 0.9155f
+#define ARM_1           450.0f     // 大臂长度
+#define ARM_2           450.0f     // 小臂长度
+#define ARM_3           105.0f     // 吸盘长度
+#define DEFAULT_ANGLE_1 0.1645f    // 大臂初始角度（相对于z轴正方向，逆时针为正）
+#define DEFAULT_ANGLE_2 0.1747f    // 大臂与小臂夹角
+#define DEFAULT_ANGLE_3 0.9155f    // 吸盘初始角度（相对于x轴正方向，逆时针为正）
 #define DEFAULT_X       0.0f
 #define DEFAULT_Z       0.0f
-#define DEFAULT_ARM_1_2 66.5f
-#define DEFAULT_ARM3_X  85.72f    // ARM3和吸盘的直线距离
+#define DEFAULT_ARM_1_2 66.5f      // 大臂与小臂连接处距离，即达妙4340长度
+#define DEFAULT_ARM3_X  85.72f     // ARM3和吸盘的直线距离
 #define DM_SPEED        0.4f
+
+#define ARM_SWITCH_KEY  10         // 遥控器按键编号，按下后切换到下一个预设点位
+
+typedef struct {
+    float y;
+    float z;
+    float pitch;
+} arm_target_point_t;
+
+static RobotArm g_robot_arm;
+static uint8_t g_arm_target_index;
+static TaskHandle_t g_robot_arm_task_handle;
+
+static const arm_target_point_t g_arm_target_points[4] = {
+    {139.95f + 20.0f, 102.70f, 0.9155f},  // 预设零点
+    {533.142f, 91.5027f, 0.0f},
+    {450.0f, 356.0f, 0.0f},
+    {-450.0f, 356.0f, 0.0f},
+};
+
+
+/**
+ * @brief 机械臂应用层初始化：创建任务、初始化机构、设置初始点位并注册遥控器按键回调
+ * @note 任务句柄和入口函数均由机械臂模块内部管理
+ */
+void robot_arm_init(void) {
+    xTaskCreate(robot_arm_task, "arm_ctrl_task", 512, NULL, 2,
+                &g_robot_arm_task_handle);
+                
+    robot_arm_system_init(&g_robot_arm);
+
+    g_arm_target_index = 0;
+    robot_arm_apply_target(g_arm_target_index);
+
+    remote_register_key_callback(ARM_SWITCH_KEY, REMOTE_KEY_PRESS_UP,
+                                 robot_arm_switch_target);
+}
+
 
 /**
  * @brief 初始化机械臂系统：电机、CAN、轨迹、状态
@@ -29,13 +67,13 @@
  */
 void robot_arm_system_init(RobotArm *arm) {
     dm_motor_init(&arm->damiao_1, 0x11, 0x01, DM_MODE_POS_SPEED, DM_J8006, 3.14f, 45.0f,
-                  20.0f, can1_selected);
+                  20.0f, can3_selected);
     dm_motor_init(&arm->damiao_2, 0x12, 0x02, DM_MODE_POS_SPEED, DM_J8006, 3.14f, 45.0f,
-                  20.0f, can1_selected);
+                  20.0f, can3_selected);
     dm_motor_init(&arm->damiao_3, 0x13, 0x03, DM_MODE_POS_SPEED, DM_J4340, 3.14f, 45.0f,
-                  20.0f, can1_selected);
+                  20.0f, can3_selected);
     dm_motor_init(&arm->damiao_4, 0x14, 0x04, DM_MODE_POS_SPEED, DM_J4310, 3.14f, 45.0f,
-                  20.0f, can1_selected);
+                  20.0f, can3_selected);
 
     dm_motor_enable(&arm->damiao_1);
     dm_motor_enable(&arm->damiao_2);
@@ -50,6 +88,50 @@ void robot_arm_system_init(RobotArm *arm) {
     arm->target_mode = ARM_TARGET_CARTESIAN;
 
     arm->status = ARM_DEFAULT;
+}
+
+/**
+ * @brief 机械臂周期任务
+ * @note 周期执行目标跟踪与电机控制
+ *
+ * @param pvParameters 任务参数（未使用）
+ */
+void robot_arm_task(void *pvParameters) {
+    UNUSED(pvParameters);
+
+    while (1) {
+        robot_arm_update(&g_robot_arm);
+        vTaskDelay(10);
+    }
+}
+
+/**
+ * @brief 根据索引应用预设点位
+ *
+ * @param index 预设点位索引
+ */
+void robot_arm_apply_target(uint8_t index) {
+    robot_arm_set_target(&g_robot_arm, g_arm_target_points[index].y,
+                         g_arm_target_points[index].z,
+                         g_arm_target_points[index].pitch);
+    g_robot_arm.arm_motion_active = 0;
+}
+
+/**
+ * @brief 遥控器控制：KEY10 抬起后切换到下一个预设点位
+ *
+ * @param key 按键编号
+ * @param event 按键事件
+ */
+void robot_arm_switch_target(uint8_t key, remote_key_event_t event) {
+    UNUSED(key);
+
+    if (event != REMOTE_KEY_PRESS_UP) {
+        return;
+    }
+
+    g_arm_target_index = (g_arm_target_index + 1) % 4;
+    robot_arm_apply_target(g_arm_target_index);
 }
 
 /**
@@ -115,8 +197,8 @@ void robot_arm_update(RobotArm *arm) {
  */
 void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
 
-    dm_pos_speed_ctrl(&arm->damiao_1, joint_des[0], DM_SPEED);
-    dm_pos_speed_ctrl(&arm->damiao_2, -joint_des[0], DM_SPEED);
+    dm_pos_speed_ctrl(&arm->damiao_1, joint_des[0], 0.1);
+    dm_pos_speed_ctrl(&arm->damiao_2, -joint_des[0], 0.1);
     dm_pos_speed_ctrl(&arm->damiao_3, joint_des[1], DM_SPEED);
     dm_pos_speed_ctrl(&arm->damiao_4, joint_des[2], 0.8);
 }
@@ -124,7 +206,7 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
 /**
  * @brief 输入指定的末端位置和吸盘姿态，计算 3 个电机的关节角度
  * @note 单位：长度(mm)，角度(rad)
- * @note 传入的x1,z1为相对于基座的坐标
+ * @note 传入的x1, z1为相对于基座的坐标，基座即为两个8006的连接中心点
  * @param x1 目标末端的水平前向坐标 (沿X轴)
  * @param z1 目标末端的垂直坐标
  * @param pitch_angle 吸盘末端期望的绝对俯仰角
@@ -162,12 +244,10 @@ void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3]) {
     angle[1] = angle2_inner - DEFAULT_ANGLE_2;
 
     if (x_w >= 0) {
-
         // 第一象限：保持原有的几何构型解
         angle[0] = DEFAULT_ANGLE_1 + PI/2 - angle1_1 - angle1_2;
         angle[1] = angle2_inner - DEFAULT_ANGLE_2;
     } else {
-
         // 第二象限：切换到另一个解
         angle[0] = DEFAULT_ANGLE_1 + PI/2 + angle1_1 - angle1_2;
         angle[1] = 2 * PI + (DEFAULT_ANGLE_2 - angle2_inner); 
@@ -175,4 +255,10 @@ void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3]) {
 
     // 5. 求吸盘角度
     angle[2] = - pitch_angle - angle[0] + angle[1] + DEFAULT_ANGLE_3;
+    if(angle[2] < -0.1){
+        angle[2] += 2*PI;
+    }
+    if(angle[2] > 2*PI){
+        angle[2] -= 2*PI;
+    }
 }

@@ -2,8 +2,8 @@
  * @file catch.c
  * @author xinglu
  * @brief 矛头夹取任务
- * @version 1.2
- * @date 2026-04-13
+ * @version 1.3
+ * @date 2026-04-15
  */
 
 #include "includes.h"
@@ -178,35 +178,35 @@ static void catch_update(void) {
 	uint8_t is_active = (uint8_t)(npn_switch_read_level() == GPIO_PIN_RESET);
 
 	/* 简单消抖：只有连续 N 次同一电平才触发后续状态变更 */
-	if (is_active) {
-		if (sensor_active_cnt < CATCH_SENSOR_COUNT) {
-			sensor_active_cnt++;
-		}
-	} else {
-		sensor_active_cnt = 0;
-	}
+	// if (is_active) {
+	// 	if (sensor_active_cnt < CATCH_SENSOR_COUNT) {
+	// 		sensor_active_cnt++;
+	// 	}
+	// } else {
+	// 	sensor_active_cnt = 0;
+	// }
 
-	switch (catch_flow) {
-		case CATCH_FLOW_WAIT_FIRST_DETECT: {
-			/* READY 阶段首次稳定检测到物体 -> 进入 GRAB */
-			if (catch_state == CATCH_STATE_READY &&
-				sensor_active_cnt >= CATCH_SENSOR_COUNT) {
-				catch_set_state(CATCH_STATE_GRAB);
-			}
-		} break;
+	// switch (catch_flow) {
+	// 	case CATCH_FLOW_WAIT_FIRST_DETECT: {
+	// 		/* READY 阶段首次稳定检测到物体 -> 进入 GRAB */
+	// 		if (catch_state == CATCH_STATE_READY &&
+	// 			sensor_active_cnt >= CATCH_SENSOR_COUNT) {
+	// 			catch_set_state(CATCH_STATE_GRAB);
+	// 		}
+	// 	} break;
 
-		case CATCH_FLOW_WAIT_SECOND_DETECT: {
-			/* 二次稳定检测到物体 -> 进入 ASSEMBLY */
-			if (catch_state == CATCH_STATE_GRAB &&
-				sensor_active_cnt >= CATCH_SENSOR_COUNT) {
-				catch_set_state(CATCH_STATE_ASSEMBLY);
-			}
-		} break;
+	// 	case CATCH_FLOW_WAIT_SECOND_DETECT: {
+	// 		/* 二次稳定检测到物体 -> 进入 ASSEMBLY */
+	// 		if (catch_state == CATCH_STATE_GRAB &&
+	// 			sensor_active_cnt >= CATCH_SENSOR_COUNT) {
+	// 			catch_set_state(CATCH_STATE_ASSEMBLY);
+	// 		}
+	// 	} break;
 
-		case CATCH_FLOW_DONE:
-		default: {
-		} break;
-	}
+	// 	case CATCH_FLOW_DONE:
+	// 	default: {
+	// 	} break;
+	// }
 
 	catch_head();
 }
