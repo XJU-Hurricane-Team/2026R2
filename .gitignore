@@ -25,3 +25,6 @@ __MACOSX__
 *.uvgui
 *.uvgui.*
 *.uvguix.*
+
+# others
+/.codex

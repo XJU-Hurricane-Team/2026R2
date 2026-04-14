@@ -32,14 +32,14 @@ static SemaphoreHandle_t microros_rcl_mutex;
 static rcl_subscription_t subscriber;
 
 // 日志模块句柄
-static rcl_publisher_t log_msg_publisher;
-static rcl_publisher_t log_data_publisher;
-std_msgs__msg__String ros_log_msg;
-std_msgs__msg__Float32MultiArray ros_log_data;
-static char ros_string_buffer[LOG_MSG_BUFFER_SIZE];
-static float ros_data_buffer[LOG_DATA_COUNT + 1];
-log_msg_packet_t log_msg_packet = {0};
-log_data_packet_t log_data_packet = {0};
+// static rcl_publisher_t log_msg_publisher;
+// static rcl_publisher_t log_data_publisher;
+// std_msgs__msg__String ros_log_msg;
+// std_msgs__msg__Float32MultiArray ros_log_data;
+// static char ros_string_buffer[LOG_MSG_BUFFER_SIZE];
+// static float ros_data_buffer[LOG_DATA_COUNT + 1];
+// log_msg_packet_t log_msg_packet = {0};
+// log_data_packet_t log_data_packet = {0};
 
 void nav_module_init(void);
 void nav_module_callback(const void *msgin);
@@ -160,11 +160,12 @@ void nav_task(void *pvParameters) {
         //     }
         // });
 
-        if (microros_rcl_mutex != NULL &&
-            xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-            rclc_executor_spin_some(&executor, 5000000); /* 5ms */
-            xSemaphoreGive(microros_rcl_mutex);
-        }
+        // if (microros_rcl_mutex != NULL &&
+        //     xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        //     rclc_executor_spin_some(&executor, 5000000); /* 5ms */
+        //     xSemaphoreGive(microros_rcl_mutex);
+        // }
+        rclc_executor_spin_some(&executor, 5000000); /* 5ms */
         vTaskDelay(10);
     }
 }
@@ -199,71 +200,71 @@ void nav_module_callback(const void *msgin) {
 
 // 初始化日志模块
 void logger_module_init(void) {
-    rclc_publisher_init_default(
-        &log_msg_publisher, &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String), "/log/msg");
+    // rclc_publisher_init_default(
+    //     &log_msg_publisher, &node,
+    //     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, String), "/log/msg");
 
-    rclc_publisher_init_default(
-        &log_data_publisher, &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
-        "/log/data");
+    // rclc_publisher_init_default(
+    //     &log_data_publisher, &node,
+    //     ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32MultiArray),
+    //     "/log/data");
 
-    ros_log_msg.data.data = ros_string_buffer;
-    ros_log_msg.data.capacity = sizeof(ros_string_buffer) / sizeof(char);
-    ros_log_msg.data.size = 0;
+    // ros_log_msg.data.data = ros_string_buffer;
+    // ros_log_msg.data.capacity = sizeof(ros_string_buffer) / sizeof(char);
+    // ros_log_msg.data.size = 0;
 
-    ros_log_data.data.data = ros_data_buffer;
-    ros_log_data.data.capacity = sizeof(ros_data_buffer) / sizeof(float);
-    ros_log_data.data.size = 0;
+    // ros_log_data.data.data = ros_data_buffer;
+    // ros_log_data.data.capacity = sizeof(ros_data_buffer) / sizeof(float);
+    // ros_log_data.data.size = 0;
 }
 
 /**
  * @brief MicroROS 字符串日志发送回调
  */
 void microros_log_msg_cb(const char *data, uint16_t len) {
-    size_t copy_len = len;
-    if (copy_len >= ros_log_msg.data.capacity) {
-        copy_len = ros_log_msg.data.capacity - 1;
-    }
+    // size_t copy_len = len;
+    // if (copy_len >= ros_log_msg.data.capacity) {
+    //     copy_len = ros_log_msg.data.capacity - 1;
+    // }
 
-    memcpy(ros_log_msg.data.data, data, copy_len * sizeof(char));
-    ros_log_msg.data.data[copy_len] = '\0';
-    ros_log_msg.data.size = copy_len;
+    // memcpy(ros_log_msg.data.data, data, copy_len * sizeof(char));
+    // ros_log_msg.data.data[copy_len] = '\0';
+    // ros_log_msg.data.size = copy_len;
 
-    if (microros_rcl_mutex != NULL &&
-        xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        rcl_ret_t pub_ret = rcl_publish(&log_msg_publisher, &ros_log_msg, NULL);
-        (void)pub_ret;
-        xSemaphoreGive(microros_rcl_mutex);
-    }
+    // if (microros_rcl_mutex != NULL &&
+    //     xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    //     rcl_ret_t pub_ret = rcl_publish(&log_msg_publisher, &ros_log_msg, NULL);
+    //     (void)pub_ret;
+    //     xSemaphoreGive(microros_rcl_mutex);
+    // }
 }
 
 /**
  * @brief MicroROS 数据日志发送回调
  */
 void microros_log_data_cb(const log_data_packet_t *packet) {
-    /* 1. 总发送长度 = 1个ID头 + 真实数据个数 */
-    size_t copy_len = 1 + packet->count;
+    // /* 1. 总发送长度 = 1个ID头 + 真实数据个数 */
+    // size_t copy_len = 1 + packet->count;
 
-    if (copy_len > ros_log_data.data.capacity) {
-        copy_len = ros_log_data.data.capacity;
-    }
+    // if (copy_len > ros_log_data.data.capacity) {
+    //     copy_len = ros_log_data.data.capacity;
+    // }
 
-    if (copy_len > 1) {
-        ros_log_data.data.data[0] = (float)packet->id;
-        memcpy(&ros_log_data.data.data[1], packet->data,
-               (copy_len - 1) * sizeof(float));
+    // if (copy_len > 1) {
+    //     ros_log_data.data.data[0] = (float)packet->id;
+    //     memcpy(&ros_log_data.data.data[1], packet->data,
+    //            (copy_len - 1) * sizeof(float));
 
-        ros_log_data.data.size = copy_len;
+    //     ros_log_data.data.size = copy_len;
 
-        if (microros_rcl_mutex != NULL &&
-            xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+    //     if (microros_rcl_mutex != NULL &&
+    //         xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
 
-            rcl_ret_t pub_ret =
-                rcl_publish(&log_data_publisher, &ros_log_data, NULL);
-            (void)pub_ret;
+    //         rcl_ret_t pub_ret =
+    //             rcl_publish(&log_data_publisher, &ros_log_data, NULL);
+    //         (void)pub_ret;
 
-            xSemaphoreGive(microros_rcl_mutex);
-        }
-    }
+    //         xSemaphoreGive(microros_rcl_mutex);
+    //     }
+    // }
 }
