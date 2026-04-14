@@ -27,7 +27,8 @@ virtualFolder:
         - path: User/Application/Src/rtos_tasks.c
         - path: User/Application/Src/chassis.c
         - path: User/Application/Src/msg_process.c
-        - path: User/Modules/robot_arm/robot_arm.c
+        - path: User/Application/Src/catch.c
+        - path: User/Application/Src/microros_ctrl.c
       folders: []
     - name: Middlewares
       files: []

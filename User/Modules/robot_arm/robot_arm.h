@@ -3,8 +3,8 @@
  * @author xinglu
  * @brief 机械臂驱动模块
  * 
- * @version 1.7
- * @date 2026-04-13
+ * @version 1.8
+ * @date 2026-04-15
  */
 
 #ifndef ROBOT_ARM
@@ -66,6 +66,8 @@ typedef struct {
 // 初始化和更新函数
 void robot_arm_system_init(RobotArm *arm);
 void robot_arm_update(RobotArm *arm);
+void robot_arm_task(void *pvParameters);
+void robot_arm_apply_target(uint8_t index);
 
 // 运动控制函数
 void arm_pos_angle(float y1, float z1, float pitch_angle, float angle[3]);
@@ -73,6 +75,7 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]);
 void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch);
 void robot_arm_set_joint_target(RobotArm *arm, float joint1, float joint2,
 								float joint3);
+void robot_arm_switch_target(uint8_t key, remote_key_event_t event);
 
 #endif /* ROBOT_ARM */
 
