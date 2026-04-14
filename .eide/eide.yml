@@ -1,5 +1,5 @@
 version: "4.1"
-name: g4_template
+name: 2026R2
 type: ARM
 deviceName: STM32G474VETx
 packDir: .pack/Keil/STM32G4xx_DFP.1.6.0
@@ -20,13 +20,14 @@ virtualFolder:
         - path: User/Bsp/usart_ex/usart_ex.c
         - path: User/Bsp/Damiao-Motor/damiao.c
         - path: User/Bsp/servo/servo.c
+        - path: User/Bsp/npn_switch/npn_switch.c
       folders: []
     - name: Application
       files:
         - path: User/Application/Src/rtos_tasks.c
         - path: User/Application/Src/chassis.c
         - path: User/Application/Src/msg_process.c
-        - path: User/Application/Src/microros_ctrl.c
+        - path: User/Modules/robot_arm/robot_arm.c
       folders: []
     - name: Middlewares
       files: []

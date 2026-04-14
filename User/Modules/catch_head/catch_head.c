@@ -2,13 +2,13 @@
  * @file catch_head.c
  * @author xinglu
  * @brief 矛头夹取模块
- * @version 1.1
- * @date 2026-04-11
+ * @version 1.2
+ * @date 2026-04-13
  */
 
 #include "catch_head.h"
 
-/* 夹取推球电机及其双环控制关节 */
+/* 旋转矛头关节管理 */
 static dji_motor_handle_t s_catch_rod_motor;
 static catch_head_dji_joint_t s_catch_rod_joint = {
 	.motor_handle = &s_catch_rod_motor,
@@ -21,7 +21,7 @@ static catch_head_dji_joint_t s_catch_rod_joint = {
 static dm_handle_t s_dm_motor;
 static catch_head_dm_joint_t s_dm_joint = {
 	.motor_handle = &s_dm_motor,
-	.target_position_deg = {0.0f, 90.0f},
+	.target_position_deg = {0.0f, 1.57f},
 	.target_index = 0,
 };
 
@@ -40,7 +40,7 @@ static uint8_t s_ready = 0;
  * @note 使用 TIM1 CH1 作为舵机输出通道，并配置上下限脉宽
  */
 void catch_head_servo_init(void) {
-	servo_init(&s_gripper_servo, &htim1, TIM_CHANNEL_1, 1400, 1908);
+	servo_init(&s_gripper_servo, &htim1, TIM_CHANNEL_1, 3000, 3850);
 }
 
 /**
@@ -49,15 +49,13 @@ void catch_head_servo_init(void) {
  */
 void catch_head_motor_init(void) {
 	if (dji_motor_init(&s_catch_rod_motor, DJI_M2006, CAN_Motor1_ID,
-					   can1_selected) != 0) {
+					   can2_selected) != 0) {
 		s_ready = 0;
 		return;
 	}
 
-	if (dm_motor_init(&s_dm_motor, 0x15,
-					  0x05, DM_MODE_POS_SPEED, DM_J4310,
-					  12.5f, 10.0f,
-					  45.0f, can1_selected) != 0) {
+	if (dm_motor_init(&s_dm_motor, 0x15, 0x05, DM_MODE_POS_SPEED, DM_J4310, 3.14f, 45.0f,
+                  20.0f, can2_selected) != 0) {
 		s_ready = 0;
 		return;
 	}
@@ -117,7 +115,7 @@ void catch_head(void) {
 
 	s_catch_rod_joint.motor_handle->set_value = (int16_t)set_current;
 
-	dji_motor_set_current(can1_selected, DJI_MOTOR_GROUP1,
+	dji_motor_set_current(can2_selected, DJI_MOTOR_GROUP1,
 						  s_catch_rod_joint.motor_handle->set_value, 0, 0, 0);
 
 	float dm_target_rad = s_dm_joint.target_position_deg[s_dm_joint.target_index];

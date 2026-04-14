@@ -31,10 +31,10 @@ typedef struct {
 
 /* Four test points: origin + three targets */
 static const target_point_t target_points[4] = {
-    {139.95f, 102.70f, 0.9155f}, /* zero point */
-    {450.0f, 356.0f, -PI / 2.0},
-    {500.0f, 300.0f, 0.0f},
-    {-450.0f, 356.0f, -PI / 2.0},
+    {139.95 + 20.0, 102.70, 0.9155f},   /* zero point */
+    {450.0f,  356.0f, -PI/2.0},  
+    {500.0f,  300.0f, 0.0f},   
+    {-450.0f,  356.0f, -PI/2.0},   
 };
 
 /*****************************************************************************/
@@ -57,8 +57,10 @@ void start_task(void *pvParameters) {
     UNUSED(pvParameters);
     taskENTER_CRITICAL();
 
+    microros_init();
     log_init(LOG_DEBUG);
     chassis_init();
+    catch_init();
     msg_process_init();
     // robot_arm_system_init(&g_robot_arm);
 
@@ -92,43 +94,25 @@ void task1(void *pvParameters) {
     }
 }
 
+/**
+ * @brief arm_ctrl_task: Control the robot arm to move to target points in sequence.
+ *
+ * @param pvParameters Start parameters.
+ */
 void arm_ctrl_task(void *pvParameters) {
     UNUSED(pvParameters);
 
     key_press_t key = KEY_NO_PRESS;
-    const float joint_step = 0.10f;
+    uint8_t index = 0;
 
-    uint8_t index = -1;
-
-    float joint_target[3] = {0.0f, 0.0f, 0.0f};
-    robot_arm_set_joint_target(&g_robot_arm, joint_target[0], joint_target[1],
-                               joint_target[2]);
+    robot_arm_set_target(&g_robot_arm, target_points[index].y,
+                          target_points[index].z,
+                          target_points[index].pitch);
     g_robot_arm.arm_motion_active = 0;
 
     while (1) {
         key = key_scan(0);
         switch (key) {
-            case KEY0_PRESS: {
-                joint_target[0] += joint_step;
-                robot_arm_set_joint_target(&g_robot_arm, joint_target[0],
-                                           joint_target[1], joint_target[2]);
-                g_robot_arm.arm_motion_active = 0;
-            } break;
-
-            case KEY1_PRESS: {
-                joint_target[1] += joint_step;
-                robot_arm_set_joint_target(&g_robot_arm, joint_target[0],
-                                           joint_target[1], joint_target[2]);
-                g_robot_arm.arm_motion_active = 0;
-            } break;
-
-            case KEY2_PRESS: {
-                joint_target[2] += joint_step;
-                robot_arm_set_joint_target(&g_robot_arm, joint_target[0],
-                                           joint_target[1], joint_target[2]);
-                g_robot_arm.arm_motion_active = 0;
-            } break;
-
             case WKUP_PRESS: {
                 index = (index + 1) % 4;
                 robot_arm_set_target(&g_robot_arm, target_points[index].y,
