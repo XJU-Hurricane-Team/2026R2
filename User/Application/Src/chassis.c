@@ -86,12 +86,12 @@ static chassis_handle_t chassis_handle = {
     .damiao_target_degree = {0.0f, 0.0f},
     .lift_fsm = {0, 0, 0}};
 
-static dji_motor_handle_t dji_3508_handle[4];
-static dji_motor_handle_t dji_2006_handle;
-static dm_handle_t dm_motor_handle[2];
-static pid_t dji_3508_speed_pid[4];
-static pid_t dji_3508_pos_pid[4];
-static pid_t dji_2006_pid;
+static dji_motor_handle_t dji_3508_handle[4] = {0};
+static dji_motor_handle_t dji_2006_handle = {0};
+static dm_handle_t dm_motor_handle[2] = {0};
+static pid_t dji_3508_speed_pid[4] = {0};
+static pid_t dji_3508_pos_pid[4] = {0};
+static pid_t dji_2006_pid = {0};
 
 static void chassis_tasks_init(void);
 static void chassis_bottom_init(void);
@@ -161,6 +161,10 @@ void chassis_mode_task(void *pvParameters) {
                                  10.0f; //遥控器与实际底盘方向相反
                 float target_x = g_remote_ctrl_data.rs[1] / 10.0f;
                 float target_yaw = g_remote_ctrl_data.rs[2] / 5.0f;
+
+                log_data(LOG_CHASSIS,g_remote_ctrl_data.rs[0],g_remote_ctrl_data.rs[1],g_remote_ctrl_data.rs[2]);
+
+                 /* 限幅 */
 
                 /* 遥控器死区限幅，防止误触侧边引起不期望的位移 */
                 if (target_x > -0.1f && target_x < 0.1f) {
@@ -535,12 +539,12 @@ static void chassis_tasks_init(void) {
         return;
     }
     task_create_res = xTaskCreate(chassis_state_task, "chassis_state_task", 256,
-                                  NULL, 5, &chassis_state_task_handle);
+                                  NULL, 4, &chassis_state_task_handle);
     if (task_create_res != pdPASS) {
         return;
     }
     task_create_res = xTaskCreate(chassis_driver_task, "chassis_driver_task",
-                                  256, NULL, 4, &chassis_driver_task_handle);
+                                  256, NULL, 5, &chassis_driver_task_handle);
     if (task_create_res != pdPASS) {
         return;
     }

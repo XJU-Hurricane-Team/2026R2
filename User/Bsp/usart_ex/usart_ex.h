@@ -47,7 +47,7 @@ extern "C" {
 
 // <h> USART1 Configuration
 //   <e> USART1_TX_DMA               Enable USART1 TX DMA
-#define USART1_TX_DMA 0
+#define USART1_TX_DMA 1
 
 #ifdef USART1_TX_DMA
 //   <o> USART1_TX_DMA_BUF_SIZE      USART1 TX DMA Buffer Size <8-4096:8>
@@ -56,7 +56,7 @@ extern "C" {
 #endif /* USART1_TX_DMA */
 
 //   <e> USART1_RX_DMA               Enable USART1 RX DMA
-#define USART1_RX_DMA 0
+#define USART1_RX_DMA 1
 
 #ifdef USART1_RX_DMA
 //   <o> USART1_RX_DMA_BUF_SIZE      USART1 RX DMA Buffer Size <8-4096:8>
@@ -129,9 +129,9 @@ extern "C" {
 
 #ifdef UART4_RX_DMA
 //   <o> UART4_RX_DMA_BUF_SIZE       UART4 RX DMA Buffer Size  <8-4096:8>
-#define UART4_RX_DMA_BUF_SIZE   512
+#define UART4_RX_DMA_BUF_SIZE   1024
 //   <o> UART4_RX_DMA_FIFO_SIZE      UART4 RX DMA FIFO Size    <8-4096:8>
-#define UART4_RX_DMA_FIFO_SIZE  512
+#define UART4_RX_DMA_FIFO_SIZE  1024
 //   </e> UART4_RX_DMA
 #endif /* UART4_RX_DMA */
 

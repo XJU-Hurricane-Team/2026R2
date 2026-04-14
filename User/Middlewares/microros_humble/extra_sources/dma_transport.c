@@ -3,6 +3,7 @@
 #include <rmw_microxrcedds_c/config.h>
 
 #include "cubemx.h"
+#include "usart_ex/usart_ex.h"
 #include "FreeRTOS.h"
 #include "task.h"
 

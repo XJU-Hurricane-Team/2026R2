@@ -27,9 +27,7 @@ virtualFolder:
         - path: User/Application/Src/rtos_tasks.c
         - path: User/Application/Src/chassis.c
         - path: User/Application/Src/msg_process.c
-        - path: User/Application/Src/microros_ctrl.c
         - path: User/Modules/robot_arm/robot_arm.c
-        - path: User/Application/Src/catch.c
       folders: []
     - name: Middlewares
       files: []
@@ -77,7 +75,7 @@ virtualFolder:
       folders:
         - name: startup
           files:
-            - path: CubeMX/Drivers/CMSIS/Device/ST/STM32G4xx/Source/gcc/startup_stm32g474xx.s
+            - path: CubeMX/Drivers/CMSIS/Device/ST/STM32G4xx/Source/gcc/startup_stm32g474xx.S
           folders: []
     - name: Modules
       files:
@@ -210,7 +208,7 @@ targets:
             language-cpp: c++11
             one-elf-section-per-data: true
             one-elf-section-per-function: true
-            optimization: level-debug
+            optimization: level-0
             warnings: all-warnings
           global:
             $float-abi-type: hard
@@ -243,7 +241,7 @@ targets:
       OpenOCD:
         baseAddr: "0x08000000"
         bin: ""
-        interface: stlink
+        interface: cmsis-dap
         target: stm32g4x
       STLink:
         address: "0x08000000"
