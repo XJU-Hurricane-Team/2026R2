@@ -9,6 +9,11 @@
 #include "includes.h"
 #include "npn_switch/npn_switch.h"
 
+#define CATCH_STATE_INIT_KEY     11
+#define CATCH_STATE_READY_KEY    12
+#define CATCH_STATE_GRAB_KEY     13
+#define CATCH_STATE_ASSEMBLY_KEY 14
+
 typedef enum {
 	CATCH_STATE_INIT = 0,  /* 初始状态，等待进入 READY */
 	CATCH_STATE_READY,     /* 准备就绪，等待首次稳定检测到物体 */
@@ -36,6 +41,7 @@ static void catch_task(void *pvParameters);
 static void catch_tasks_init(void);
 static void catch_update(void);
 static void catch_set_state(catch_state_t state);
+static void catch_remote_state_switch(uint8_t key, remote_key_event_t event);
 
 /*
  * @brief 判断目标状态是否为当前状态的下一个合法状态。
@@ -79,31 +85,31 @@ static void catch_update_flow_for_state(catch_state_t state) {
 }
 
 /*
- * @brief 处理按键触发的手动状态切换。
+ * @brief 遥控器按键回调：KEY11/12/13/14 对应四种主状态。
  * @note
- * KEY0 -> INIT
- * KEY1 -> READY
- * KEY2 -> GRAB
- * WKUP -> ASSEMBLY
+ * KEY11 -> INIT
+ * KEY12 -> READY
+ * KEY13 -> GRAB
+ * KEY14 -> ASSEMBLY
  * 实际合法性由 catch_set_state() 再次校验。
  */
-static void catch_handle_key_control(void) {
-	key_press_t key = key_scan(0);
+static void catch_remote_state_switch(uint8_t key, remote_key_event_t event) {
+	UNUSED(event);
 
 	switch (key) {
-		case KEY0_PRESS: {
+		case CATCH_STATE_INIT_KEY: {
 			catch_set_state(CATCH_STATE_INIT);
 		} break;
 
-		case KEY1_PRESS: {
+		case CATCH_STATE_READY_KEY: {
 			catch_set_state(CATCH_STATE_READY);
 		} break;
 
-		case KEY2_PRESS: {
+		case CATCH_STATE_GRAB_KEY: {
 			catch_set_state(CATCH_STATE_GRAB);
 		} break;
 
-		case WKUP_PRESS: {
+		case CATCH_STATE_ASSEMBLY_KEY: {
 			catch_set_state(CATCH_STATE_ASSEMBLY);
 		} break;
 
@@ -113,7 +119,7 @@ static void catch_handle_key_control(void) {
 }
 
 /*
- * @brief 按状态下发抓头执行器目标值。
+ * @brief 按状态下发抓矛头执行器目标值。
  * @param state 需要应用的目标状态。
  * @note
  * 该函数只负责执行器目标配置，不修改状态变量。
@@ -159,6 +165,16 @@ void catch_init(void) {
 	catch_update_flow_for_state(catch_state);
 
 	catch_apply_state(catch_state);
+
+	remote_register_key_callback(CATCH_STATE_INIT_KEY, REMOTE_KEY_PRESS_UP,
+	                             catch_remote_state_switch);
+	remote_register_key_callback(CATCH_STATE_READY_KEY, REMOTE_KEY_PRESS_UP,
+	                             catch_remote_state_switch);
+	remote_register_key_callback(CATCH_STATE_GRAB_KEY, REMOTE_KEY_PRESS_UP,
+	                             catch_remote_state_switch);
+	remote_register_key_callback(CATCH_STATE_ASSEMBLY_KEY, REMOTE_KEY_PRESS_UP,
+	                             catch_remote_state_switch);
+
 	catch_tasks_init();
 }
 
@@ -166,16 +182,14 @@ void catch_init(void) {
  * @brief 抓取模块周期更新函数（建议在主循环或任务中周期调用）。
  * @note
  * 处理顺序：
- * 1) 扫描按键并尝试手动切换状态；
+ * 1) 遥控器回调触发状态切换；
  * 2) 采样 NPN 传感器并进行稳定计数；
  * 3) 按子流程条件执行自动状态推进；
  * 4) 调用 catch_head() 执行底层控制更新。
  */
 static void catch_update(void) {
-	catch_handle_key_control();
-
 	/* NPN 低电平表示检测到物体 */
-	uint8_t is_active = (uint8_t)(npn_switch_read_level() == GPIO_PIN_RESET);
+	// uint8_t is_active = (uint8_t)(npn_switch_read_level() == GPIO_PIN_RESET);
 
 	/* 简单消抖：只有连续 N 次同一电平才触发后续状态变更 */
 	// if (is_active) {
