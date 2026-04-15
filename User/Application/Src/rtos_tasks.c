@@ -37,12 +37,11 @@ void start_task(void *pvParameters) {
     UNUSED(pvParameters);
     taskENTER_CRITICAL();
 
-    microros_init();
     log_init(LOG_DEBUG);
     chassis_init();
     catch_init();
     msg_process_init();
-    robot_arm_init();
+    // robot_arm_init();
 
     xTaskCreate(task1, "task1", 128, NULL, 2, &task1_handle);
 
