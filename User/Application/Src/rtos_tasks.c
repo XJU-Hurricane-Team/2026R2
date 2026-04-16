@@ -45,10 +45,10 @@ void start_task(void *pvParameters) {
 
     xTaskCreate(task1, "task1", 128, NULL, 2, &task1_handle);
 
-    if (xTaskCreate(nav_task, "nav_task", 128*10, NULL, 3, &nav_task_handle) !=
-        pdPASS) {
-        Error_Handler();
-    }
+    // if (xTaskCreate(nav_task, "nav_task", 128*10, NULL, 3, &nav_task_handle) !=
+    //     pdPASS) {
+    //     Error_Handler();
+    // }
 
     vTaskDelete(NULL);
     taskEXIT_CRITICAL();

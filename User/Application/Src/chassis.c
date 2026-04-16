@@ -28,7 +28,7 @@
 #define MAX_ACCEL_W              2
 
 #define LIFT_START_DEGREE        0.0f
-#define LIFT_TARGET_DEG_MIN      0.0f
+#define LIFT_TARGET_DEG_MIN      -8.3f
 #define LIFT_TARGET_DEG_MAX      8.3f
 #define LIFT_TARGET_DEG_STEP     0.5f
 #define LIFT_TARGET_DEG_UP_SEQ   1.0f
@@ -584,11 +584,12 @@ static void chassis_pid_clear_state(pid_t *pid) {
 }
 
 static float chassis_lift_limit_target(float target_degree) {
-    if (fabs(target_degree) < LIFT_TARGET_DEG_MIN) {
-        return LIFT_TARGET_DEG_MIN;
-    }
-    if (fabs(target_degree) > LIFT_TARGET_DEG_MAX) {
+ 
+    if (target_degree > LIFT_TARGET_DEG_MAX) {
         return LIFT_TARGET_DEG_MAX;
+    }
+    else if (target_degree < LIFT_TARGET_DEG_MIN) {
+        return LIFT_TARGET_DEG_MIN;
     }
     return target_degree;
 }
