@@ -28,8 +28,8 @@
 #define MAX_ACCEL_W              2
 
 #define LIFT_START_DEGREE        0.0f
-#define LIFT_TARGET_DEG_MIN      -8.3f
-#define LIFT_TARGET_DEG_MAX      8.3f
+#define LIFT_TARGET_DEG_MIN      0.0f
+#define LIFT_TARGET_DEG_MAX      7.93f
 #define LIFT_TARGET_DEG_STEP     0.5f
 #define LIFT_TARGET_DEG_UP_SEQ   1.0f
 #define LIFT_TARGET_DEG_DOWN_SEQ 1.0f
@@ -86,12 +86,12 @@ static chassis_handle_t chassis_handle = {
     .damiao_target_degree = {0.0f, 0.0f},
     .lift_fsm = {0, 0, 0}};
 
-static dji_motor_handle_t dji_3508_handle[4] = {0};
-static dji_motor_handle_t dji_2006_handle = {0};
-static dm_handle_t dm_motor_handle[2] = {0};
-static pid_t dji_3508_speed_pid[4] = {0};
-static pid_t dji_3508_pos_pid[4] = {0};
-static pid_t dji_2006_pid = {0};
+static dji_motor_handle_t dji_3508_handle[4];
+static dji_motor_handle_t dji_2006_handle[2];
+static dm_handle_t dm_motor_handle[2];
+static pid_t dji_3508_speed_pid[4];
+static pid_t dji_3508_pos_pid[4];
+static pid_t dji_2006_pid[2];
 
 static void chassis_tasks_init(void);
 static void chassis_bottom_init(void);
@@ -104,14 +104,6 @@ static void chassis_lift_seq_down_update(float *target_y);
 static float chassis_lift_limit_target(float target_degree);
 static void chassis_lift_set_target(float target_degree);
 
-int16_t test_rpm1;
-int16_t test_rpm2;
-int16_t test_rpm3;
-int16_t test_rpm4;
-int16_t test_target_rpm;
-float test_target_x;
-float test_target_y;
-float test_delta_out;
 
 static TaskHandle_t chassis_mode_task_handle;
 void chassis_mode_task(void *pvParameters);
@@ -157,28 +149,29 @@ void chassis_mode_task(void *pvParameters) {
             case CHASSIS_MODE_MANUAL: {
                 chassis_handle.chassis_speed.target_2006_rpm =
                     0.0f; // 手动模式下保证2006不转
-                float target_y = -g_remote_ctrl_data.rs[0] /
-                                 10.0f; //遥控器与实际底盘方向相反
+                float target_y = -g_remote_ctrl_data.rs[0] / 10.0f; //遥控器与实际底盘方向相反
                 float target_x = g_remote_ctrl_data.rs[1] / 10.0f;
-                float target_yaw = g_remote_ctrl_data.rs[2] / 5.0f;
-
-                log_data(LOG_CHASSIS,g_remote_ctrl_data.rs[0],g_remote_ctrl_data.rs[1],g_remote_ctrl_data.rs[2]);
-
-                 /* 限幅 */
+                float target_yaw = -g_remote_ctrl_data.rs[2] / 5.0f;
+                float target_2006 = g_remote_ctrl_data.rs[3] * 250.0f;
 
                 /* 遥控器死区限幅，防止误触侧边引起不期望的位移 */
-                if (target_x > -0.1f && target_x < 0.1f) {
+                if (target_x > -0.01f && target_x < 0.01f) {
                     target_x = 0.0f;
                 }
-                if (target_y > -0.1f && target_y < 0.1f) {
+
+                if (target_y > -0.3f && target_y < 0.3f) {
                     target_y = 0.0f;
                 }
+                if (target_yaw > -0.1f && target_yaw < 0.1f){
+                    target_yaw = 0.0f;
+                }
 
-                test_target_x = target_x;
-                test_target_y = target_y;
+                // test_target_yaw = target_yaw;
                 chassis_handle.chassis_speed.target_speed.vx = target_x;
                 chassis_handle.chassis_speed.target_speed.vy = target_y;
                 chassis_handle.chassis_speed.target_speed.vw = target_yaw;
+                chassis_handle.chassis_speed.target_2006_rpm = target_2006;
+               
                 // chassis_plan_step(
                 //     target_x, target_y, target_yaw,
                 //     &chassis_handle.chassis_speed.target_speed.vx,
@@ -226,7 +219,7 @@ void chassis_mode_task(void *pvParameters) {
 void chassis_state_task(void *pvParameters) {
     (void)pvParameters;
     bool halt_last = chassis_handle.halt;
-
+    int16_t motor_2006_out[2] = {0};
     while (1) {
         if (chassis_handle.halt != halt_last) {
             /* 模式切换沿触发时清零 PID 内部状态，避免跨模式继承积分和误差历史 */
@@ -246,13 +239,16 @@ void chassis_state_task(void *pvParameters) {
             halt_last = chassis_handle.halt;
         }
 
+
         /* 2006 辅控电机 PID 计算与 CAN 下发 (使用 0x1FF 即 DJI_MOTOR_GROUP2) */
-        float real_2006_rpm = dji_2006_handle.speed_rpm;
-        int16_t motor_2006_out = (int16_t)pid_calc(
-            &dji_2006_pid, chassis_handle.chassis_speed.target_2006_rpm,
-            real_2006_rpm);
+        for(int i = 0; i < 2; i++) {
+        float real_2006_rpm = dji_2006_handle[i].speed_rpm;
+        float target_rpm = (i == 0) ? chassis_handle.chassis_speed.target_2006_rpm : -chassis_handle.chassis_speed.target_2006_rpm;
+        float current_calc = (int16_t)pid_calc(&dji_2006_pid[i], target_rpm, real_2006_rpm);
+        motor_2006_out[i] = current_calc;
+        }    
         dji_motor_set_current(CHASSIS_CAN_SELECT, DJI_MOTOR_GROUP2,
-                              motor_2006_out, 0, 0, 0);
+                              motor_2006_out[0], motor_2006_out[1], 0, 0);
 
         if (chassis_handle.mode != CHASSIS_MODE_LIFT_SEQ) {
             if (chassis_handle.lift_state == LIFT_STATE_UP) {
@@ -260,11 +256,11 @@ void chassis_state_task(void *pvParameters) {
                                         LIFT_TARGET_DEG_STEP * 0.05f);
             } else if (chassis_handle.lift_state == LIFT_STATE_DOWN) {
                 chassis_lift_set_target(chassis_handle.lift_target_degree -
-                                        LIFT_TARGET_DEG_STEP * 0.05f);
+                                        LIFT_TARGET_DEG_STEP * 0.05f);      //1.4°
             }
         }
 
-        /* 达妙伺服电机位置持续高频发包控制（MIT 模式） */
+        // /* 达妙伺服电机位置持续高频发包控制（MIT 模式） */
         dm_pos_speed_ctrl(
             &dm_motor_handle[0],
             chassis_handle.damiao_target_degree.lift_target_degree1,
@@ -299,20 +295,14 @@ void chassis_driver_task(void *pvParameters) {
                 (const chassis_speed_t *)&chassis_handle.chassis_speed,
                 chassis_handle.chassis_speed.target_rpm);
 
-            test_rpm1 = (int16_t)dji_3508_handle[0].speed_rpm;
-            test_rpm2 = (int16_t)dji_3508_handle[1].speed_rpm;
-            test_rpm3 = (int16_t)dji_3508_handle[2].speed_rpm;
-            test_rpm4 = (int16_t)dji_3508_handle[3].speed_rpm;
-            test_target_rpm =
-                (int16_t)chassis_handle.chassis_speed.target_rpm[0];
-            test_delta_out = dji_3508_speed_pid[0].delta_out;
-
+            float ff_gain[4] = {1.80f, 1.80f, 1.65f, 1.75f};
             for (int i = 0; i < 4; i++) {
                 float real_rpm = dji_3508_handle[i].speed_rpm;
                 float target_rpm = chassis_handle.chassis_speed.target_rpm[i];
-                float calc_current =
-                    pid_calc(&dji_3508_speed_pid[i], target_rpm, real_rpm);
-                motor_out_current[i] = (int16_t)calc_current;
+                float calc_current = pid_calc(&dji_3508_speed_pid[i], target_rpm, real_rpm);
+                float forwardfeed = target_rpm * ff_gain[i]; 
+                motor_out_current[i] = (int16_t)(calc_current + forwardfeed);
+                // motor_out_current[i] = (int16_t)calc_current;
             }
         } else {
             for (int i = 0; i < 4; i++) {
@@ -331,7 +321,7 @@ void chassis_driver_task(void *pvParameters) {
         dji_motor_set_current(CHASSIS_CAN_SELECT, DJI_MOTOR_GROUP1,
                               motor_out_current[0], motor_out_current[1],
                               motor_out_current[2], motor_out_current[3]);
-        vTaskDelay(5);
+        vTaskDelay(3);
     }
 }
 
@@ -481,26 +471,30 @@ static void chassis_bottom_init(void) {
     }
 
     /* DJI 2006电机初始化 */
-    dji_motor_init(&dji_2006_handle, DJI_M2006, CAN_Motor5_ID,
-                   CHASSIS_CAN_SELECT);
-
+    for (int i = 0; i < 2; i++) {
+        dji_motor_init(&dji_2006_handle[i], DJI_M2006, CAN_Motor5_ID + i,
+                       CHASSIS_CAN_SELECT);
+    }
+    
     /* 达妙4310初始化 */
     for (int i = 0; i < 2; i++) {
         dm_motor_init(&dm_motor_handle[i], 0x11 + i, 0x01 + i,
                       DM_MODE_POS_SPEED, DM_J4310, 12.5f, 30.0f, 10.0f,
                       LIFT_CAN_SELECT);
     }
-    //chassis_lift_set_target(LIFT_START_DEGREE);
 
-    /* DJI电机速度环PID初始化：拆分为每个电机独立配置，解决机械阻力不同导致的单轮振荡 */
-    for(int i = 0; i < 4; i++) {
-        pid_init(&dji_3508_speed_pid[i], 10000.0f, 800.0f, 0.0f, 20000.0f,
-             DELTA_PID, 1.70f, 0.04f, 0.0f);
-    }
-    /* 单独针对4号轮：降低P值消除高频毛刺，保持I值为0.01确保稳态响应速度 */
-    pid_init(&dji_3508_speed_pid[3], 10000.0f, 800.0f, 0.0f, 20000.0f,
-             DELTA_PID, 1.70f, 0.02f, 0.0f);
+    /* 3508电机速度环PID初始化 */
+    pid_init(&dji_3508_speed_pid[0], 10000.0f, 800.0f, 0.0f, 16384.0f,
+             DELTA_PID, 7.50f, 0.035f, 0.35f);
+    pid_init(&dji_3508_speed_pid[1], 10000.0f, 800.0f, 0.0f, 16384.0f,
+             DELTA_PID, 7.50f, 0.043f, 0.35f);
+    pid_init(&dji_3508_speed_pid[2], 10000.0f, 800.0f, 0.0f, 16384.0f,          
+             DELTA_PID, 7.20f, 0.033f, 0.35f);         
+    pid_init(&dji_3508_speed_pid[3], 10000.0f, 800.0f, 0.0f, 16384.0f,        
+             DELTA_PID, 7.40f, 0.043f, 0.35f);
 
+    
+    /* 3508电机位置环PID初始化 */
     pid_init(&dji_3508_pos_pid[0], 5000.0f, 0.0f, 5.5f, 360.0f, POSITION_PID,
              55.0f, 0.0f, 0.0f);
     pid_init(&dji_3508_pos_pid[1], 5000.0f, 0.0f, 5.5f, 360.0f, POSITION_PID,
@@ -510,8 +504,11 @@ static void chassis_bottom_init(void) {
     pid_init(&dji_3508_pos_pid[3], 5000.0f, 0.0f, 5.5f, 360.0f, POSITION_PID,
              55.0f, 0.0f, 0.0f);
 
-    pid_init(&dji_2006_pid, 10000.0f, 500.0f, 0.0f, 15000.0f, DELTA_PID, 2.0f,
-             0.1f, 0.0f);
+    /* 2006电机速度环PID初始化 */
+    for (int i = 0; i < 2; i++) {
+        pid_init(&dji_2006_pid[i], 10000.0f, 500.0f, 0.0f, 15000.0f, DELTA_PID, 1.80f,
+                 0.01f, 0.00f);
+    }
 
     /* 规划器初始化 */
     chassis_plan_config_t plan_cfg;
@@ -584,8 +581,13 @@ static void chassis_pid_clear_state(pid_t *pid) {
 }
 
 static float chassis_lift_limit_target(float target_degree) {
- 
-    if (target_degree > LIFT_TARGET_DEG_MAX) {
+    if (fabs(target_degree) > LIFT_TARGET_DEG_MAX) {
+        if(target_degree < 0) {
+            return -LIFT_TARGET_DEG_MAX;
+        }
+        if(target_degree > 0) {
+            return LIFT_TARGET_DEG_MAX;
+        }
         return LIFT_TARGET_DEG_MAX;
     }
     else if (target_degree < LIFT_TARGET_DEG_MIN) {

@@ -396,7 +396,7 @@ void can_list_polling_task(void *args) {
                 continue;
         }
 
-        uint16_t read_count = 2;
+        uint16_t read_count = 3;
         for(uint16_t i = 0; i < read_count; i++) {
         if (HAL_FDCAN_GetRxMessage(recv_msg.hcan, recv_msg.rx_fifo, &rx_header,
                                    rx_data) != HAL_OK) {
