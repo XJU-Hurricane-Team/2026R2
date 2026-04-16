@@ -590,6 +590,9 @@ static float chassis_lift_limit_target(float target_degree) {
         }
         return LIFT_TARGET_DEG_MAX;
     }
+    else if (target_degree < LIFT_TARGET_DEG_MIN) {
+        return LIFT_TARGET_DEG_MIN;
+    }
     return target_degree;
 }
 
