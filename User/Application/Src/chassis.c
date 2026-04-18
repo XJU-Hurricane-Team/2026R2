@@ -260,7 +260,7 @@ void chassis_state_task(void *pvParameters) {
             }
         }
 
-        // /* 达妙伺服电机位置持续高频发包控制（MIT 模式） */
+        /* 达妙伺服电机位置持续高频发包控制（位置速度 模式） */
         dm_pos_speed_ctrl(
             &dm_motor_handle[0],
             chassis_handle.damiao_target_degree.lift_target_degree1,
@@ -290,7 +290,6 @@ void chassis_driver_task(void *pvParameters) {
     while (1) {
 
         if (!chassis_handle.halt) {
-            // chassis_handle.degree_lock = false;
             omni_wheels_resolve(
                 (const chassis_speed_t *)&chassis_handle.chassis_speed,
                 chassis_handle.chassis_speed.target_rpm);
