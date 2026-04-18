@@ -165,8 +165,7 @@ void chassis_mode_task(void *pvParameters) {
                 if (target_yaw > -0.1f && target_yaw < 0.1f){
                     target_yaw = 0.0f;
                 }
-
-                // test_target_yaw = target_yaw;
+                
                 chassis_handle.chassis_speed.target_speed.vx = target_x;
                 chassis_handle.chassis_speed.target_speed.vy = target_y;
                 chassis_handle.chassis_speed.target_speed.vw = target_yaw;
