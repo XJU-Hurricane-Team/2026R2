@@ -46,6 +46,7 @@ void nav_module_callback(const void *msgin);
 void logger_module_init(void);
 void microros_log_msg_cb(const char *data, uint16_t len);
 void microros_log_data_cb(const log_data_packet_t *packet);
+void agent_init_task(void *pvParameters);
 
 /**
  * @brief 初始化MicroROS
@@ -140,6 +141,7 @@ int microros_init(void) {
 
     return (int)RCL_RET_OK;
 }
+
 
 void nav_task(void *pvParameters) {
     UNUSED(pvParameters);

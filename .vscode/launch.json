@@ -27,10 +27,12 @@
             "name": "Debug: JLINK",
             "servertype": "jlink",
             "interface": "swd",
-            "executable": "Build/Debug/g4_template.elf",
+            "executable": "Build/Debug/2026R2.elf",
             "runToEntryPoint": "main",
             "device": "STM32G474VE",
             "toolchainPrefix": "arm-none-eabi",
+            "gdbPath": "gdb-multiarch",
+            "rtos": "FreeRTOS",
             "liveWatch": {
                 "enabled": true,
                 "samplesPerSecond": 4

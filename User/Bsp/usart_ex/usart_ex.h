@@ -129,9 +129,9 @@ extern "C" {
 
 #ifdef UART4_RX_DMA
 //   <o> UART4_RX_DMA_BUF_SIZE       UART4 RX DMA Buffer Size  <8-4096:8>
-#define UART4_RX_DMA_BUF_SIZE   1024
+#define UART4_RX_DMA_BUF_SIZE   512
 //   <o> UART4_RX_DMA_FIFO_SIZE      UART4 RX DMA FIFO Size    <8-4096:8>
-#define UART4_RX_DMA_FIFO_SIZE  1024
+#define UART4_RX_DMA_FIFO_SIZE  512
 //   </e> UART4_RX_DMA
 #endif /* UART4_RX_DMA */
 
