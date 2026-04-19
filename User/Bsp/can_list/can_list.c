@@ -396,7 +396,7 @@ void can_list_polling_task(void *args) {
                 continue;
         }
 
-        uint16_t read_count = 3;
+        uint16_t read_count = 2;
         for(uint16_t i = 0; i < read_count; i++) {
         if (HAL_FDCAN_GetRxMessage(recv_msg.hcan, recv_msg.rx_fifo, &rx_header,
                                    rx_data) != HAL_OK) {
@@ -654,6 +654,19 @@ static void can_message_process(CAN_HandleTypeDef *hcan, uint32_t rx_fifo) {
 
 #if CAN_LIST_USE_FDCAN
 
+static void can_list_fdcan_drain_fifo(FDCAN_HandleTypeDef *hfdcan,
+                                      uint32_t rx_fifo) {
+    FDCAN_RxHeaderTypeDef rx_header;
+    uint8_t rx_data[64];
+
+    while (HAL_FDCAN_GetRxFifoFillLevel(hfdcan, rx_fifo) > 0U) {
+        if (HAL_FDCAN_GetRxMessage(hfdcan, rx_fifo, &rx_header, rx_data) !=
+            HAL_OK) {
+            break;
+        }
+    }
+}
+
 /**
  * @brief Rx FIFO 0 callback.
  * 
@@ -670,16 +683,21 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan,
 
 #if CAN_LIST_USE_RTOS
     if (can_list_queue_handle == NULL) {
+        can_list_fdcan_drain_fifo(hfdcan, FDCAN_RX_FIFO0);
         return;
     }
 
     send_msg_from_isr.hcan = hfdcan;
     send_msg_from_isr.rx_fifo = FDCAN_RX_FIFO0;
-    xQueueSendFromISR(can_list_queue_handle, &send_msg_from_isr, NULL);
+    if (xQueueSendFromISR(can_list_queue_handle, &send_msg_from_isr, NULL) !=
+        pdPASS) {
+        can_list_fdcan_drain_fifo(hfdcan, FDCAN_RX_FIFO0);
+    }
 #else  /* CAN_LIST_USE_RTOS */
     can_message_process(hfdcan, FDCAN_RX_FIFO0);
 #endif /* CAN_LIST_USE_RTOS */
 }
+
 /**
  * @brief Rx FIFO 1 callback.
  *
@@ -696,12 +714,16 @@ void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan,
 
 #if CAN_LIST_USE_RTOS
     if (can_list_queue_handle == NULL) {
+        can_list_fdcan_drain_fifo(hfdcan, FDCAN_RX_FIFO1);
         return;
     }
 
     send_msg_from_isr.hcan = hfdcan;
     send_msg_from_isr.rx_fifo = FDCAN_RX_FIFO1;
-    xQueueSendFromISR(can_list_queue_handle, &send_msg_from_isr, NULL);
+    if (xQueueSendFromISR(can_list_queue_handle, &send_msg_from_isr, NULL) !=
+        pdPASS) {
+        can_list_fdcan_drain_fifo(hfdcan, FDCAN_RX_FIFO1);
+    }
 #else  /* CAN_LIST_USE_RTOS */
     can_message_process(hfdcan, FDCAN_RX_FIFO1);
 #endif /* CAN_LIST_USE_RTOS */

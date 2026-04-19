@@ -45,9 +45,9 @@ extern "C" {
 
 #if CAN_LIST_USE_RTOS
 #define CAN_LIST_TASK_NAME     "Can list"
-#define CAN_LIST_TASK_PRIORITY 2
+#define CAN_LIST_TASK_PRIORITY 4
 #define CAN_LSIT_TASK_STK_SIZE 256
-#define CAN_LIST_QUEUE_LENGTH  5
+#define CAN_LIST_QUEUE_LENGTH  10
 
 #endif /* CAN_LIST_USE_RTOS */
 
