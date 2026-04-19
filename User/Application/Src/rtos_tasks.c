@@ -25,7 +25,7 @@ void nav_task(void *pvParameters);
  *
  */
 void freertos_start(void) {
-    xTaskCreate(start_task, "start_task", 256, NULL, 2, &start_task_handle);
+    xTaskCreate(start_task, "start_task", 512, NULL, 2, &start_task_handle);
     vTaskStartScheduler();
 }
 
@@ -36,27 +36,36 @@ void freertos_start(void) {
  */
 void start_task(void *pvParameters) {
     UNUSED(pvParameters);
-    taskENTER_CRITICAL();
 
     log_init(LOG_DEBUG);
     can_list_add_can(can1_selected, 4, 4);
     can_list_add_can(can2_selected, 4, 4);
     can_list_add_can(can3_selected, 4, 4);
+
+    if (microros_init() != 0) {
+        log_message(LOG_ERROR, "start_task: microros_init failed");
+        Error_Handler();
+    }
+
+    logger_module_init();
+
+    if (xTaskCreate(nav_task, "nav_task", 128 * 11, NULL, 3,
+                    &nav_task_handle) != pdPASS) {
+        log_message(LOG_ERROR, "start_task: nav_task create failed");
+        Error_Handler();
+    }
+
     chassis_init();
-    catch_init(); 
+    catch_init();
     msg_process_init();
     // robot_arm_init();
 
-    xTaskCreate(task1, "task1", 128, NULL, 2, &task1_handle);
-
-
-    if (xTaskCreate(nav_task, "nav_task", 128 * 10, NULL, 3,
-                    &nav_task_handle) != pdPASS) {
+    if (xTaskCreate(task1, "task1", 128, NULL, 2, &task1_handle) != pdPASS) {
+        log_message(LOG_ERROR, "start_task: task1 create failed");
         Error_Handler();
     }
 
     vTaskDelete(NULL);
-    taskEXIT_CRITICAL();
 }
 
 /**

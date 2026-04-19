@@ -47,6 +47,10 @@ void omni_wheels_resolve(const chassis_speed_t *chassis_speed, volatile float *o
     // 在全向轮等效速度模型中, 要将底盘的线速度(Vx, Vy)投影到每个轮子的法线上。
     // 此外, 底盘旋转(Vw)使得每个轮子产生一个切向线速度, 大小为 Vw * 旋转半径(R)。输出轴逆时针转动
 
+    vx = fmaxf(fminf(vx, MAX_SPEED_XY), -MAX_SPEED_XY);
+    vy = fmaxf(fminf(vy, MAX_SPEED_XY), -MAX_SPEED_XY);
+    vw = fmaxf(fminf(vw, MAX_SPEED_W), -MAX_SPEED_W);
+
     float v1 = -SQRT2_2 * vx - SQRT2_2 * vy - vw * CHASSIS_RADIUS; // 轮1：右上 (前偏右)
     float v2 =  SQRT2_2 * vx - SQRT2_2 * vy - vw * CHASSIS_RADIUS; // 轮2：左上 (前偏左)
     float v3 =  SQRT2_2 * vx + SQRT2_2 * vy - vw * CHASSIS_RADIUS; // 轮3：左下 (后偏左)

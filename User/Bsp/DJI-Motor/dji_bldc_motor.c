@@ -44,8 +44,9 @@ static void can_callback(void *node_obj, can_rx_header_t *can_rx_header,
     switch (motor_point->motor_model) {
 #if (DJI_MOTOR_USE_M3508_2006 == 1)
         case DJI_M3508: {
-            motor_point->real_current = (float)(can_msg[2] << 8 | can_msg[3]);
-            motor_point->speed_rpm = (int16_t)(motor_point->real_current);
+            motor_point->speed_rpm = (int16_t)((can_msg[2] << 8) | can_msg[3]);
+            motor_point->real_current =
+                (float)((int16_t)((can_msg[4] << 8) | can_msg[5])) ;
             motor_point->given_current =
                 (int16_t)((float)(can_msg[4] << 8 | can_msg[5]) / -5.0f);
         } break;
@@ -133,6 +134,7 @@ uint8_t dji_motor_init(dji_motor_handle_t *motor, dji_motor_model_t motor_model,
     }
 
     motor->motor_model = motor_model;
+    // motor->motor_id = can_id;
     motor->got_offset = false;
     motor->can_select = can_select;
     if (can_list_add_new_node(can_select, (void *)motor, can_id, 0x7FF,

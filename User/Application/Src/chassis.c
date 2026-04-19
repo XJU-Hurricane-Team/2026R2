@@ -22,11 +22,6 @@
 #define FRONT_SENSOR_PIN         GPIO_PIN_1
 #define REAR_SENSOR_PIN          GPIO_PIN_2
 
-#define MAX_SPEED_XY             2
-#define MAX_SPEED_W              4
-#define MAX_ACCEL_XY             1.5
-#define MAX_ACCEL_W              2
-
 #define LIFT_START_DEGREE        0.0f
 #define LIFT_TARGET_DEG_MIN      0.0f
 #define LIFT_TARGET_DEG_MAX      7.93f
@@ -98,6 +93,7 @@ static void chassis_bottom_init(void);
 static void chassis_switch_mode(uint8_t key, remote_key_event_t event);
 static void chassis_halt_degree_update(void);
 static void chassis_pid_clear_state(pid_t *pid);
+static bool chassis_3508_feedback_ready(void);
 static void chassis_lift_seq_update(void);
 static void chassis_lift_seq_up_update(float *target_y);
 static void chassis_lift_seq_down_update(float *target_y);
@@ -155,11 +151,11 @@ void chassis_mode_task(void *pvParameters) {
                 float target_2006 = g_remote_ctrl_data.rs[3] * 250.0f;
 
                 /* 遥控器死区限幅，防止误触侧边引起不期望的位移 */
-                if (target_x > -0.01f && target_x < 0.01f) {
+                if (target_x > -0.4 && target_x < 0.4) {
                     target_x = 0.0f;
                 }
 
-                if (target_y > -0.3f && target_y < 0.3f) {
+                if (target_y > -0.4 && target_y < 0.4) {
                     target_y = 0.0f;
                 }
                 if (target_yaw > -0.1f && target_yaw < 0.1f){
@@ -170,7 +166,7 @@ void chassis_mode_task(void *pvParameters) {
                 chassis_handle.chassis_speed.target_speed.vy = target_y;
                 chassis_handle.chassis_speed.target_speed.vw = target_yaw;
                 chassis_handle.chassis_speed.target_2006_rpm = target_2006;
-               
+            //    log_data(LOG_CHASSIS,target_x,target_y,target_yaw,target_2006);
                 // chassis_plan_step(
                 //     target_x, target_y, target_yaw,
                 //     &chassis_handle.chassis_speed.target_speed.vx,
@@ -205,6 +201,8 @@ void chassis_mode_task(void *pvParameters) {
             default:
                 break;
         }
+
+    
 
         vTaskDelay(5);
     }
@@ -279,6 +277,7 @@ void chassis_state_task(void *pvParameters) {
 void chassis_driver_task(void *pvParameters) {
     (void)pvParameters;
     int16_t motor_out_current[4] = {0};
+    bool feedback_ready_last = false;
 
     /* 达妙电机只需在上电时使能一次，留出延时防止CAN拥堵 */
     vTaskDelay(pdMS_TO_TICKS(10));
@@ -287,6 +286,32 @@ void chassis_driver_task(void *pvParameters) {
     dm_motor_enable(&dm_motor_handle[1]);
 
     while (1) {
+        bool feedback_ready = chassis_3508_feedback_ready();
+
+        if (!feedback_ready) {
+            /* 上电后未收到3508首帧反馈时，禁止下发驱动电流，避免偶发冲车。 */
+            for (int i = 0; i < 4; i++) {
+                motor_out_current[i] = 0;
+                chassis_pid_clear_state(&dji_3508_speed_pid[i]);
+                chassis_pid_clear_state(&dji_3508_pos_pid[i]);
+            }
+
+            if (feedback_ready_last) {
+                log_message(LOG_ERROR, "3508 feedback lost, output disabled.");
+            }
+            feedback_ready_last = false;
+
+            dji_motor_set_current(CHASSIS_CAN_SELECT, DJI_MOTOR_GROUP1,
+                                  motor_out_current[0], motor_out_current[1],
+                                  motor_out_current[2], motor_out_current[3]);
+            vTaskDelay(3);
+            continue;
+        }
+
+        if (!feedback_ready_last) {
+            log_message(LOG_INFO, "3508 feedback ready, enable chassis output.");
+        }
+        feedback_ready_last = true;
 
         if (!chassis_handle.halt) {
             omni_wheels_resolve(
@@ -321,6 +346,15 @@ void chassis_driver_task(void *pvParameters) {
                               motor_out_current[2], motor_out_current[3]);
         vTaskDelay(3);
     }
+}
+
+static bool chassis_3508_feedback_ready(void) {
+    for (int i = 0; i < 4; i++) {
+        if (!dji_3508_handle[i].got_offset) {
+            return false;
+        }
+    }
+    return true;
 }
 
 /* ==================================================== 底盘和抬升按键注册函数 ==================================================== */
@@ -464,14 +498,21 @@ void chassis_init(void) {
 static void chassis_bottom_init(void) {
     /* DJI 3508电机初始化 */
     for (int i = 0; i < 4; i++) {
-        dji_motor_init(&dji_3508_handle[i], DJI_M3508, CAN_Motor1_ID + i,
-                       CHASSIS_CAN_SELECT);
+        if (dji_motor_init(&dji_3508_handle[i], DJI_M3508, CAN_Motor1_ID + i,
+                           CHASSIS_CAN_SELECT) != 0) {
+                            
+            log_message(LOG_ERROR, "3508 motor init failed: idx=%d", i);
+            return;
+        }
     }
 
     /* DJI 2006电机初始化 */
     for (int i = 0; i < 2; i++) {
-        dji_motor_init(&dji_2006_handle[i], DJI_M2006, CAN_Motor5_ID + i,
-                       CHASSIS_CAN_SELECT);
+        if (dji_motor_init(&dji_2006_handle[i], DJI_M2006, CAN_Motor5_ID + i,
+                           CHASSIS_CAN_SELECT) != 0) {
+            log_message(LOG_ERROR, "2006 motor init failed: idx=%d", i);
+            return;
+        }
     }
     
     /* 达妙4310初始化 */
@@ -531,16 +572,19 @@ static void chassis_tasks_init(void) {
     task_create_res = xTaskCreate(chassis_mode_task, "chassis_mode_task", 256,
                                   NULL, 4, &chassis_mode_task_handle);
     if (task_create_res != pdPASS) {
+        log_message(LOG_ERROR, "Failed to create chassis_mode_task.");
         return;
     }
     task_create_res = xTaskCreate(chassis_state_task, "chassis_state_task", 256,
                                   NULL, 4, &chassis_state_task_handle);
     if (task_create_res != pdPASS) {
+        log_message(LOG_ERROR, "Failed to create chassis_state_task.");
         return;
     }
     task_create_res = xTaskCreate(chassis_driver_task, "chassis_driver_task",
                                   256, NULL, 5, &chassis_driver_task_handle);
     if (task_create_res != pdPASS) {
+        log_message(LOG_ERROR, "Failed to create chassis_driver_task.");
         return;
     }
 }

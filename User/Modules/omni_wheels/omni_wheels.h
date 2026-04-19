@@ -19,8 +19,15 @@
 #define WHEEL_RADIUS   0.076f      // 轮子半径 152mm/2 = 76mm
 #define GEAR_RATIO     19.0f       // M3508减速比
 
+
 #define PI 3.1415926535f
 #define SQRT2_2 0.70710678f // sqrt(2)/2 的常数，用于45度麦克纳姆/全向轮运动学投影
+
+// 速度限制参数
+#define MAX_SPEED_XY             1.0f
+#define MAX_SPEED_W              4.0f
+#define MAX_ACCEL_XY             1.5f
+#define MAX_ACCEL_W              2.0f
 
 // 宏定义：轮子线速度(m/s)转化为电机转子转速(rpm)
 // v = (rpm / 60) * (1 / GEAR_RATIO) * (2 * PI * WHEEL_RADIUS)

@@ -68,7 +68,7 @@ void remote_receive_callback(uint32_t msg_length, uint8_t msg_type,
     /* LED2 闪烁判断消息收发是否正常 */
     if (HAL_GetTick() - start_time > 200) {
         start_time = HAL_GetTick();
-        LED2_TOGGLE();
+       LED2_TOGGLE();
     }
 }
 
