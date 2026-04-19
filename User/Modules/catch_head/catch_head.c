@@ -21,7 +21,7 @@ static catch_head_dji_joint_t g_catch_rod_joint = {
 static dm_handle_t g_dm_motor;
 static catch_head_dm_joint_t g_dm_joint = {
 	.motor_handle = &g_dm_motor,
-	.target_position_deg = {0.0f, 1.57f},
+	.target_position_rad = {1.57f, 0.0f , -0.5f},
 	.target_index = 0,
 };
 
@@ -34,6 +34,8 @@ static catch_head_servo_joint_t g_gripper_joint = {
 
 /* 模块就绪标志，避免初始化失败后继续执行控制 */
 static uint8_t g_ready = 0;
+
+static void catch_head_apply_default_targets(void);
 
 /**
  * @brief 初始化夹爪舵机
@@ -68,9 +70,7 @@ void catch_head_motor_init(void) {
 	g_dm_joint.target_index = 0;
 	g_gripper_joint.target_index = 0;
 
-
-	catch_head_set_dji_target(0);
-	catch_head_set_servo_target(0);
+	catch_head_apply_default_targets();
 	g_ready = 1;
 }
 
@@ -118,8 +118,14 @@ void catch_head(void) {
 	dji_motor_set_current(can2_selected, DJI_MOTOR_GROUP1,
 					  g_catch_rod_joint.motor_handle->set_value, 0, 0, 0);
 
-	float dm_target_rad = g_dm_joint.target_position_deg[g_dm_joint.target_index];
+	float dm_target_rad = g_dm_joint.target_position_rad[g_dm_joint.target_index];
 	dm_pos_speed_ctrl(g_dm_joint.motor_handle, dm_target_rad, DM_SPEED);
+}
+
+static void catch_head_apply_default_targets(void) {
+	catch_head_set_dji_target(CATCH_HEAD_DJI_TARGET_HOME);
+	catch_head_set_dm_target(CATCH_HEAD_DM_TARGET_RETRACT);
+	catch_head_set_servo_target(CATCH_HEAD_SERVO_TARGET_CLOSE);
 }
 
 /**
@@ -132,7 +138,11 @@ void catch_head_set_dji_target(uint8_t target_index) {
 		return;
 	}
 
-	target_index %= CATCH_HEAD_DJI_TARGET_COUNT;
+	// target_index %= CATCH_HEAD_DJI_TARGET_COUNT;
+	if (target_index >= CATCH_HEAD_DJI_TARGET_COUNT) {
+    return;
+}
+
 	g_catch_rod_joint.target_index = target_index;
 	t_trajectory_init(&g_catch_rod_joint.trajectory,
 					 g_catch_rod_joint.motor_handle->rotor_degree * CATCH_HEAD_DEG_TO_RAD,
@@ -149,7 +159,11 @@ void catch_head_set_dm_target(uint8_t target_index) {
 		return;
 	}
 
-	target_index %= CATCH_HEAD_DM_TARGET_COUNT;
+	if (target_index >= CATCH_HEAD_DM_TARGET_COUNT) {
+		return;
+	}
+
+	// target_index %= CATCH_HEAD_DM_TARGET_COUNT;
 	g_dm_joint.target_index = target_index;
 }
 
@@ -162,7 +176,10 @@ void catch_head_set_servo_target(uint8_t target_index) {
 		return;
 	}
 
-	target_index %= CATCH_HEAD_SERVO_TARGET_COUNT;
+	if (target_index >= CATCH_HEAD_SERVO_TARGET_COUNT) {
+		return;
+	}
+	// target_index %= CATCH_HEAD_SERVO_TARGET_COUNT;
 	g_gripper_joint.target_index = target_index;
 
 	servo_set_state(g_gripper_joint.servo_handle,

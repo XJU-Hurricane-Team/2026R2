@@ -17,6 +17,7 @@ void task1(void *pvParameters);
 static TaskHandle_t nav_task_handle;
 void nav_task(void *pvParameters);
 
+
 /*****************************************************************************/
 
 /**
@@ -38,17 +39,21 @@ void start_task(void *pvParameters) {
     taskENTER_CRITICAL();
 
     log_init(LOG_DEBUG);
+    can_list_add_can(can1_selected, 4, 4);
+    can_list_add_can(can2_selected, 4, 4);
+    can_list_add_can(can3_selected, 4, 4);
     chassis_init();
-    catch_init();
+    catch_init(); 
     msg_process_init();
     // robot_arm_init();
 
     xTaskCreate(task1, "task1", 128, NULL, 2, &task1_handle);
 
-    // if (xTaskCreate(nav_task, "nav_task", 128*10, NULL, 3, &nav_task_handle) !=
-    //     pdPASS) {
-    //     Error_Handler();
-    // }
+
+    if (xTaskCreate(nav_task, "nav_task", 128 * 10, NULL, 3,
+                    &nav_task_handle) != pdPASS) {
+        Error_Handler();
+    }
 
     vTaskDelete(NULL);
     taskEXIT_CRITICAL();

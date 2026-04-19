@@ -9,24 +9,50 @@
 #include "includes.h"
 #include "npn_switch/npn_switch.h"
 
-#define CATCH_STATE_INIT_KEY     11
-#define CATCH_STATE_READY_KEY    12
-#define CATCH_STATE_GRAB_KEY     13
-#define CATCH_STATE_ASSEMBLY_KEY 14
+#define CATCH_AUTO_FLOW_ENABLE   0U
+#define CATCH_TASK_PERIOD_MS     5U
+#define CATCH_SENSOR_COUNT       6U
 
+#define CATCH_STATE_INIT_KEY     11U
+#define CATCH_STATE_READY_KEY    12U
+#define CATCH_STATE_GRAB_KEY     13U
+#define CATCH_STATE_CHECK_KEY    14U
+#define CATCH_STATE_ASSEMBLY_KEY 15U
+#define CATCH_STATE_DONE_KEY     16U
+
+/**
+ * @brief 夹取状态定义
+ * 
+ */
 typedef enum {
 	CATCH_STATE_INIT = 0,  /* 初始状态，等待进入 READY */
 	CATCH_STATE_READY,     /* 准备就绪，等待首次稳定检测到物体 */
 	CATCH_STATE_GRAB,      /* 抓取状态，等待二次稳定检测到物体 */
+	CATCH_STATE_CHECK,     /* 检测状态，等待检测完成 */
 	CATCH_STATE_ASSEMBLY,  /* 拼接状态 */
+	CATCH_STATE_DONE,      /* 完成状态 */
 	CATCH_STATE_COUNT,     /* 状态数量 */
 } catch_state_t;
 
+/**
+ * @brief 状态内流程定义
+ * 
+ */
 typedef enum {
 	CATCH_FLOW_WAIT_FIRST_DETECT = 0,   /* 在 READY 阶段等待首次检测到物体 */
 	CATCH_FLOW_WAIT_SECOND_DETECT,      /* 二次检测，确认下一阶段条件成立 */
 	CATCH_FLOW_DONE,                    /* 检测完成，进入拼接态*/
 } catch_flow_t;
+
+/**
+ * @brief 电机目标状态定义
+ * 
+ */
+typedef struct {
+	uint8_t servo_target;
+	uint8_t dm_target;
+	uint8_t dji_target;
+} catch_motor_target_t;
 
 static catch_state_t catch_state = CATCH_STATE_INIT;
 static catch_flow_t catch_flow = CATCH_FLOW_WAIT_FIRST_DETECT;
@@ -34,35 +60,61 @@ static catch_flow_t catch_flow = CATCH_FLOW_WAIT_FIRST_DETECT;
 /* 传感器稳定计数：active 连续达到阈值才认为状态有效 */
 static uint8_t sensor_active_cnt = 0;
 static TaskHandle_t catch_task_handle;
+
 static void catch_task(void *pvParameters);
-
-#define CATCH_SENSOR_COUNT 6
-
 static void catch_tasks_init(void);
 static void catch_update(void);
 static void catch_set_state(catch_state_t state);
+static void catch_update_flow_for_state(catch_state_t state);
 static void catch_remote_state_switch(uint8_t key, remote_key_event_t event);
+static void catch_apply_state(catch_state_t state);
+static uint8_t catch_is_sensor_active(void);
+static void catch_update_sensor_counter(void);
+static void catch_process_auto_flow(void);
 
-/*
- * @brief 判断目标状态是否为当前状态的下一个合法状态。
- * @param curr 当前状态。
- * @param next 目标状态。
- * @return 1 表示合法顺序跳转，0 表示非法跳转。
- * @note 本函数只做顺序关系判断，不执行状态切换。
+/**
+ * @brief 夹爪整体各阶段下电机状态
+ * 
  */
-static uint8_t catch_is_next_state(catch_state_t curr, catch_state_t next) {
-	/* 仅允许按 INIT->READY->GRAB->ASSEMBLY->INIT 的顺序切换 */
-	return (uint8_t)(next == (catch_state_t)((curr + 1) % CATCH_STATE_COUNT));
-}
+static const catch_motor_target_t g_catch_motor_targets[CATCH_STATE_COUNT] = {
+	[CATCH_STATE_INIT] = {
+		.servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
+		.dm_target = CATCH_HEAD_DM_TARGET_RETRACT,
+		.dji_target = CATCH_HEAD_DJI_TARGET_HOME,
+	},
+	[CATCH_STATE_READY] = {
+		.servo_target = CATCH_HEAD_SERVO_TARGET_OPEN,
+		.dm_target = CATCH_HEAD_DM_TARGET_EXTEND,
+		.dji_target = CATCH_HEAD_DJI_TARGET_HOME,
+	},
+	[CATCH_STATE_GRAB] = {
+		.servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
+		.dm_target = CATCH_HEAD_DM_TARGET_EXTEND,
+		.dji_target = CATCH_HEAD_DJI_TARGET_HOME,
+	},
+	[CATCH_STATE_CHECK] = {
+		.servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
+		.dm_target = CATCH_HEAD_DM_TARGET_CHECK,
+		.dji_target = CATCH_HEAD_DJI_TARGET_HOME,
+	},
+	[CATCH_STATE_ASSEMBLY] = {
+		.servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
+		.dm_target = CATCH_HEAD_DM_TARGET_EXTEND,
+		.dji_target = CATCH_HEAD_DJI_TARGET_ASSEMBLY,
+	},
+	[CATCH_STATE_DONE] = {
+		.servo_target = CATCH_HEAD_SERVO_TARGET_OPEN,
+		.dm_target = CATCH_HEAD_DM_TARGET_EXTEND,
+		.dji_target = CATCH_HEAD_DJI_TARGET_ASSEMBLY,
+	},
+};
 
-/*
- * @brief 根据主状态重置子流程状态，并清空传感器稳定计数。
- * @param state 当前主状态。
- * @note
- * INIT/READY: 进入首次检测流程。
- * GRAB: 进入二次检测流程。
- * ASSEMBLY: 进入流程结束状态。
- * 每次主状态切换后调用，避免沿用旧流程计数。
+
+
+/**
+ * @brief 更新状态对应的流程
+ * 
+ * @param state 
  */
 static void catch_update_flow_for_state(catch_state_t state) {
 	switch (state) {
@@ -75,6 +127,7 @@ static void catch_update_flow_for_state(catch_state_t state) {
 			catch_flow = CATCH_FLOW_WAIT_SECOND_DETECT;
 		} break;
 
+		case CATCH_STATE_CHECK:
 		case CATCH_STATE_ASSEMBLY:
 		default: {
 			catch_flow = CATCH_FLOW_DONE;
@@ -84,14 +137,25 @@ static void catch_update_flow_for_state(catch_state_t state) {
 	sensor_active_cnt = 0;
 }
 
-/*
- * @brief 遥控器按键回调：KEY11/12/13/14 对应四种主状态。
- * @note
- * KEY11 -> INIT
- * KEY12 -> READY
- * KEY13 -> GRAB
- * KEY14 -> ASSEMBLY
- * 实际合法性由 catch_set_state() 再次校验。
+/**
+ * @brief 更新电机状态
+ * 
+ * @param state 
+ */
+static void catch_apply_state(catch_state_t state) {
+	if (state >= CATCH_STATE_COUNT) {
+		return;
+	}
+	catch_head_set_servo_target(g_catch_motor_targets[state].servo_target);
+	catch_head_set_dm_target(g_catch_motor_targets[state].dm_target);
+	catch_head_set_dji_target(g_catch_motor_targets[state].dji_target);
+}
+
+/**
+ * @brief 按键回调
+ * 
+ * @param key 
+ * @param event 
  */
 static void catch_remote_state_switch(uint8_t key, remote_key_event_t event) {
 	UNUSED(event);
@@ -109,61 +173,31 @@ static void catch_remote_state_switch(uint8_t key, remote_key_event_t event) {
 			catch_set_state(CATCH_STATE_GRAB);
 		} break;
 
+		case CATCH_STATE_CHECK_KEY: {
+			catch_set_state(CATCH_STATE_CHECK);
+		} break;
+
 		case CATCH_STATE_ASSEMBLY_KEY: {
 			catch_set_state(CATCH_STATE_ASSEMBLY);
 		} break;
 
+		case CATCH_STATE_DONE_KEY: {
+			catch_set_state(CATCH_STATE_DONE);
+		} break;
 		default: {
 		} break;
 	}
 }
 
-/*
- * @brief 按状态下发抓矛头执行器目标值。
- * @param state 需要应用的目标状态。
- * @note
- * 该函数只负责执行器目标配置，不修改状态变量。
- * 不同状态下分别控制舵机、达妙电机、DJI 电机目标位。
- */
-static void catch_apply_state(catch_state_t state) {
-	switch (state) {
-		case CATCH_STATE_INIT: {
-			catch_head_set_servo_target(0);
-			catch_head_set_dm_target(0);
-			catch_head_set_dji_target(0);
-		} break;
-
-		case CATCH_STATE_READY: {
-			catch_head_set_servo_target(1);
-			catch_head_set_dm_target(1);
-			catch_head_set_dji_target(0);
-		} break;
-
-		case CATCH_STATE_GRAB: {
-			catch_head_set_servo_target(0);
-		} break;
-
-		case CATCH_STATE_ASSEMBLY: {
-			catch_head_set_dji_target(1);
-		} break;
-
-		default: {
-		} break;
-	}
-}
-
-/*
- * @brief 抓取模块初始化入口。
- * @note
- * 初始化抓头驱动，设置主状态为 INIT，
- * 同步重置子流程和传感器计数，并下发 INIT 状态对应执行器目标。
+/**
+ * @brief 初始化夹爪状态
+ * 
  */
 void catch_init(void) {
 	catch_head_init();
 
 	catch_state = CATCH_STATE_INIT;
 	catch_update_flow_for_state(catch_state);
-
 	catch_apply_state(catch_state);
 
 	remote_register_key_callback(CATCH_STATE_INIT_KEY, REMOTE_KEY_PRESS_UP,
@@ -174,54 +208,73 @@ void catch_init(void) {
 	                             catch_remote_state_switch);
 	remote_register_key_callback(CATCH_STATE_ASSEMBLY_KEY, REMOTE_KEY_PRESS_UP,
 	                             catch_remote_state_switch);
-
+	remote_register_key_callback(CATCH_STATE_CHECK_KEY, REMOTE_KEY_PRESS_UP,
+	                             catch_remote_state_switch);
+	remote_register_key_callback(CATCH_STATE_DONE_KEY, REMOTE_KEY_PRESS_UP,
+	                             catch_remote_state_switch);
 	catch_tasks_init();
 }
 
-/*
- * @brief 抓取模块周期更新函数（建议在主循环或任务中周期调用）。
- * @note
- * 处理顺序：
- * 1) 遥控器回调触发状态切换；
- * 2) 采样 NPN 传感器并进行稳定计数；
- * 3) 按子流程条件执行自动状态推进；
- * 4) 调用 catch_head() 执行底层控制更新。
+/**
+ * @brief 判断传感器是否被触发
+ * 
+ * @return uint8_t 
+ */
+static uint8_t catch_is_sensor_active(void) {
+	return (uint8_t)(npn_switch_read_level() == GPIO_PIN_RESET);
+}
+
+/**
+ * @brief 更新传感器计数器
+ * 
+ */
+static void catch_update_sensor_counter(void) {
+	if (catch_is_sensor_active()) {
+		if (sensor_active_cnt < CATCH_SENSOR_COUNT) {
+			sensor_active_cnt++;
+		}
+	} else {
+		sensor_active_cnt = 0;
+	}
+}
+
+/**
+ * @brief 夹取自动流程
+ * 
+ */
+static void catch_process_auto_flow(void) {
+#if CATCH_AUTO_FLOW_ENABLE
+	switch (catch_flow) {
+		case CATCH_FLOW_WAIT_FIRST_DETECT: {
+			if (catch_state == CATCH_STATE_READY &&
+			    sensor_active_cnt >= CATCH_SENSOR_COUNT) {
+				catch_set_state(CATCH_STATE_GRAB);
+			}
+		} break;
+
+		case CATCH_FLOW_WAIT_SECOND_DETECT: {
+			if (catch_state == CATCH_STATE_GRAB &&
+			    sensor_active_cnt >= CATCH_SENSOR_COUNT) {
+				catch_set_state(CATCH_STATE_ASSEMBLY);
+			}
+		} break;
+
+		case CATCH_FLOW_DONE:
+		default: {
+		} break;
+	}
+#else
+	UNUSED(catch_flow);
+#endif
+}
+
+/**
+ * @brief 夹取状态更新，更新传感器状态，处理自动流程，更新电机状态
+ * 
  */
 static void catch_update(void) {
-	/* NPN 低电平表示检测到物体 */
-	// uint8_t is_active = (uint8_t)(npn_switch_read_level() == GPIO_PIN_RESET);
-
-	/* 简单消抖：只有连续 N 次同一电平才触发后续状态变更 */
-	// if (is_active) {
-	// 	if (sensor_active_cnt < CATCH_SENSOR_COUNT) {
-	// 		sensor_active_cnt++;
-	// 	}
-	// } else {
-	// 	sensor_active_cnt = 0;
-	// }
-
-	// switch (catch_flow) {
-	// 	case CATCH_FLOW_WAIT_FIRST_DETECT: {
-	// 		/* READY 阶段首次稳定检测到物体 -> 进入 GRAB */
-	// 		if (catch_state == CATCH_STATE_READY &&
-	// 			sensor_active_cnt >= CATCH_SENSOR_COUNT) {
-	// 			catch_set_state(CATCH_STATE_GRAB);
-	// 		}
-	// 	} break;
-
-	// 	case CATCH_FLOW_WAIT_SECOND_DETECT: {
-	// 		/* 二次稳定检测到物体 -> 进入 ASSEMBLY */
-	// 		if (catch_state == CATCH_STATE_GRAB &&
-	// 			sensor_active_cnt >= CATCH_SENSOR_COUNT) {
-	// 			catch_set_state(CATCH_STATE_ASSEMBLY);
-	// 		}
-	// 	} break;
-
-	// 	case CATCH_FLOW_DONE:
-	// 	default: {
-	// 	} break;
-	// }
-
+	catch_update_sensor_counter();
+	catch_process_auto_flow();
 	catch_head();
 }
 
@@ -244,25 +297,30 @@ static void catch_set_state(catch_state_t state) {
 		return;
 	}
 
-	if (catch_is_next_state(catch_state, state) == 0) {
-		/* 拒绝跨阶段跳转，保证执行器动作按既定顺序发生 */
-		return;
-	}
 
 	catch_state = state;
 	catch_apply_state(catch_state);
 	catch_update_flow_for_state(catch_state);
 }
 
+/**
+ * @brief 夹取任务函数
+ * 
+ * @param pvParameters 
+ */
 static void catch_task(void *pvParameters) {
 	UNUSED(pvParameters);
 
 	while (1) {
 		catch_update();
-		vTaskDelay(2);
+		vTaskDelay(pdMS_TO_TICKS(CATCH_TASK_PERIOD_MS));
 	}
 }
 
+/**
+ * @brief 夹取任务初始化
+ * 
+ */
 static void catch_tasks_init(void) {
-	xTaskCreate(catch_task, "catch_task", 256, NULL, 2, &catch_task_handle);
+	xTaskCreate(catch_task, "catch_task", 256, NULL, 3, &catch_task_handle);
 }
