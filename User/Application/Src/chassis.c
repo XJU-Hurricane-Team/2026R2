@@ -7,6 +7,9 @@
  */
 
 #include "includes.h"
+#include "microros_ctrl.h"
+#include "chassis_calculations/chassis_calculations.h"
+#include "omni_wheels/omni_wheels.h"
 
 #define SWITCH_WORLD_KEY         2 /* 切换世界/自身坐标系按键 */
 #define SWITCH_AUTO_KEY          3 /* 切换自动/手动按键 */
@@ -124,20 +127,20 @@ static bool get_rear_photoelectric(void) {
  */
 void chassis_mode_task(void *pvParameters) {
     (void)pvParameters;
-
+    int wait = 0;
     while (1) {
         /* 判断是否传入升起/下降的信号 */
         if (chassis_handle.mode != CHASSIS_MODE_LIFT_SEQ) {
-            if (g_nuc_ctrl_data.lift == 1) { /* 1 表示触发上升 */
+            if (wait == 1) { /* 1 表示触发上升 */
                 chassis_handle.mode = CHASSIS_MODE_LIFT_SEQ;
                 chassis_handle.lift_fsm.action = 1;
                 chassis_handle.lift_fsm.step = 0;
-                g_nuc_ctrl_data.lift = 0;
-            } else if (g_nuc_ctrl_data.lift == 2) { /* 2 表示触发下降 */
+                wait = 0;
+            } else if (wait == 2) { /* 2 表示触发下降 */
                 chassis_handle.mode = CHASSIS_MODE_LIFT_SEQ;
                 chassis_handle.lift_fsm.action = 2;
                 chassis_handle.lift_fsm.step = 0;
-                g_nuc_ctrl_data.lift = 0;
+                wait = 0;
             }
         }
 
@@ -175,8 +178,7 @@ void chassis_mode_task(void *pvParameters) {
 
                 if (chassis_handle.world_cordinate) {
                     omni_wheels_world_transform(
-                        &chassis_handle.chassis_speed.target_speed,
-                        g_nuc_pos_data.yaw); //第二个参数待填
+                        &chassis_handle.chassis_speed.target_speed,0); //第二个参数待填
                 }
                 break;
             }
@@ -632,9 +634,8 @@ static float chassis_lift_limit_target(float target_degree) {
         }
         return LIFT_TARGET_DEG_MAX;
     }
-    else if (target_degree < LIFT_TARGET_DEG_MIN) {
-        return LIFT_TARGET_DEG_MIN;
-    }
+
+    
     return target_degree;
 }
 

@@ -6,44 +6,47 @@
  * @date    2026-04-7
  */
 
-#include "cubemx.h"
-#include "./usart_ex/usart_ex.h"
-#include <string.h>
+#include "includes.h"
 
-#include "logger/logger.h"
-
-#include "FreeRTOS.h"
-#include "task.h"
-#include "semphr.h"
 #include "MicroROSConfig.h"
 #include "microros_ctrl.h"
+#include "catch.h"
+
 #include <std_msgs/msg/float32_multi_array.h>
 #include <std_msgs/msg/string.h>
+#include <std_msgs/msg/int8.h>
+#include "custom_msg/srv/grab.h"
 
-custom_nav_msgs__msg__SpeedHeading nav_pram;
 static volatile bool g_microros_ready = false;
 
-static rclc_executor_t executor;
-static rcl_node_t node;
-static rclc_support_t support;
-static rcl_allocator_t allocator;
-static SemaphoreHandle_t microros_rcl_mutex;
+static rclc_executor_t executor = {0};
+static rcl_node_t node = {0};
+static rclc_support_t support = {0};
+static rcl_allocator_t allocator = {0};
+static SemaphoreHandle_t microros_rcl_mutex = NULL;
 
-// 导航模块句柄
-static rcl_subscription_t subscriber;
+// 导航，抓取模块
+static rcl_subscription_t nav_subscriber = {0};
+static rcl_service_t grab_service = {0};
+static rcl_publisher_t grab_publisher = {0};
+custom_msg__msg__SpeedHeading nav_pram = {0};
+static custom_msg__srv__Grab_Request grab_srv_pram = {0};
+static std_msgs__msg__Int8 grab_pub_pram = {0};
 
 // 日志模块句柄
-static rcl_publisher_t log_msg_publisher;
-static rcl_publisher_t log_data_publisher;
-std_msgs__msg__String ros_log_msg;
-std_msgs__msg__Float32MultiArray ros_log_data;
-static char ros_string_buffer[LOG_MSG_BUFFER_SIZE];
-static float ros_data_buffer[LOG_DATA_COUNT + 1];
+static rcl_publisher_t log_msg_publisher = {0};
+static rcl_publisher_t log_data_publisher = {0};
+std_msgs__msg__String ros_log_msg = {0};
+std_msgs__msg__Float32MultiArray ros_log_data = {0};
+static char ros_string_buffer[LOG_MSG_BUFFER_SIZE] = {0};
+static float ros_data_buffer[LOG_DATA_COUNT + 1] = {
+    0}; /* 预留第一个元素存放数据个数 */
 log_msg_packet_t log_msg_packet = {0};
 log_data_packet_t log_data_packet = {0};
 
 void nav_module_init(void);
-void nav_module_callback(const void *msgin);
+void nav_sub_callback(const void *msgin);
+void grab_microros_callback(const void *request_msg, void *response_msg);
 void logger_module_init(void);
 void microros_log_msg_cb(const char *data, uint16_t len);
 void microros_log_data_cb(const log_data_packet_t *packet);
@@ -56,7 +59,6 @@ void microros_log_data_cb(const log_data_packet_t *packet);
 
 int microros_init(void) {
     rcl_ret_t ret;
-    g_microros_ready = false;
 
     rmw_uros_set_custom_transport(
         true, (void *)&huart4, cubemx_transport_open, cubemx_transport_close,
@@ -127,7 +129,7 @@ int microros_init(void) {
         return (int)ret;
     }
 
-    ret = rclc_node_init_default(&node, "chassis_node", "", &support);
+    ret = rclc_node_init_default(&node, "chassis", "", &support);
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR, "microros_init: node init failed, ret=%d\n",
                     (int)ret);
@@ -141,78 +143,167 @@ int microros_init(void) {
         return (int)ret;
     }
 
-    g_microros_ready = true;
-
     return (int)RCL_RET_OK;
 }
 
-bool microros_is_ready(void) {
-    return g_microros_ready;
-}
-
+/**
+ * @brief 导航任务
+ * 
+ * @param pvParameters 
+ */
 void nav_task(void *pvParameters) {
     UNUSED(pvParameters);
-    if (!microros_is_ready()) {
-        log_message(LOG_ERROR, "nav_task: microros not ready, task halted\n");
-        vTaskDelete(NULL);
-        return;
-    }
+
     nav_module_init();
 
     while (1) {
-        // EXECUTE_EVERY_MS(50, t_nav, {
-        //     if (microros_rcl_mutex != NULL &&
-        //         xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) ==
-        //             pdTRUE) {
-        //         rclc_executor_spin_some(&executor, 0);
-        //         xSemaphoreGive(microros_rcl_mutex);
-        //     }
-        // });
-
         if (microros_rcl_mutex != NULL &&
             xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
             rclc_executor_spin_some(&executor, 5000000); /* 5ms */
             xSemaphoreGive(microros_rcl_mutex);
         }
-        // rclc_executor_spin_some(&executor, 5000000); /* 5ms */
         vTaskDelay(10);
     }
 }
 
-// 初始化导航接收模块
+/**
+ * @brief 初始化导航模块
+ * 
+ */
 void nav_module_init(void) {
     rcl_ret_t ret = rclc_subscription_init_default(
-        &subscriber, &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(custom_nav_msgs, msg, SpeedHeading),
+        &nav_subscriber, &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(custom_msg, msg, SpeedHeading),
         "/nav_speed_heading_data");
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR,
                     "nav_module_init: subscription init failed, ret=%d\n",
                     (int)ret);
         return;
-    }
-    else {
+    } else {
         log_message(LOG_INFO, "nav_module_init: subscription init success\n");
     }
 
-    ret = rclc_executor_add_subscription(&executor, &subscriber, &nav_pram,
-                                         &nav_module_callback, ON_NEW_DATA);
+    ret = rclc_executor_add_subscription(&executor, &nav_subscriber, &nav_pram,
+                                         &nav_sub_callback, ON_NEW_DATA);
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR, "nav_module_init: add subscription failed");
     }
 }
 
-void nav_module_callback(const void *msgin) {
+/**
+ * @brief 导航订阅回调函数
+ * 
+ * @param msgin 
+ */
+void nav_sub_callback(const void *msgin) {
     // Cast received message to used type
-    const custom_nav_msgs__msg__SpeedHeading *msg =
-        (const custom_nav_msgs__msg__SpeedHeading *)msgin;
-
-    nav_pram.linear_x = msg->linear_x;
-    nav_pram.linear_y = msg->linear_y;
-    nav_pram.angular_z = msg->angular_z;
+    nav_pram = *(const custom_msg__msg__SpeedHeading *)msgin;
 }
 
-// 初始化日志模块
+/**
+ * @brief 初始化抓取模块
+ * 
+ */
+void grab_microros_init(void) {
+    rcl_ret_t ret = rclc_service_init_default(
+        &grab_service, &node,
+        ROSIDL_GET_SRV_TYPE_SUPPORT(custom_msg, srv, Grab), "/grab_service");
+    if (ret != RCL_RET_OK) {
+        log_message(LOG_ERROR,
+                    "grab_microros_init: service init failed, ret=%d\n",
+                    (int)ret);
+    }
+
+    ret = rclc_publisher_init_default(
+        &grab_publisher, &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/grab_topic");
+    if (ret != RCL_RET_OK) {
+        log_message(LOG_ERROR,
+                    "grab_microros_init: publisher init failed, ret=%d\n",
+                    (int)ret);
+    }
+
+    ret = rclc_executor_add_service(&executor, &grab_service, &grab_srv_pram,
+                                    &grab_microros_callback, ON_NEW_DATA);
+    if (ret != RCL_RET_OK) {
+        log_message(LOG_ERROR, "grab_microros_init: add service failed");
+    }
+}
+
+/**
+ * @brief 抓取状态发布函数
+ * 
+ */
+void grab_microros_publish(void) {
+    bool success = false;
+
+    while (1) {
+        success = catch_head_is_target_reached();
+        if (success) {
+            grab_pub_pram.data = 1;
+            if (microros_rcl_mutex != NULL &&
+                xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) ==
+                    pdTRUE) {
+                rcl_ret_t pub_ret =
+                    rcl_publish(&grab_publisher, &grab_pub_pram, NULL);
+                if (pub_ret != RCL_RET_OK) {
+                    log_message(LOG_ERROR,
+                                "grab_microros_publish: publish failed\n");
+                }
+                xSemaphoreGive(microros_rcl_mutex);
+            }
+            grab_pub_pram.data = 0;
+            break;
+        }
+        vTaskDelay(10);
+    }
+}
+
+/**
+ * @brief 抓取服务回调函数
+ * 
+ * @param request_msg 
+ * @param response_msg 
+ */
+void grab_microros_callback(const void *request_msg, void *response_msg) {
+
+    grab_srv_pram = *(const custom_msg__srv__Grab_Request *)request_msg;
+
+    switch (grab_srv_pram.command_mode) {
+        case 0:
+            catch_set_state(CATCH_STATE_INIT);
+            break;
+        case 1:
+            catch_set_state(CATCH_STATE_READY);
+            break;
+        case 2:
+            catch_set_state(CATCH_STATE_GRAB);
+            break;
+        case 3:
+            catch_set_state(CATCH_STATE_CHECK);
+            break;
+        case 4:
+            catch_set_state(CATCH_STATE_ASSEMBLY);
+            break;
+        case 5:
+            catch_set_state(CATCH_STATE_DONE);
+            break;
+        default:
+            break;
+    }
+    if (catch_feedback_handle != NULL) {
+        xTaskNotifyGive(catch_feedback_handle);
+    }
+    custom_msg__srv__Grab_Response *res =
+        (custom_msg__srv__Grab_Response *)response_msg;
+    res->success = true; // 指令已成功接收并开始执行
+}
+
+/**
+ * @brief 初始化日志模块
+ * 
+ */
 void logger_module_init(void) {
     int ret = 0;
     ret |= rclc_publisher_init_default(
@@ -255,7 +346,7 @@ void microros_log_msg_cb(const char *data, uint16_t len) {
 
     if (microros_rcl_mutex != NULL &&
         xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        rcl_ret_t pub_ret = rcl_publish(&log_msg_publisher, &ros_log_msg, NULL);
+        rcl_publish(&log_msg_publisher, &ros_log_msg, NULL);
         xSemaphoreGive(microros_rcl_mutex);
     }
 }
@@ -280,9 +371,7 @@ void microros_log_data_cb(const log_data_packet_t *packet) {
 
         if (microros_rcl_mutex != NULL &&
             xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-
-            rcl_ret_t pub_ret =
-                rcl_publish(&log_data_publisher, &ros_log_data, NULL);
+            rcl_publish(&log_data_publisher, &ros_log_data, NULL);
             xSemaphoreGive(microros_rcl_mutex);
         }
     }
