@@ -10,7 +10,8 @@
 #ifndef ROBOT_ARM
 #define ROBOT_ARM
 
-#include <cubemx.h>
+#include "bsp.h"
+#include "remote_ctrl/remote_ctrl.h"
 #include "./Damiao-Motor/damiao.h"
 #include "arm_math.h"
 

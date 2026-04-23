@@ -120,7 +120,7 @@ extern uint32_t SystemCoreClock;
 #define configSUPPORT_DYNAMIC_ALLOCATION          1
 
 //  <o>堆内存总大小 [byte] <0-65535>
-#define configTOTAL_HEAP_SIZE                     ((size_t)1024*25)
+#define configTOTAL_HEAP_SIZE                     ((size_t)1024*30)
 
 //  <q>用户手动分配FreeRTOS内存堆
 //  <i> 默认: 0
@@ -148,7 +148,7 @@ extern uint32_t SystemCoreClock;
 //  <i> 当堆栈溢出时, 调用vApplicationStackOverflowHook钩子函数
 //  <i> 不同方式区别参照FreeRTOS官方文档
 //  <i> 默认: 0
-#define configCHECK_FOR_STACK_OVERFLOW            0
+#define configCHECK_FOR_STACK_OVERFLOW            1
 
 //  <q>启用定时器服务Startup钩子函数
 //  <i> 在定时器服务首次执行前调用vApplicationDaemonTaskStartupHook钩子函数

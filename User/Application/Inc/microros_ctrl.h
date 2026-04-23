@@ -16,12 +16,11 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#include "custom_nav_msgs/msg/speed_heading.h"
-extern custom_nav_msgs__msg__SpeedHeading nav_pram;
+#include "custom_msg/msg/speed_heading.h"
+extern custom_msg__msg__SpeedHeading nav_pram;
 
-int microros_init(void);
 bool microros_is_ready(void);
-void logger_module_init(void);
+void grab_microros_publish(void);
 
 #ifdef __cplusplus
 }

@@ -42,7 +42,7 @@ static void catch_head_apply_default_targets(void);
  * @note 使用 TIM1 CH1 作为舵机输出通道，并配置上下限脉宽
  */
 void catch_head_servo_init(void) {
-	servo_init(&g_gripper_servo, &htim1, TIM_CHANNEL_1, 3000, 3850);
+	servo_init(&g_gripper_servo, &htim1, TIM_CHANNEL_1, 3150, 4300);
 }
 
 /**
@@ -184,4 +184,30 @@ void catch_head_set_servo_target(uint8_t target_index) {
 
 	servo_set_state(g_gripper_joint.servo_handle,
 				   target_index == 0 ? SERVO_CLOSE : SERVO_OPEN);
+}
+
+/**
+ * @brief 检测动作是否成功
+ * 
+ * @return true 
+ * @return false 
+ */
+bool catch_head_is_target_reached(void) {
+	if (g_ready == 0 || g_catch_rod_joint.motor_handle == NULL ||
+		g_dm_joint.motor_handle == NULL) {
+		return false;
+	}
+
+	float dji_target_deg = g_catch_rod_joint.target_angle_deg[g_catch_rod_joint.target_index];
+	float dji_err_deg = fabsf(g_catch_rod_joint.motor_handle->rotor_degree - dji_target_deg);
+
+
+	float dm_target_rad = g_dm_joint.target_position_rad[g_dm_joint.target_index];
+	float dm_err_rad = fabsf(g_dm_joint.motor_handle->position - dm_target_rad);
+
+	uint8_t dji_ok = (uint8_t)(dji_err_deg <= CATCH_HEAD_DJI_POS_TOL_DEG);
+	uint8_t dm_ok = (uint8_t)(dm_err_rad <= CATCH_HEAD_DM_POS_TOL_RAD);
+	uint8_t servo_ok = 1; 
+
+	return (bool)(dji_ok && dm_ok && servo_ok);
 }

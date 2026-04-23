@@ -21,6 +21,9 @@
 #define CATCH_HEAD_RAD_TO_DEG 57.29578f
 #define CATCH_HEAD_RAD_S_TO_RPM 9.549296f
 
+#define CATCH_HEAD_DJI_POS_TOL_DEG   1.5f
+#define CATCH_HEAD_DM_POS_TOL_RAD    0.05f
+
 #define DM_SPEED 0.6f
 
 typedef enum {
@@ -78,5 +81,7 @@ void catch_head(void);        // 夹取模块周期更新函数
 void catch_head_set_dji_target(uint8_t target_index);
 void catch_head_set_dm_target(uint8_t target_index);
 void catch_head_set_servo_target(uint8_t target_index);
+
+bool catch_head_is_target_reached(void);
 
 #endif /* __CATCH_HEAD_H */

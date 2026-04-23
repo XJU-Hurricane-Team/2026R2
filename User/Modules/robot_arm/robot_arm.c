@@ -8,7 +8,9 @@
  * @date 2026-04-15
  */
 
-#include "includes.h"
+#include "robot_arm.h"  
+#include "FreeRTOS.h"
+#include "task.h"
 
 #define ARM_1           450.0f     // 大臂长度
 #define ARM_2           450.0f     // 小臂长度
