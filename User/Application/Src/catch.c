@@ -304,6 +304,12 @@ static void catch_task(void *pvParameters) {
     }
 }
 
+/**
+ * @brief 夹取反馈任务函数
+ * @note 该任务等待通知触发，触发后调用 grab_microros_publish(),检测动作是否完成， 发布成功失败到 ROS2.
+ * 
+ * @param pvParameters 
+ */
 static void catch_feedback_task(void *pvParameters) {
 	UNUSED(pvParameters);
 
