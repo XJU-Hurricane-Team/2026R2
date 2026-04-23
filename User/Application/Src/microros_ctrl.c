@@ -17,7 +17,6 @@
 #include <std_msgs/msg/int8.h>
 #include "custom_msg/srv/grab.h"
 
-static volatile bool g_microros_ready = false;
 
 static rclc_executor_t executor = {0};
 static rcl_node_t node = {0};
@@ -198,17 +197,10 @@ void nav_module_init(void) {
 
 /**
  * @brief 导航订阅回调函数
- * 
+ * @note 获取导航发布的底盘速度
  * @param msgin 
  */
 void nav_sub_callback(const void *msgin) {
-    // Cast received message to used type
-    //     const custom_msg__msg__SpeedHeading *msg =
-    //     (const custom_msg__msg__SpeedHeading *)msgin;
-
-    // nav_pram.linear_x = msg->linear_x;
-    // nav_pram.linear_y = msg->linear_y;
-    // nav_pram.angular_z = msg->angular_z;
     nav_pram = *(const custom_msg__msg__SpeedHeading *)msgin;
 }
 
@@ -243,8 +235,7 @@ void grab_microros_init(void) {
 }
 
 /**
- * @brief 抓取状态发布函数
- * 
+ * @brief 夹爪动作状态发布函数
  */
 void grab_microros_publish(void) {
     bool success = false;
@@ -276,6 +267,7 @@ void grab_microros_publish(void) {
  * 
  * @param request_msg 
  * @param response_msg 
+ * @note 后续可扩展为多动作的控制指令发布，如上下台阶，机械臂控制等
  */
 void grab_microros_callback(const void *request_msg, void *response_msg) {
     custom_msg__srv__Grab_Request *req_in =
