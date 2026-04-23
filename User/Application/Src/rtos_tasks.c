@@ -63,7 +63,7 @@ void start_task(void *pvParameters) {
     chassis_init();
     catch_init();
     msg_process_init();
-    // robot_arm_init();
+    robot_arm_init();
 
     if (xTaskCreate(task1, "task1", 256, NULL, 2, &task1_handle) != pdPASS) {
         log_message(LOG_ERROR, "start_task: task1 create failed");
@@ -121,7 +121,7 @@ static void log_task_stack_usage(TaskHandle_t task_handle,
 }
 
 static void log_system_heap_summary(void) {
-    // 获取当前剩余堆内存（字节）
+    // 获取当前剩余堆内存（字节�?
     size_t current_free_heap = xPortGetFreeHeapSize();
     
     // 获取历史最低剩余堆内存（字节）

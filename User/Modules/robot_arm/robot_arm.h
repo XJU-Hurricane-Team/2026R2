@@ -3,15 +3,14 @@
  * @author xinglu
  * @brief 机械臂驱动模块
  * 
- * @version 1.8
- * @date 2026-04-15
+ * @version 2.0
+ * @date 2026-04-24
  */
 
 #ifndef ROBOT_ARM
 #define ROBOT_ARM
 
-#include "bsp.h"
-#include "remote_ctrl/remote_ctrl.h"
+#include <cubemx.h>
 #include "./Damiao-Motor/damiao.h"
 #include "arm_math.h"
 
@@ -19,22 +18,11 @@
  * @brief 机械臂状态定义，为上位机预留的接口
  */
 typedef enum {
-	ARM_DEFAULT = 0,           // 默认状态
-	ARM_MOVING_TO_READY = 1,   // 移动到准备位置
-	ARM_READY = 2,             // 准备就绪
-	ARM_CATCHING = 3,          // 抓取动作
-	ARM_PLACING = 4,           // 放置动作
+	ARM_STATE_INIT = 0,        // 初始态
+	ARM_STATE_READY = 1,       // 就绪态
+	ARM_STATE_CATCH = 2,       // 抓取态
+	ARM_STATE_PLACE = 3,       // 放置态
 } arm_status_t;
-
-/**
- * @brief 机械臂事件标志定义，为上位机预留的接口
- */
-typedef enum {
-	EVENT_READY = 0,           // 准备位置事件
-	EVENT_CATCH = 1,           // 抓取事件
-	EVENT_PLACE = 2,           // 放置事件
-	EVENT_TRAJ_FINISHED = 3,   // 轨迹完成事件
-} arm_event_t;
 
 /**
  * @brief 机械臂控制目标类型
@@ -62,9 +50,17 @@ typedef struct {
 
 	// 状态管理
 	arm_status_t status;        // 当前机械臂状态
+
+	// 大臂过冲控制（用于关键点位避碰）
+	float big_arm_overshoot_rad;    // 大臂过冲幅值上限(rad)
+	float big_arm_final_joint;      // 过冲完成后回落的最终关节目标(rad)
+	float big_arm_overshoot_joint;  // 过冲阶段的中间目标关节角(rad)
+	uint8_t big_arm_overshoot_armed; // 过冲武装标志: 1=等待触发过冲, 0=不触发
+	uint8_t big_arm_overshoot_phase; // 过冲阶段: 0=关闭, 1=去过冲点, 2=回落终点
 } RobotArm;
 
 // 初始化和更新函数
+void robot_arm_init(void);
 void robot_arm_system_init(RobotArm *arm);
 void robot_arm_update(RobotArm *arm);
 void robot_arm_task(void *pvParameters);
@@ -76,7 +72,8 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]);
 void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch);
 void robot_arm_set_joint_target(RobotArm *arm, float joint1, float joint2,
 								float joint3);
-void robot_arm_switch_target(uint8_t key, remote_key_event_t event);
+void robot_arm_set_big_arm_overshoot(RobotArm *arm, float overshoot_rad);
+void robot_arm_set_ctrl_dt(float dt_s);
 
 #endif /* ROBOT_ARM */
 
