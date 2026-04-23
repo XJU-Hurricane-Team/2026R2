@@ -90,12 +90,12 @@ void task1(void *pvParameters) {
         LED1_TOGGLE();
 
         /* Print stack usage every 5 seconds to avoid flooding the log output. */
-        if (++count >= 5) {
-            count = 0;
-            log_task_stack_usage(task1_handle, "task1", 256);
-            log_task_stack_usage(nav_task_handle, "nav_task", 128*10);
-            log_system_heap_summary();
-        }
+        // if (++count >= 5) {
+        //     count = 0;
+        //     // log_task_stack_usage(task1_handle, "task1", 256);
+        //     log_task_stack_usage(nav_task_handle, "nav_task", 128*10);
+        //     log_system_heap_summary();
+        // }
 
         vTaskDelay(1000);
     }

@@ -30,7 +30,8 @@ static rcl_subscription_t nav_subscriber = {0};
 static rcl_service_t grab_service = {0};
 static rcl_publisher_t grab_publisher = {0};
 custom_msg__msg__SpeedHeading nav_pram = {0};
-static custom_msg__srv__Grab_Request grab_srv_pram = {0};
+static custom_msg__srv__Grab_Request grab_request = {0};
+static custom_msg__srv__Grab_Response grab_response = {0};
 static std_msgs__msg__Int8 grab_pub_pram = {0};
 
 // 日志模块句柄
@@ -46,6 +47,8 @@ log_data_packet_t log_data_packet = {0};
 
 void nav_module_init(void);
 void nav_sub_callback(const void *msgin);
+
+void grab_microros_init(void);
 void grab_microros_callback(const void *request_msg, void *response_msg);
 void logger_module_init(void);
 void microros_log_msg_cb(const char *data, uint16_t len);
@@ -136,7 +139,7 @@ int microros_init(void) {
         return (int)ret;
     }
 
-    ret = rclc_executor_init(&executor, &support.context, 2, &allocator);
+    ret = rclc_executor_init(&executor, &support.context, 10, &allocator);
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR, "microros_init: executor init failed, ret=%d\n",
                     (int)ret);
@@ -155,6 +158,8 @@ void nav_task(void *pvParameters) {
     UNUSED(pvParameters);
 
     nav_module_init();
+    vTaskDelay(50); // 确保导航模块先于抓取模块初始化
+    grab_microros_init();
 
     while (1) {
         if (microros_rcl_mutex != NULL &&
@@ -162,7 +167,7 @@ void nav_task(void *pvParameters) {
             rclc_executor_spin_some(&executor, 5000000); /* 5ms */
             xSemaphoreGive(microros_rcl_mutex);
         }
-        vTaskDelay(10);
+        vTaskDelay(5);
     }
 }
 
@@ -198,6 +203,12 @@ void nav_module_init(void) {
  */
 void nav_sub_callback(const void *msgin) {
     // Cast received message to used type
+    //     const custom_msg__msg__SpeedHeading *msg =
+    //     (const custom_msg__msg__SpeedHeading *)msgin;
+
+    // nav_pram.linear_x = msg->linear_x;
+    // nav_pram.linear_y = msg->linear_y;
+    // nav_pram.angular_z = msg->angular_z;
     nav_pram = *(const custom_msg__msg__SpeedHeading *)msgin;
 }
 
@@ -223,9 +234,9 @@ void grab_microros_init(void) {
                     "grab_microros_init: publisher init failed, ret=%d\n",
                     (int)ret);
     }
-
-    ret = rclc_executor_add_service(&executor, &grab_service, &grab_srv_pram,
-                                    &grab_microros_callback, ON_NEW_DATA);
+    
+    ret = rclc_executor_add_service(&executor, &grab_service, &grab_request,
+                                    &grab_response, &grab_microros_callback);
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR, "grab_microros_init: add service failed");
     }
@@ -267,10 +278,9 @@ void grab_microros_publish(void) {
  * @param response_msg 
  */
 void grab_microros_callback(const void *request_msg, void *response_msg) {
-
-    grab_srv_pram = *(const custom_msg__srv__Grab_Request *)request_msg;
-
-    switch (grab_srv_pram.command_mode) {
+    custom_msg__srv__Grab_Request *req_in =
+        (custom_msg__srv__Grab_Request *)request_msg;
+    switch (req_in->command_mode) {
         case 0:
             catch_set_state(CATCH_STATE_INIT);
             break;
@@ -295,9 +305,9 @@ void grab_microros_callback(const void *request_msg, void *response_msg) {
     if (catch_feedback_handle != NULL) {
         xTaskNotifyGive(catch_feedback_handle);
     }
-    custom_msg__srv__Grab_Response *res =
+    custom_msg__srv__Grab_Response *res_in =
         (custom_msg__srv__Grab_Response *)response_msg;
-    res->success = true; // 指令已成功接收并开始执行
+    res_in->success = true;
 }
 
 /**

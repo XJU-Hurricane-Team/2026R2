@@ -22,7 +22,7 @@
 #define CATCH_HEAD_RAD_S_TO_RPM 9.549296f
 
 #define CATCH_HEAD_DJI_POS_TOL_DEG   1.5f
-#define CATCH_HEAD_DM_POS_TOL_RAD    0.1f
+#define CATCH_HEAD_DM_POS_TOL_RAD    0.05f
 
 #define DM_SPEED 0.6f
 
