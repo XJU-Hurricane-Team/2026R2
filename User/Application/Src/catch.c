@@ -61,6 +61,8 @@ static uint8_t catch_is_sensor_active(void);
 static void catch_update_sensor_counter(void);
 static void catch_process_auto_flow(void);
 
+bool check_sensor_active(void);
+
 /**
  * @brief 夹爪整体各阶段下电机状态
  * 
@@ -93,14 +95,14 @@ static const catch_motor_target_t g_catch_motor_targets[CATCH_STATE_COUNT] = {
     [CATCH_STATE_ASSEMBLY] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
-            .dm_target = CATCH_HEAD_DM_TARGET_EXTEND,
-            .dji_target = CATCH_HEAD_DJI_TARGET_ASSEMBLY,
+            .dm_target = CATCH_HEAD_DM_TARGET_CHECK,
+            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
     [CATCH_STATE_DONE] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_OPEN,
-            .dm_target = CATCH_HEAD_DM_TARGET_EXTEND,
-            .dji_target = CATCH_HEAD_DJI_TARGET_ASSEMBLY,
+            .dm_target = CATCH_HEAD_DM_TARGET_CHECK,
+            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
 };
 
@@ -300,6 +302,7 @@ static void catch_task(void *pvParameters) {
 
     while (1) {
         catch_update();
+        check_sensor_active();
         vTaskDelay(pdMS_TO_TICKS(CATCH_TASK_PERIOD_MS));
     }
 }
@@ -311,13 +314,13 @@ static void catch_task(void *pvParameters) {
  * @param pvParameters 
  */
 static void catch_feedback_task(void *pvParameters) {
-	UNUSED(pvParameters);
+    UNUSED(pvParameters);
 
-	while (1) {
-		ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+    while (1) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-		grab_microros_publish();
-	}
+        grab_microros_publish();
+    }
 }
 
 /**
@@ -326,5 +329,19 @@ static void catch_feedback_task(void *pvParameters) {
  */
 static void catch_tasks_init(void) {
     xTaskCreate(catch_task, "catch_task", 256, NULL, 3, &catch_task_handle);
-	xTaskCreate(catch_feedback_task, "catch_feedback_task", 256, NULL, 3, &catch_feedback_handle);
+    xTaskCreate(catch_feedback_task, "catch_feedback_task", 256, NULL, 3,
+                &catch_feedback_handle);
+}
+
+bool check_sensor_active(void) {
+    // 读取 PE8 引脚的状态
+    static int8_t count = 0;
+    if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_7) == GPIO_PIN_SET && count == 0 ) {
+        // log_message(LOG_INFO, "Target Detected!");
+        count = 1;
+        return true;
+    } else {
+        count = 0;
+        return false;
+    }
 }

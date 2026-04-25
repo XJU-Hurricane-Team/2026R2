@@ -43,22 +43,34 @@ void start_task(void *pvParameters) {
     UNUSED(pvParameters);
 
     log_init(LOG_DEBUG);
-    can_list_add_can(can1_selected, 4, 4);
-    can_list_add_can(can2_selected, 4, 4);
-    can_list_add_can(can3_selected, 4, 4);
+    int8_t res = can_list_add_can(can1_selected, 4, 4);
+    if(res != 0)
+    {
+        log_message(LOG_ERROR, "start_task: add_can1 failed, res=%d", res);
+    }
+    res = can_list_add_can(can2_selected, 4, 4);
+    if(res != 0)
+    {
+        log_message(LOG_ERROR, "start_task: add_can2 failed, res=%d", res);
+    }
+    res = can_list_add_can(can3_selected, 4, 4);
+    if(res != 0)
+    {
+        log_message(LOG_ERROR, "start_task: add_can3 failed, res=%d", res);
+    }
 
-    // if (microros_init() != 0) {
-    //     log_message(LOG_ERROR, "start_task: microros_init failed");
-    //     Error_Handler();
-    // }
+    if (microros_init() != 0) {
+        log_message(LOG_ERROR, "start_task: microros_init failed");
+        Error_Handler();
+    }
 
-    // logger_module_init();
+    logger_module_init();
 
-    // if (xTaskCreate(nav_task, "nav_task", 128 * 10, NULL, 3,
-    //                 &nav_task_handle) != pdPASS) {
-    //     log_message(LOG_ERROR, "start_task: nav_task create failed");
-    //     Error_Handler();
-    // }
+    if (xTaskCreate(nav_task, "nav_task", 128 * 10, NULL, 3,
+                    &nav_task_handle) != pdPASS) {
+        log_message(LOG_ERROR, "start_task: nav_task create failed");
+        Error_Handler();
+    }
 
     chassis_init();
     catch_init();

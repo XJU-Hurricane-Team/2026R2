@@ -396,36 +396,40 @@ void can_list_polling_task(void *args) {
                 continue;
         }
 
+        if (can_table[can_received] == NULL) {
+            continue; // 如果这个 CAN 口压根没注册配置，直接丢弃报文，防止死机
+        }
+        
         uint16_t read_count = 2;
-        for(uint16_t i = 0; i < read_count; i++) {
-        if (HAL_FDCAN_GetRxMessage(recv_msg.hcan, recv_msg.rx_fifo, &rx_header,
-                                   rx_data) != HAL_OK) {
-            continue;
-        }
+        for (uint16_t i = 0; i < read_count; i++) {
+            if (HAL_FDCAN_GetRxMessage(recv_msg.hcan, recv_msg.rx_fifo,
+                                       &rx_header, rx_data) != HAL_OK) {
+                continue;
+            }
 
-        if (rx_header.IdType == FDCAN_STANDARD_ID) {
-            table = &can_table[can_received]->id_table[STD_ID_TABLE];
-        } else {
-            table = &can_table[can_received]->id_table[EXT_ID_TABLE];
-        }
-        id = rx_header.Identifier;
+            if (rx_header.IdType == FDCAN_STANDARD_ID) {
+                table = &can_table[can_received]->id_table[STD_ID_TABLE];
+            } else {
+                table = &can_table[can_received]->id_table[EXT_ID_TABLE];
+            }
+            id = rx_header.Identifier;
 
-        if (table->len == 0) {
-            continue;
-        }
-        node = table->table[id % table->len];
+            if (table->len == 0) {
+                continue;
+            }
+            node = table->table[id % table->len];
 
-        while ((node != NULL) && (node->id) != (id & node->id_mask)) {
-            node = node->next;
-        }
+            while ((node != NULL) && (node->id) != (id & node->id_mask)) {
+                node = node->next;
+            }
 
-        if (node == NULL || node->callback == NULL) {
-            continue;
-        }
+            if (node == NULL || node->callback == NULL) {
+                continue;
+            }
 
-        call_rx_header.id_type = rx_header.IdType;
-        call_rx_header.frame_type = rx_header.RxFrameType;
-        call_rx_header.data_length = rx_header.DataLength;
+            call_rx_header.id_type = rx_header.IdType;
+            call_rx_header.frame_type = rx_header.RxFrameType;
+            call_rx_header.data_length = rx_header.DataLength;
 
 #else /* CAN_LIST_USE_FDCAN */
         switch ((uintptr_t)(recv_msg.hcan->Instance)) {
@@ -489,10 +493,10 @@ void can_list_polling_task(void *args) {
 
 #endif /* CAN_LIST_USE_FDCAN */
 
-        call_rx_header.id = id;
+            call_rx_header.id = id;
 
-        node->callback(node->can_data, &call_rx_header, rx_data);
-    }
+            node->callback(node->can_data, &call_rx_header, rx_data);
+        }
     }
 }
 

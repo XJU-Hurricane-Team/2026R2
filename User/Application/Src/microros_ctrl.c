@@ -157,7 +157,7 @@ void nav_task(void *pvParameters) {
     UNUSED(pvParameters);
 
     nav_module_init();
-    vTaskDelay(50); // 确保导航模块先于抓取模块初始化
+    vTaskDelay(500); // 确保导航模块先于抓取模块初始化
     grab_microros_init();
 
     while (1) {
@@ -175,6 +175,7 @@ void nav_task(void *pvParameters) {
  * 
  */
 void nav_module_init(void) {
+    vTaskDelay(5); 
     rcl_ret_t ret = rclc_subscription_init_default(
         &nav_subscriber, &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(custom_msg, msg, SpeedHeading),
@@ -188,6 +189,7 @@ void nav_module_init(void) {
         log_message(LOG_INFO, "nav_module_init: subscription init success\n");
     }
 
+    vTaskDelay(5);
     ret = rclc_executor_add_subscription(&executor, &nav_subscriber, &nav_pram,
                                          &nav_sub_callback, ON_NEW_DATA);
     if (ret != RCL_RET_OK) {
@@ -209,6 +211,7 @@ void nav_sub_callback(const void *msgin) {
  * 
  */
 void grab_microros_init(void) {
+    vTaskDelay(5);
     rcl_ret_t ret = rclc_service_init_default(
         &grab_service, &node,
         ROSIDL_GET_SRV_TYPE_SUPPORT(custom_msg, srv, Grab), "/grab_service");
@@ -218,6 +221,7 @@ void grab_microros_init(void) {
                     (int)ret);
     }
 
+    vTaskDelay(5); 
     ret = rclc_publisher_init_default(
         &grab_publisher, &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/grab_topic");
@@ -231,6 +235,9 @@ void grab_microros_init(void) {
                                     &grab_response, &grab_microros_callback);
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR, "grab_microros_init: add service failed");
+    }
+    else {
+        log_message(LOG_INFO,"grab_microros_init:success");
     }
 }
 

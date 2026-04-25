@@ -7,6 +7,7 @@
  */
 
 #include "catch_head.h"
+#include "logger/logger.h"  
 
 /* 旋转矛头关节管理 */
 static dji_motor_handle_t g_catch_rod_motor;
@@ -21,7 +22,7 @@ static catch_head_dji_joint_t g_catch_rod_joint = {
 static dm_handle_t g_dm_motor;
 static catch_head_dm_joint_t g_dm_joint = {
 	.motor_handle = &g_dm_motor,
-	.target_position_rad = {1.57f, 0.0f , -0.5f},
+	.target_position_rad = {1.57f, 0.0f , -1.57f},
 	.target_index = 0,
 };
 
@@ -50,16 +51,17 @@ void catch_head_servo_init(void) {
  * @note 包括 DJI 电机、DM 电机、PID 参数和默认目标状态
  */
 void catch_head_motor_init(void) {
-	if (dji_motor_init(&g_catch_rod_motor, DJI_M2006, CAN_Motor1_ID,
-					   can2_selected) != 0) {
+	int8_t res = dji_motor_init(&g_catch_rod_motor, DJI_M2006, CAN_Motor1_ID,
+					   can2_selected);
+	if (res != 0) {
 		g_ready = 0;
-		return;
+		log_message(LOG_ERROR, "catch_head_motor_init: DJI motor init failed");
 	}
-
-	if (dm_motor_init(&g_dm_motor, 0x15, 0x05, DM_MODE_POS_SPEED, DM_J4310, 3.14f, 45.0f,
-                  20.0f, can2_selected) != 0) {
+	res = dm_motor_init(&g_dm_motor, 0x15, 0x05, DM_MODE_POS_SPEED, DM_J4310, 3.14f, 45.0f,
+                  20.0f, can2_selected);
+	if (res != 0) {
 		g_ready = 0;
-		return;
+		log_message(LOG_ERROR, "catch_head_motor_init: DM motor init failed");
 	}
 
 	pid_init(&g_catch_rod_joint.speed_pid, 16384, 500, 0, 16384, DELTA_PID, 8, 0.12f, 0.0f);
