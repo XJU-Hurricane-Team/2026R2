@@ -15,7 +15,10 @@
 #include <std_msgs/msg/float32_multi_array.h>
 #include <std_msgs/msg/string.h>
 #include <std_msgs/msg/int8.h>
+#include <std_msgs/msg/bool.h>
+#include <std_srvs/srv/set_bool.h>
 #include "custom_msg/srv/grab.h"
+#include <geometry_msgs/msg/point.h>
 
 
 static rclc_executor_t executor = {0};
@@ -52,6 +55,8 @@ void grab_microros_callback(const void *request_msg, void *response_msg);
 void logger_module_init(void);
 void microros_log_msg_cb(const char *data, uint16_t len);
 void microros_log_data_cb(const log_data_packet_t *packet);
+
+void arm_microros_init(void);
 
 /**
  * @brief 初始化MicroROS
@@ -156,9 +161,10 @@ int microros_init(void) {
 void nav_task(void *pvParameters) {
     UNUSED(pvParameters);
 
-    nav_module_init();
-    vTaskDelay(500); // 确保导航模块先于抓取模块初始化
-    grab_microros_init();
+    // nav_module_init();
+    // vTaskDelay(500); // 确保导航模块先于抓取模块初始化
+    // grab_microros_init();
+    arm_microros_init();
 
     while (1) {
         if (microros_rcl_mutex != NULL &&
@@ -383,5 +389,143 @@ void microros_log_data_cb(const log_data_packet_t *packet) {
             rcl_publish(&log_data_publisher, &ros_log_data, NULL);
             xSemaphoreGive(microros_rcl_mutex);
         }
+    }
+}
+
+
+/* ========================= 机械臂 microROS 逻辑 ========================= */
+
+typedef enum {
+    ARM_MICRO_STATE_WAIT_READY = 0,
+    ARM_MICRO_STATE_READY,
+    ARM_MICRO_STATE_CATCH,
+} arm_microros_state_t;
+
+extern void robot_arm_set_dynamic_catch_target(float y, float z, float pitch);
+static arm_microros_state_t arm_microros_state = ARM_MICRO_STATE_WAIT_READY;
+static geometry_msgs__msg__Point arm_target_cache = {0};
+static bool arm_target_cache_valid = false;
+
+// 机械臂模块句柄与消息定义
+static rcl_subscription_t arm_target_subscriber = {0};
+static geometry_msgs__msg__Point arm_target_msg = {0};
+static rcl_service_t arm_service = {0};
+static rcl_publisher_t arm_ready_publisher = {0};
+static std_msgs__msg__Bool arm_ready_msg = {0};
+static std_srvs__srv__SetBool_Request arm_request = {0};
+static std_srvs__srv__SetBool_Response arm_response = {0};
+
+static void arm_microros_set_state(arm_microros_state_t state);
+static void arm_microros_clear_target(void);
+void arm_microros_callback(const void *request_msg, void *response_msg);
+
+/**
+ * @brief 机械臂目标坐标订阅回调函数
+ */
+void arm_target_sub_callback(const void *msgin) {
+    const geometry_msgs__msg__Point *msg = (const geometry_msgs__msg__Point *)msgin;
+    
+    // 仅在 READY 态缓存有效坐标，非 READY 态直接忽略
+    robot_arm_set_dynamic_catch_target((float)msg->x, (float)msg->y, (float)msg->z);
+    
+    log_message(LOG_INFO, "arm target received: y=%.2f z=%.2f pitch=%.2f\n",
+                (float)msg->x, (float)msg->y, (float)msg->z);
+}
+
+static void arm_microros_set_state(arm_microros_state_t state) {
+    arm_microros_state = state;
+    if (state != ARM_MICRO_STATE_READY) {
+        arm_microros_clear_target();
+        return;
+    }
+
+    arm_ready_msg.data = true;
+    if (microros_rcl_mutex != NULL &&
+        xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        rcl_ret_t ret = rcl_publish(&arm_ready_publisher, &arm_ready_msg, NULL);
+        if (ret != RCL_RET_OK) {
+            log_message(LOG_ERROR, "arm_microros_set_state: publish ready failed\n");
+        }
+        xSemaphoreGive(microros_rcl_mutex);
+    }
+}
+
+static void arm_microros_clear_target(void) {
+    arm_target_cache_valid = false;
+    arm_target_cache.x = 0.0f;
+    arm_target_cache.y = 0.0f;
+    arm_target_cache.z = 0.0f;
+}
+
+/**
+ * @brief 初始化机械臂服务与目标订阅
+ */
+void arm_microros_init(void) {
+    rcl_ret_t ret;
+
+    // 1. 初始化机械臂目标坐标订阅 (解耦提取到此处)
+    ret = rclc_subscription_init_default(
+        &arm_target_subscriber, &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Point), "pos_sub");
+    if (ret != RCL_RET_OK) {
+        log_message(LOG_ERROR, "arm_microros_init: arm target sub init failed\n");
+    }
+
+    geometry_msgs__msg__Point__init(&arm_target_msg);
+
+    ret = rclc_executor_add_subscription(&executor, &arm_target_subscriber,
+                                         &arm_target_msg,
+                                         &arm_target_sub_callback,
+                                         ON_NEW_DATA);
+    if (ret != RCL_RET_OK) {
+        log_message(LOG_ERROR, "arm_microros_init: add arm target sub failed\n");
+    }
+
+    // 2. 初始化机械臂控制服务
+    ret = rclc_service_init_default(
+        &arm_service, &node,
+        ROSIDL_GET_SRV_TYPE_SUPPORT(std_srvs, srv, SetBool), "arm_ctr_srv");
+    if (ret != RCL_RET_OK) {
+        log_message(LOG_ERROR, "arm_microros_init: service init failed, ret=%d\n", (int)ret);
+    }
+
+    std_srvs__srv__SetBool_Request__init(&arm_request);
+    std_srvs__srv__SetBool_Response__init(&arm_response);
+
+    ret = rclc_executor_add_service(&executor, &arm_service, &arm_request,
+                                    &arm_response, &arm_microros_callback);
+    if (ret != RCL_RET_OK) {
+        log_message(LOG_ERROR, "arm_microros_init: add service failed");
+    }
+}
+
+/**
+ * @brief 机械臂服务回调函数
+ */
+void arm_microros_callback(const void *request_msg, void *response_msg) {
+    std_srvs__srv__SetBool_Request *req_in =
+        (std_srvs__srv__SetBool_Request *)request_msg;
+    std_srvs__srv__SetBool_Response *res_in =
+        (std_srvs__srv__SetBool_Response *)response_msg;
+
+    res_in->success = false;
+
+    if (req_in->data == false) {
+        arm_microros_set_state(ARM_MICRO_STATE_READY);
+        res_in->success = true;
+    } else if (arm_microros_state == ARM_MICRO_STATE_READY) {
+        arm_microros_set_state(ARM_MICRO_STATE_CATCH);
+        if (arm_target_cache_valid) {
+            log_message(LOG_INFO,
+                        "arm target consumed: y=%.2f z=%.2f pitch=%.2f\n",
+                        (float)arm_target_cache.x,
+                        (float)arm_target_cache.y,
+                        (float)arm_target_cache.z);
+            arm_microros_clear_target();
+        } else {
+            log_message(LOG_WARNING,
+                        "arm service: no cached target available\n");
+        }
+        res_in->success = true;
     }
 }

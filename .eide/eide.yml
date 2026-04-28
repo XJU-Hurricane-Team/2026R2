@@ -29,6 +29,7 @@ virtualFolder:
         - path: User/Application/Src/msg_process.c
         - path: User/Application/Src/catch.c
         - path: User/Application/Src/microros_ctrl.c
+        - path: User/Application/Src/arm_ctrl.c
       folders: []
     - name: Middlewares
       files: []
@@ -254,4 +255,4 @@ targets:
         resetMode: default
         runAfterProgram: true
         speed: 4000
-    uploader: OpenOCD
+    uploader: JLink
