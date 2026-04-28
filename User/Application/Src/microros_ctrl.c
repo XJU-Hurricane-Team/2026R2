@@ -11,6 +11,7 @@
 #include "MicroROSConfig.h"
 #include "microros_ctrl.h"
 #include "catch.h"
+#include "lift.h"
 
 #include <std_msgs/msg/float32_multi_array.h>
 #include <std_msgs/msg/string.h>
@@ -28,10 +29,15 @@ static SemaphoreHandle_t microros_rcl_mutex = NULL;
 static rcl_subscription_t nav_subscriber = {0};
 static rcl_service_t grab_service = {0};
 static rcl_publisher_t grab_publisher = {0};
+static rcl_service_t stair_service = {0};
+static rcl_publisher_t stair_publisher = {0};
 custom_msg__msg__SpeedHeading nav_pram = {0};
 static custom_msg__srv__Grab_Request grab_request = {0};
 static custom_msg__srv__Grab_Response grab_response = {0};
 static std_msgs__msg__Int8 grab_pub_pram = {0};
+static custom_msg__srv__Grab_Request stair_request = {0};
+static custom_msg__srv__Grab_Response stair_response = {0};
+static std_msgs__msg__Int8 stair_pub_pram = {0};
 
 // 日志模块句柄
 static rcl_publisher_t log_msg_publisher = {0};
@@ -49,6 +55,10 @@ void nav_sub_callback(const void *msgin);
 
 void grab_microros_init(void);
 void grab_microros_callback(const void *request_msg, void *response_msg);
+
+void stair_microros_init(void);
+void stair_microros_callback(const void *request_msg, void *response_msg);
+
 void logger_module_init(void);
 void microros_log_msg_cb(const char *data, uint16_t len);
 void microros_log_data_cb(const log_data_packet_t *packet);
@@ -138,7 +148,7 @@ int microros_init(void) {
         return (int)ret;
     }
 
-    ret = rclc_executor_init(&executor, &support.context, 10, &allocator);
+    ret = rclc_executor_init(&executor, &support.context, 12, &allocator);
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR, "microros_init: executor init failed, ret=%d\n",
                     (int)ret);
@@ -157,8 +167,9 @@ void nav_task(void *pvParameters) {
     UNUSED(pvParameters);
 
     nav_module_init();
-    vTaskDelay(500); // 确保导航模块先于抓取模块初始化
-    grab_microros_init();
+    vTaskDelay(1000); // 确保导航模块先于抓取模块初始化
+    // grab_microros_init();
+    stair_microros_init();
 
     while (1) {
         if (microros_rcl_mutex != NULL &&
@@ -175,7 +186,6 @@ void nav_task(void *pvParameters) {
  * 
  */
 void nav_module_init(void) {
-    vTaskDelay(5); 
     rcl_ret_t ret = rclc_subscription_init_default(
         &nav_subscriber, &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(custom_msg, msg, SpeedHeading),
@@ -189,7 +199,6 @@ void nav_module_init(void) {
         log_message(LOG_INFO, "nav_module_init: subscription init success\n");
     }
 
-    vTaskDelay(5);
     ret = rclc_executor_add_subscription(&executor, &nav_subscriber, &nav_pram,
                                          &nav_sub_callback, ON_NEW_DATA);
     if (ret != RCL_RET_OK) {
@@ -211,7 +220,6 @@ void nav_sub_callback(const void *msgin) {
  * 
  */
 void grab_microros_init(void) {
-    vTaskDelay(5);
     rcl_ret_t ret = rclc_service_init_default(
         &grab_service, &node,
         ROSIDL_GET_SRV_TYPE_SUPPORT(custom_msg, srv, Grab), "/grab_service");
@@ -221,7 +229,6 @@ void grab_microros_init(void) {
                     (int)ret);
     }
 
-    vTaskDelay(5); 
     ret = rclc_publisher_init_default(
         &grab_publisher, &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/grab_topic");
@@ -235,9 +242,6 @@ void grab_microros_init(void) {
                                     &grab_response, &grab_microros_callback);
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR, "grab_microros_init: add service failed");
-    }
-    else {
-        log_message(LOG_INFO,"grab_microros_init:success");
     }
 }
 
@@ -307,6 +311,61 @@ void grab_microros_callback(const void *request_msg, void *response_msg) {
     custom_msg__srv__Grab_Response *res_in =
         (custom_msg__srv__Grab_Response *)response_msg;
     res_in->success = true;
+}
+
+/**
+ * @brief 初始化上下台阶服务模块
+ */
+void stair_microros_init(void) {
+    // rcl_ret_t ret = rclc_service_init_default(
+    //     &stair_service, &node,
+    //     ROSIDL_GET_SRV_TYPE_SUPPORT(custom_msg, srv, Grab), "/stair_service");
+    // if (ret != RCL_RET_OK) {
+    //     log_message(LOG_ERROR, "stair_microros_init: service init failed, ret=%d\n", (int)ret);
+    // }
+
+    rcl_ret_t ret = rclc_publisher_init_default(
+        &stair_publisher, &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/stair_topic");
+    if (ret != RCL_RET_OK) {
+        log_message(LOG_ERROR, "stair_microros_init: publisher init failed, ret=%d\n", (int)ret);
+    }
+    else{
+        log_message(LOG_INFO,"stair_microros_init: publisher init success");
+    }
+    
+    // ret = rclc_executor_add_service(&executor, &stair_service, &stair_request,
+    //                                 &stair_response, &stair_microros_callback);
+    // if (ret != RCL_RET_OK) {
+    //     log_message(LOG_ERROR, "stair_microros_init: add service failed");
+    // }
+}
+
+/**
+ * @brief 上下台阶服务回调函数
+ */
+void stair_microros_callback(const void *request_msg, void *response_msg) {
+    custom_msg__srv__Grab_Request *req_in = (custom_msg__srv__Grab_Request *)request_msg;
+    
+    lift_set_stair_mode(req_in->command_mode);
+
+    custom_msg__srv__Grab_Response *res_in = (custom_msg__srv__Grab_Response *)response_msg;
+    res_in->success = true;
+}
+
+/**
+ * @brief 上下台阶完成反馈发布函数
+ */
+void stair_microros_publish(int8_t status) {
+    stair_pub_pram.data = status;
+    if (microros_rcl_mutex != NULL &&
+        xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        rcl_ret_t pub_ret = rcl_publish(&stair_publisher, &stair_pub_pram, NULL);
+        if (pub_ret != RCL_RET_OK) {
+            log_message(LOG_ERROR, "stair_microros_publish: publish failed\n");
+        }
+        xSemaphoreGive(microros_rcl_mutex);
+    }
 }
 
 /**

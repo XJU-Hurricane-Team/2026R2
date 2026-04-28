@@ -35,11 +35,11 @@ void omni_wheels_world_transform(chassis_slope_t *speed, float yaw_angle)
  *        正前向为X正向，正左为Y正向，逆时针为Yaw正向
  *        v1 (右前), v2 (左前), v3 (左后), v4 (右后)
  */
-void omni_wheels_resolve(const chassis_speed_t *chassis_speed, volatile float *out_wheel_rpm)
+void omni_wheels_resolve(const chassis_slope_t *target_speed, volatile float *out_wheel_rpm)
 {
-    float vx = chassis_speed->target_speed.vx;
-    float vy = chassis_speed->target_speed.vy;
-    float vw = chassis_speed->target_speed.vw;
+    float vx = target_speed->vx;
+    float vy = target_speed->vy;
+    float vw = target_speed->vw;
 
     // 设底盘中心为坐标原点, 车头正向为 X 轴正方向, 车身正左为 Y 轴正方向。
     // 设4个全向轮分别安装在四个角, 每个轮子的法线与坐标轴成 45 度角 (即 𝛑/4)。
@@ -72,21 +72,16 @@ void omni_wheels_resolve(const chassis_speed_t *chassis_speed, volatile float *o
  */
 void omni_wheels_drive(const chassis_speed_t *ch_tgt, dji_motor_handle_t *motor_handle, pid_t *dji_3508_speed_pid)
 {
-   
-    float wheel_rpm[4] = {0}; 
     int16_t motor_out_current[4] = {0}; 
-    /* 1. 运动学逆解算：从宏观速度解算到各个轮子的目标RPM */ 
-    omni_wheels_resolve(ch_tgt, wheel_rpm);
 
-    /* 2. 将各个轮子独立进行PID计算 */
+    /* 直接使用上层已解算好的目标轮速进行PID计算 */
     for(int i = 0; i < 4; i++) {
-        // 通过PID将平滑后的目标转速计算为期望的电机控制电流
         float real_rpm = motor_handle[i].speed_rpm;
-        float calc_current = pid_calc(&dji_3508_speed_pid[i], wheel_rpm[i], real_rpm);
+        float calc_current = pid_calc(&dji_3508_speed_pid[i], ch_tgt->target_rpm[i], real_rpm);
         motor_out_current[i] = (int16_t)calc_current;
     }
 
-    /* 3. 统一输出电流到四个底盘电机 */
+    /* 统一输出电流到四个底盘电机 */
     dji_motor_set_current(can1_selected, 0x200, motor_out_current[0], 
                           motor_out_current[1], motor_out_current[2], motor_out_current[3]);
 }
@@ -97,7 +92,7 @@ void omni_wheels_drive(const chassis_speed_t *ch_tgt, dji_motor_handle_t *motor_
  * @param motor_handle 电机句柄数组（读取其 speed_rpm）
  * @param chassis_speed 解算后输出的宏观速度
  */
-void omni_wheels_forward(const dji_motor_handle_t *motor_handle, chassis_speed_t *chassis_speed)
+void omni_wheels_forward(const dji_motor_handle_t *motor_handle, chassis_slope_t *chassis_speed)
 {
     /* 1. 将RPM转化为轮子的切向线速度 (m/s) */
     float v1 = RPM_TO_MPS((float)motor_handle[0].speed_rpm);
@@ -107,8 +102,8 @@ void omni_wheels_forward(const dji_motor_handle_t *motor_handle, chassis_speed_t
 
     /* 2. 运动学正解算 (逆向求解) */
     // 根据方程推导的最小二乘解或由于机械对称性得出的逆矩阵结果:
-    chassis_speed->target_speed.vx = ( v1 + v2 - v3 - v4) / (4.0f * SQRT2_2);
-    chassis_speed->target_speed.vy = (-v1 + v2 + v3 - v4) / (4.0f * SQRT2_2);
-    chassis_speed->target_speed.vw = ( v1 - v2 - v3 + v4) / (4.0f * CHASSIS_RADIUS);
+    chassis_speed->vx = ( v1 + v2 - v3 - v4) / (4.0f * SQRT2_2);
+    chassis_speed->vy = (-v1 + v2 + v3 - v4) / (4.0f * SQRT2_2);
+    chassis_speed->vw = ( v1 - v2 - v3 + v4) / (4.0f * CHASSIS_RADIUS);
 }
 
