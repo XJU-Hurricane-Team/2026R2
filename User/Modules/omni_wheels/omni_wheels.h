@@ -44,9 +44,7 @@ typedef struct {
 
 // 底盘各量纲所需的速度
 typedef struct {
-    chassis_slope_t target_speed;      /* 量纲：规划后小车整体速度，单位m/s */
-    float target_rpm[4];               /* 量纲：规划后每个轮子的转速，单位rpm */ 
-    float target_2006_rpm;      /* 量纲：2006目标转速，单位rpm */
+    float target_rpm[4];               /* 量纲：规划后每个轮子的转速，单位rpm */
 } chassis_speed_t;
 
 extern volatile float wheel_rpm[4]; // 4个轮子的转子转速 (rpm)
@@ -63,7 +61,7 @@ void omni_wheels_world_transform(chassis_slope_t *speed, float yaw_angle);
  * @param chassis_speed 宏观速度输入
  * @param wheel_speed 轮子转速输出
  */
-void omni_wheels_resolve(const chassis_speed_t *chassis_speed, volatile float *out_wheel_rpm);
+void omni_wheels_resolve(const chassis_slope_t *target_speed, volatile float *out_wheel_rpm);
 
 /**
  * @brief 综合控制接口：逆解算 + PID + 输出控制电流
@@ -78,6 +76,6 @@ void omni_wheels_drive(const chassis_speed_t *ch_tgt, dji_motor_handle_t *motor_
  * @param motor_handle 电机句柄数组（用于读取 speed_rpm）
  * @param chassis_speed 输出的宏观速度
  */
-void omni_wheels_forward(const dji_motor_handle_t *motor_handle, chassis_speed_t *chassis_speed);
+void omni_wheels_forward(const dji_motor_handle_t *motor_handle, chassis_slope_t *chassis_speed);
 
 #endif // OMNI_WHEELS_H

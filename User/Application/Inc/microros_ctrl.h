@@ -19,8 +19,9 @@ extern "C" {
 #include "custom_msg/msg/speed_heading.h"
 extern custom_msg__msg__SpeedHeading nav_pram;
 
-bool microros_is_ready(void);
+
 void grab_microros_publish(void);
+void stair_microros_publish(int8_t status);
 
 #ifdef __cplusplus
 }
