@@ -693,7 +693,6 @@ static void lift_up_step_drive_2006_forward(void) {
     vTaskDelay(400);
     // 检查后光电的上升沿（false -> true）
     if (get_rear_photoelectric_rising_edge()) {
-        log_message(LOG_INFO, "2006 move");
         g_lift_handle.target_2006_rpm = 0.0f;
         g_lift_handle.lift_state = LIFT_STATE_UP;
         lift_set_target(LIFT_TARGET_DEG_UP_SEQ);
