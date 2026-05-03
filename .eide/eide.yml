@@ -30,6 +30,7 @@ virtualFolder:
         - path: User/Application/Src/catch.c
         - path: User/Application/Src/microros_ctrl.c
         - path: User/Application/Src/lift.c
+        - path: User/Application/Src/arm_ctrl.c
       folders: []
     - name: Middlewares
       files: []
@@ -148,6 +149,8 @@ targets:
       - CubeMX/Core/Src/Backup
       - CubeMX/Core/Src/sysmem.c
       - CubeMX/Core/Src/syscalls.c
+    settings:
+      debugger: cortex-debug
     toolchain: GCC
     toolchainConfigMap:
       AC6:

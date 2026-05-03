@@ -63,7 +63,7 @@ void start_task(void *pvParameters) {
     chassis_init();
     catch_init();
     msg_process_init();
-    // robot_arm_init();
+    robot_arm_init();
 
     if (xTaskCreate(task1, "task1", 256, NULL, 2, &task1_handle) != pdPASS) {
         log_message(LOG_ERROR, "start_task: task1 create failed");
