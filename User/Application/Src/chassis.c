@@ -3,9 +3,12 @@
  * @author  Dominate0017
  * @brief   底盘控制任务
  * @version 1.0
- * @date    2026-04-28
+ * @date    2026-05-02
+ * ********************************************************************************
+ *    Date    | Version |   Author    | Version Info
+ * -----------+---------+-------------+----------------------------------------
+ * 2026-05-02 |   1.0   | Dominate0017 | 代码重构,删除多余任务,自锁按键直接清空PID
  */
-
 #include "includes.h"
 #include "chassis_calculations/chassis_calculations.h"
 #include "omni_wheels/omni_wheels.h"
@@ -44,9 +47,10 @@ static dji_motor_handle_t dji_3508_handle[4];
 static pid_t dji_3508_speed_pid[4];
 static pid_t dji_3508_pos_pid[4];
 
-static void chassis_tasks_init(void);
 static void chassis_bottom_init(void);
+static void chassis_tasks_init(void);
 static void chassis_switch_mode(uint8_t key, remote_key_event_t event);
+static void chassis_set_halt(bool enable);
 static void chassis_halt_degree_update(void);
 static void chassis_pid_clear_state(pid_t *pid);
 static bool chassis_3508_feedback_ready(void);
@@ -58,11 +62,12 @@ typedef void (*chassis_mode_handler_t)(void);
 
 static TaskHandle_t chassis_mode_task_handle;
 void chassis_mode_task(void *pvParameters);
-static TaskHandle_t chassis_state_task_handle;
-void chassis_state_task(void *pvParameters);
 static TaskHandle_t chassis_driver_task_handle;
 void chassis_driver_task(void *pvParameters);
 
+/**
+ * @brief 底盘模式切换：手动/自动
+ */
 void chassis_mode_task(void *pvParameters) {
     (void)pvParameters;
     static const chassis_mode_handler_t mode_handlers[] = {
@@ -79,28 +84,9 @@ void chassis_mode_task(void *pvParameters) {
     }
 }
 
-void chassis_state_task(void *pvParameters) {
-    (void)pvParameters;
-    bool halt_last = chassis_handle.halt;
-
-    while (1) {
-        if (chassis_handle.halt != halt_last) {
-            for (int i = 0; i < 4; i++) {
-                chassis_pid_clear_state(&dji_3508_speed_pid[i]);
-                chassis_pid_clear_state(&dji_3508_pos_pid[i]);
-            }
-            if (chassis_handle.halt) {
-                for (int i = 0; i < 4; i++) {
-                    chassis_handle.chassis_speed.target_rpm[i] = 0.0f;
-                }
-                chassis_halt_degree_update();
-            }
-            halt_last = chassis_handle.halt;
-        }
-        vTaskDelay(5);
-    }
-}
-
+/**
+ * @brief 底盘驱动任务：根据当前模式计算电机输出
+ */
 void chassis_driver_task(void *pvParameters) {
     (void)pvParameters;
     int16_t motor_out_current[4] = {0};
@@ -163,26 +149,17 @@ void chassis_driver_task(void *pvParameters) {
     }
 }
 
-static bool chassis_3508_feedback_ready(void) {
-    for (int i = 0; i < 4; i++) {
-        if (!dji_3508_handle[i].got_offset) {
-            return false;
-        }
-    }
-    return true;
-}
-
 static void chassis_switch_mode(uint8_t key, remote_key_event_t event) {
     UNUSED(event);
 
+    /* 若抬升处于动作序列，禁止SET_HALT_KEY以外的按键 */
     if (lift_is_sequence_running() && key != SET_HALT_KEY) {
         return;
     }
 
     switch (key) {
         case SET_HALT_KEY:
-            chassis_handle.halt = !chassis_handle.halt;
-            log_message(LOG_INFO, chassis_handle.halt ? "Set chassis halt. " : "Release chassis halt. ");
+            chassis_set_halt(!chassis_handle.halt);
             break;
 
         case SWITCH_AUTO_KEY:
@@ -203,6 +180,9 @@ static void chassis_switch_mode(uint8_t key, remote_key_event_t event) {
     }
 }
 
+/**
+ * @brief 底盘总初始化：电机、PID、任务、按键回调
+ */
 void chassis_init(void) {
     chassis_bottom_init();
     lift_init();
@@ -216,6 +196,9 @@ void chassis_init(void) {
                                  chassis_switch_mode);
 }
 
+/**
+ * @brief 底盘底层初始化：配置电机、PID和运动规划参数
+ */
 static void chassis_bottom_init(void) {
     for (int i = 0; i < 4; i++) {
         if (dji_motor_init(&dji_3508_handle[i], DJI_M3508, CAN_Motor1_ID + i,
@@ -254,16 +237,13 @@ static void chassis_bottom_init(void) {
     chassis_plan_init(&plan_cfg, CHASSIS_SPEED_PLAN_TRAPEZOID);
 }
 
+/**
+ * @brief 底盘任务初始化：创建模式切换任务和驱动任务
+ */
 static void chassis_tasks_init(void) {
     if (xTaskCreate(chassis_mode_task, "chassis_mode_task", 256, NULL, 4,
                     &chassis_mode_task_handle) != pdPASS) {
         log_message(LOG_ERROR, "Failed to create chassis_mode_task.");
-        return;
-    }
-
-    if (xTaskCreate(chassis_state_task, "chassis_state_task", 256, NULL, 4,
-                    &chassis_state_task_handle) != pdPASS) {
-        log_message(LOG_ERROR, "Failed to create chassis_state_task.");
         return;
     }
 
@@ -273,6 +253,79 @@ static void chassis_tasks_init(void) {
     }
 }
 
+/**
+ * @brief 设置底盘急停状态
+ */
+static void chassis_set_halt(bool enable) {
+    if (chassis_handle.halt == enable) {
+        return;
+    }
+
+    chassis_handle.halt = enable;
+
+    for (int i = 0; i < 4; i++) {
+        chassis_pid_clear_state(&dji_3508_speed_pid[i]);
+        chassis_pid_clear_state(&dji_3508_pos_pid[i]);
+    }
+
+    if (enable) {
+        for (int i = 0; i < 4; i++) {
+            chassis_handle.chassis_speed.target_rpm[i] = 0.0f;
+        }
+        chassis_halt_degree_update();
+        log_message(LOG_INFO, "Set chassis halt. ");
+    } else {
+        log_message(LOG_INFO, "Release chassis halt. ");
+    }
+}
+
+/**
+ * @brief 底盘自锁时更新目标位置为当前转子位置，保持位置不变
+ */
+static void chassis_halt_degree_update(void) {
+    if (chassis_handle.halt) {
+        for (int i = 0; i < 4; i++) {
+            chassis_handle.g_current_rotor_degree[i] =
+                dji_3508_handle[i].rotor_degree;
+        }
+    }
+}
+
+/**
+ * @brief 清除PID状态
+ */
+static void chassis_pid_clear_state(pid_t *pid) {
+    pid->iout = 0.0f;
+    pid->pos_out = 0.0f;
+
+#if PID_USE_DELTA_PID
+    pid->err[0] = 0.0f;
+    pid->err[1] = 0.0f;
+    pid->err[2] = 0.0f;
+    pid->delta_u = 0.0f;
+    pid->delta_out = 0.0f;
+    pid->delta_lastout = 0.0f;
+#else
+    pid->err[0] = 0.0f;
+    pid->err[1] = 0.0f;
+#endif
+}
+
+/**
+ * @brief 检查3508电机反馈是否准备好：所有电机都收到过反馈数据
+ */
+static bool chassis_3508_feedback_ready(void) {
+    for (int i = 0; i < 4; i++) {
+        if (!dji_3508_handle[i].got_offset) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * @brief 更新底盘目标转速：根据输入的线速度和角速度计算每个轮子的目标转速
+ */
 static void chassis_update_target_rpm(float vx, float vy, float vw) {
     chassis_slope_t target_speed = {
         .vx = vx,
@@ -285,6 +338,9 @@ static void chassis_update_target_rpm(float vx, float vy, float vw) {
     omni_wheels_resolve(&target_speed, chassis_handle.chassis_speed.target_rpm);
 }
 
+/**
+ * @brief 底盘手动模式更新：根据遥控器输入计算目标转速
+ */
 static void chassis_mode_manual_update(void) {
     float target_y = -g_remote_ctrl_data.rs[0] / 10.0f;
     float target_x = g_remote_ctrl_data.rs[1] / 10.0f;
@@ -303,33 +359,10 @@ static void chassis_mode_manual_update(void) {
     chassis_update_target_rpm(target_x, target_y, target_yaw);
 }
 
+/**
+ * @brief 底盘自动模式更新：根据导航参数计算目标转速
+ */
 static void chassis_mode_auto_update(void) {
     chassis_update_target_rpm(nav_pram.linear_x, nav_pram.linear_y,
                               nav_pram.angular_z);
-}
-
-static void chassis_halt_degree_update(void) {
-    if (chassis_handle.halt) {
-        for (int i = 0; i < 4; i++) {
-            chassis_handle.g_current_rotor_degree[i] =
-                dji_3508_handle[i].rotor_degree;
-        }
-    }
-}
-
-static void chassis_pid_clear_state(pid_t *pid) {
-    pid->iout = 0.0f;
-    pid->pos_out = 0.0f;
-
-#if PID_USE_DELTA_PID
-    pid->err[0] = 0.0f;
-    pid->err[1] = 0.0f;
-    pid->err[2] = 0.0f;
-    pid->delta_u = 0.0f;
-    pid->delta_out = 0.0f;
-    pid->delta_lastout = 0.0f;
-#else
-    pid->err[0] = 0.0f;
-    pid->err[1] = 0.0f;
-#endif
 }
