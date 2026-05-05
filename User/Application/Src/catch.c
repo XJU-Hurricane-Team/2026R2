@@ -320,7 +320,7 @@ static void catch_feedback_task(void *pvParameters) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         // grab_microros_publish();
-        grab_microros_publish(1);
+        control_dispatch_publish(1);
     }
 }
 
