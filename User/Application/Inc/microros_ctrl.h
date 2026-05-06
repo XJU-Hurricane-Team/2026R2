@@ -22,7 +22,7 @@ extern custom_msg__msg__SpeedHeading nav_pram;
 
 void stair_microros_init(void);
 void stair_microros_publish(int8_t status);
-void grab_microros_publish(int8_t status);
+void control_dispatch_publish(int8_t status);
 #ifdef __cplusplus
 }
 #endif /* __cplusplus */
