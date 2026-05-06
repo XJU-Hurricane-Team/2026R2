@@ -32,27 +32,34 @@
 
 /* 大臂 (J8006电机) 速度与滤波参数 */
 #define ARM_J8006_CMD_SPEED_BASE            0.24f   // 基础运动速度 (rad/s)
-#define ARM_J8006_CMD_SPEED_MAX             1.05f   // 绝对最大允许速度 (rad/s)
+#define ARM_J8006_CMD_SPEED_MAX             0.55f   // 绝对最大允许速度 (rad/s)
 #define ARM_J8006_CMD_SPEED_FF_GAIN         0.08f   // 前馈增益系数
-#define ARM_J8006_FILTER_ALPHA              0.10f   // 低通滤波平滑系数 (越小越平滑但延迟大)
+#define ARM_J8006_FILTER_ALPHA              0.20f   // 低通滤波平滑系数 (越小越平滑但延迟大)
 #define ARM_J8006_CMD_RATE_LIMIT            1.20f   // 指令变化率限制 (rad/s)，防止阶跃信号
 #define ARM_J8006_HOLD_ERR_RAD              0.10f   // 悬停/保持判定误差死区
 #define ARM_J8006_NEAR_ERR_RAD              0.15f   // 接近目标时的减速触发阈值 (弧度)
 #define ARM_J8006_FINE_ERR_RAD              0.08f   // 微调阶段的误差阈值 (弧度)
-#define ARM_J8006_NEAR_SPEED_MAX            0.60f   // 接近阶段的最大速度限制
-#define ARM_J8006_FINE_SPEED_MAX            0.30f   // 微调阶段的最大速度限制
-#define ARM_J8006_PHASE2_Q2TOQ1_SPEED_MAX   0.48f   // 象限翻转阶段的限速
+#define ARM_J8006_NEAR_SPEED_MAX            0.30f   // 接近阶段的最大速度限制
+#define ARM_J8006_FINE_SPEED_MAX            0.20f   // 微调阶段的最大速度限制
+#define ARM_J8006_PHASE2_Q2TOQ1_SPEED_MAX   0.15f   // 象限翻转阶段的限速
 
 #define ARM_BIG_ARM_FLIP_OVERSHOOT_FORCE_RAD 0.4f   // 跨越象限运动时给予的强制过冲量 (弧度)
+#define ARM_PLACE_TAKEOUT_BIG_ARM_OVERSHOOT_RAD -0.4f // PLACE->TAKEOUT 时大臂过冲量 (弧度)
+#define ARM_TAKEOUT_SMALL_ARM_SYNC_ERR_RAD   0.4f   // PLACE->TAKEOUT 小臂接近目标的同步阈值
 #define ARM_BIG_ARM_MIN_ANGLE_RAD            0.0f   // 大臂物理下限，禁止反向小于0
 
 /* 小臂速度控制参数 */
-#define ARM_SMALL_SPEED_BASE                0.28f 
-#define ARM_SMALL_SPEED_GAIN                0.80f 
-#define ARM_SMALL_SPEED_MAX                 1.00f 
-#define ARM_SMALL_CATCH_SPEED_BASE          0.58f   // 抓取动作时小臂基础速度加快
-#define ARM_SMALL_CATCH_SPEED_GAIN          1.50f 
-#define ARM_SMALL_CATCH_SPEED_MAX           1.80f 
+#define ARM_SMALL_SPEED_BASE                1.00f 
+#define ARM_SMALL_SPEED_GAIN                1.10f 
+#define ARM_SMALL_SPEED_MAX                 1.20f 
+#define ARM_SMALL_PLACE_EXIT_SPEED_BASE     1.20f   // 从放置态退出时，小臂提速以尽快完成姿态切换
+#define ARM_SMALL_PLACE_EXIT_SPEED_GAIN     1.35f
+#define ARM_SMALL_PLACE_EXIT_SPEED_MAX      1.60f
+#define ARM_SMALL_CATCH_SPEED_BASE          0.80f   // 抓取动作时小臂基础速度加快
+#define ARM_SMALL_CATCH_SPEED_GAIN          0.85f 
+#define ARM_SMALL_CATCH_SPEED_MAX           1.20f 
+
+#define ARM_BIG_PLACE_EXIT_SPEED_MAX        0.45f   // 从放置态退出时，大臂限速避免过猛摆动
 
 /* 吸盘/末端速度与死区控制参数 */
 #define ARM_SUCTION_SPEED_BASE              0.24f 
@@ -60,7 +67,7 @@
 #define ARM_SUCTION_SPEED_MAX               1.30f 
 #define ARM_SUCTION_FLIP_SLOW_SPEED_MAX     0.75f   // 翻转时吸盘限速
 
-#define ARM_PLACE_SMALL_ARM_READY_ERR_RAD   0.05f   // 放置前需等待小臂到达指定位置的允许误差
+#define ARM_PLACE_SMALL_ARM_READY_ERR_RAD   0.20f   // 放置前需等待小臂到达指定位置的允许误差
 #define ARM_SUCTION_PLACE_SPEED_BASE        0.24f 
 #define ARM_SUCTION_PLACE_SPEED_GAIN        0.80f 
 #define ARM_SUCTION_PLACE_SPEED_MIN         0.50f 
@@ -68,13 +75,13 @@
 #define ARM_SUCTION_PLACE_FINE_ERR_RAD      0.03f 
 #define ARM_SUCTION_PLACE_FINE_SPEED_MIN    0.08f 
 #define ARM_SUCTION_PLACE_BRAKE_SPEED_MAX   0.16f   // 刹车阶段最大速度
-#define ARM_PLACE_SUCTION_OFFSET_RAD        -0.1f   // 放置时给吸盘施加一个微小的下压/偏置预紧力
+#define ARM_PLACE_SUCTION_OFFSET_RAD        -0.0f   // 放置时给吸盘施加一个微小的下压/偏置预紧力
 
 /* 超时时间与保持速度参数 */
 #define ARM_SUCTION_WAIT_HOLD_SPEED         0.35f 
 #define ARM_SUCTION_WAIT_TIMEOUT_MS         2000U   // 吸盘等待动作超时时间 (防止死锁)
 #define ARM_TAKEOUT_WAIT_TIMEOUT_MS         2000U   // 取出动作超时时间
-#define ARM_SMALL_WAIT_HOLD_SPEED           0.35f 
+#define ARM_SMALL_WAIT_HOLD_SPEED           1.20f 
 
 /**
  * @brief 机械臂工作状态枚举
@@ -156,6 +163,12 @@ typedef struct {
 	float small_arm_wait_locked_pos; // 小臂等待期间的锁定角度
 	uint32_t wait_start_tick;        // 锁死等待动作的开始时间戳 (用于超时强制退出)
 
+	/* PLACE->TAKEOUT 特殊过渡控制 */
+	float takeout_small_target;      // 小臂最终目标角度 (用于同步判定)
+	uint8_t takeout_sync_active;     // PLACE->TAKEOUT 过渡动作使能
+	uint8_t takeout_sync_phase;      // 过渡阶段: 1过冲中, 2等小臂接近目标, 3回弹中
+	uint8_t takeout_small_target_inited; // 小臂目标是否已锁存
+
 	arm_status_t last_status;        // 上一时刻的状态机状态 (用于检测状态切换边沿)
 	int8_t last_target_quadrant;     // 上一次目标所处的象限 (1: 正向象限, -1: 反向象限)
 	int8_t flip_transition_dir;      // 机械臂象限翻转的方向指示
@@ -169,9 +182,11 @@ typedef struct {
 		uint16_t suction_wait_locked_inited : 1;   // 吸盘等待时的角度是否已锁存
 		uint16_t small_arm_wait_locked_inited : 1; // 小臂等待时的角度是否已锁存
 		uint16_t small_arm_wait_latched : 1;       // 小臂是否处于等待状态
+		uint16_t suction_locked_in_takeout : 1;    // PLACE->TAKEOUT转换时吸盘是否处于锁定状态
 		
 		uint16_t has_transition : 1;               // 当前动作是否需要执行单点过渡
 		uint16_t transition_done : 1;              // 单点过渡动作是否已执行完成
+		uint16_t place_exit_safety_active : 1;     // 从放置态退出时，启用安全过渡点与专用速度策略
 	} flags;
 
 } RobotArm;
