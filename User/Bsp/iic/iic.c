@@ -23,13 +23,13 @@ void iic_init(void) {
     gpio_initure.Mode = GPIO_MODE_OUTPUT_OD;
     gpio_initure.Pull = GPIO_PULLUP;
     gpio_initure.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(GPIOB, &gpio_initure);
+    HAL_GPIO_Init(IIC_SCL_GPIO_PORT, &gpio_initure);
 
     gpio_initure.Pin = IIC_SDA_GPIO_PIN;
     gpio_initure.Mode = GPIO_MODE_OUTPUT_OD;
     gpio_initure.Pull = GPIO_PULLUP;
     gpio_initure.Speed = GPIO_SPEED_FREQ_HIGH;
-    HAL_GPIO_Init(GPIOB, &gpio_initure);
+    HAL_GPIO_Init(IIC_SDA_GPIO_PORT, &gpio_initure);
 
     iic_stop();
 }

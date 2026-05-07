@@ -9,6 +9,7 @@
 /bin
 /obj
 /out
+CubeMX/build/
 
 # eide template
 *.ept

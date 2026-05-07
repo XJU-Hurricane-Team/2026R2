@@ -11,11 +11,11 @@
 #include <cubemx.h>
 
 #define IIC_SCL_GPIO_PORT     GPIOC
-#define IIC_SCL_GPIO_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE()
+#define IIC_SCL_GPIO_ENABLE() __HAL_RCC_GPIOC_CLK_ENABLE()
 #define IIC_SCL_GPIO_PIN      GPIO_PIN_6
 
 #define IIC_SDA_GPIO_PORT     GPIOC
-#define IIC_SDA_GPIO_ENABLE() __HAL_RCC_GPIOB_CLK_ENABLE()
+#define IIC_SDA_GPIO_ENABLE() __HAL_RCC_GPIOC_CLK_ENABLE()
 #define IIC_SDA_GPIO_PIN      GPIO_PIN_7
 
 #define IIC_SCL(x)                                                             \

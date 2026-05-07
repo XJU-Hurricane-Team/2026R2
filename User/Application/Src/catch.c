@@ -211,7 +211,7 @@ static void catch_update(void) {
  */
 void catch_init(void) {
     catch_head_init();
-        vl53l1_apply_init();
+    vl53l1_apply_init();
 
     catch_state = CATCH_STATE_INIT;
     catch_update_flow_for_state(catch_state);
