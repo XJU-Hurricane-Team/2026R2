@@ -651,7 +651,7 @@ static void lift_publish_if_auto(uint8_t code) {
         if (code == 0) {
             stair_microros_publish((int8_t)code);
         } else {
-            grab_microros_publish((int8_t)code);
+            control_dispatch_publish((int8_t)code);
         }
     }
 }

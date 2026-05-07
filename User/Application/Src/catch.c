@@ -9,6 +9,7 @@
 #include "includes.h"
 #include "catch.h"
 #include "microros_ctrl.h"
+#include "vl53l1/vl53l1_apply.h"
 #include "npn_switch/npn_switch.h"
 
 #define CATCH_AUTO_FLOW_ENABLE   0U
@@ -19,7 +20,7 @@
 #define CATCH_STATE_READY_KEY    12U
 #define CATCH_STATE_GRAB_KEY     13U
 #define CATCH_STATE_CHECK_KEY    14U
-#define CATCH_STATE_ASSEMBLY_KEY 15U
+#define CATCH_STATE_RECOGNIZE_KEY 15U
 #define CATCH_STATE_DONE_KEY     16U
 
 /**
@@ -29,7 +30,7 @@
 typedef enum {
     CATCH_FLOW_WAIT_FIRST_DETECT = 0, /* 在 READY 阶段等待首次检测到物体 */
     CATCH_FLOW_WAIT_SECOND_DETECT,    /* 二次检测，确认下一阶段条件成立 */
-    CATCH_FLOW_DONE,                  /* 检测完成，进入拼接态*/
+    CATCH_FLOW_DONE,                  /* Detection done, enter recognize */
 } catch_flow_t;
 
 /**
@@ -44,6 +45,7 @@ typedef struct {
 
 static catch_state_t catch_state = CATCH_STATE_INIT;
 static catch_flow_t catch_flow = CATCH_FLOW_WAIT_FIRST_DETECT;
+static bool recognize_published = false;
 
 /* 传感器稳定计数：active 连续达到阈值才认为状态有效 */
 static uint8_t sensor_active_cnt = 0;
@@ -60,6 +62,7 @@ static void catch_apply_state(catch_state_t state);
 static uint8_t catch_is_sensor_active(void);
 static void catch_update_sensor_counter(void);
 static void catch_process_auto_flow(void);
+static void catch_handle_recognize(void);
 
 bool check_sensor_active(void);
 
@@ -72,37 +75,31 @@ static const catch_motor_target_t g_catch_motor_targets[CATCH_STATE_COUNT] = {
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
             .dm_target = CATCH_HEAD_DM_TARGET_RETRACT,
-            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
     [CATCH_STATE_READY] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_OPEN,
             .dm_target = CATCH_HEAD_DM_TARGET_EXTEND,
-            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
     [CATCH_STATE_GRAB] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
             .dm_target = CATCH_HEAD_DM_TARGET_EXTEND,
-            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
     [CATCH_STATE_CHECK] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
             .dm_target = CATCH_HEAD_DM_TARGET_CHECK,
-            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
-    [CATCH_STATE_ASSEMBLY] =
+    [CATCH_STATE_RECOGNIZE] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
             .dm_target = CATCH_HEAD_DM_TARGET_CHECK,
-            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
     [CATCH_STATE_DONE] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_OPEN,
             .dm_target = CATCH_HEAD_DM_TARGET_CHECK,
-            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
 };
 
@@ -121,6 +118,9 @@ void catch_set_state(catch_state_t state) {
     }
 
     catch_state = state;
+    if (catch_state == CATCH_STATE_RECOGNIZE) {
+        recognize_published = false;
+    }
     catch_apply_state(catch_state);
     catch_update_flow_for_state(catch_state);
 }
@@ -142,7 +142,7 @@ static void catch_update_flow_for_state(catch_state_t state) {
         } break;
 
         case CATCH_STATE_CHECK:
-        case CATCH_STATE_ASSEMBLY:
+        case CATCH_STATE_RECOGNIZE:
         default: {
             catch_flow = CATCH_FLOW_DONE;
         } break;
@@ -162,7 +162,6 @@ static void catch_apply_state(catch_state_t state) {
     }
     catch_head_set_servo_target(g_catch_motor_targets[state].servo_target);
     catch_head_set_dm_target(g_catch_motor_targets[state].dm_target);
-    catch_head_set_dji_target(g_catch_motor_targets[state].dji_target);
 }
 
 /**
@@ -195,6 +194,7 @@ static void catch_update_sensor_counter(void) {
 static void catch_update(void) {
     catch_update_sensor_counter();
     catch_process_auto_flow();
+    catch_handle_recognize();
     catch_head();
 }
 
@@ -204,6 +204,7 @@ static void catch_update(void) {
  */
 void catch_init(void) {
     catch_head_init();
+    vl53l1_apply_init();
 
     catch_state = CATCH_STATE_INIT;
     catch_update_flow_for_state(catch_state);
@@ -215,7 +216,7 @@ void catch_init(void) {
                                  catch_remote_state_switch);
     remote_register_key_callback(CATCH_STATE_GRAB_KEY, REMOTE_KEY_PRESS_UP,
                                  catch_remote_state_switch);
-    remote_register_key_callback(CATCH_STATE_ASSEMBLY_KEY, REMOTE_KEY_PRESS_UP,
+    remote_register_key_callback(CATCH_STATE_RECOGNIZE_KEY, REMOTE_KEY_PRESS_UP,
                                  catch_remote_state_switch);
     remote_register_key_callback(CATCH_STATE_CHECK_KEY, REMOTE_KEY_PRESS_UP,
                                  catch_remote_state_switch);
@@ -250,8 +251,8 @@ static void catch_remote_state_switch(uint8_t key, remote_key_event_t event) {
             catch_set_state(CATCH_STATE_CHECK);
         } break;
 
-        case CATCH_STATE_ASSEMBLY_KEY: {
-            catch_set_state(CATCH_STATE_ASSEMBLY);
+        case CATCH_STATE_RECOGNIZE_KEY: {
+            catch_set_state(CATCH_STATE_RECOGNIZE);
         } break;
 
         case CATCH_STATE_DONE_KEY: {
@@ -279,7 +280,7 @@ static void catch_process_auto_flow(void) {
         case CATCH_FLOW_WAIT_SECOND_DETECT: {
             if (catch_state == CATCH_STATE_GRAB &&
                 sensor_active_cnt >= CATCH_SENSOR_COUNT) {
-                catch_set_state(CATCH_STATE_ASSEMBLY);
+                catch_set_state(CATCH_STATE_RECOGNIZE);
             }
         } break;
 
@@ -290,6 +291,25 @@ static void catch_process_auto_flow(void) {
 #else
     UNUSED(catch_flow);
 #endif
+}
+
+static void catch_handle_recognize(void) {
+    uint16_t distance_mm = 0;
+
+    if (catch_state != CATCH_STATE_RECOGNIZE) {
+        return;
+    }
+
+    if (!vl53l1_apply_get_distance_mm(&distance_mm)) {
+        return;
+    }
+    log_data(LOG_CHASSIS,distance_mm);
+
+    if ((distance_mm < VL53L1_APPLY_DISTANCE_THRESHOLD_MM) &&
+        !recognize_published) {
+        stair_microros_publish(1);
+        recognize_published = true;
+    }
 }
 
 /**
@@ -319,8 +339,11 @@ static void catch_feedback_task(void *pvParameters) {
     while (1) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        // grab_microros_publish();
-        grab_microros_publish(1);
+      
+       while(!catch_head_is_target_reached()){
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+        control_dispatch_publish(1);
     }
 }
 
