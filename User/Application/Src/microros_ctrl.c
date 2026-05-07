@@ -22,21 +22,26 @@
 #include "custom_msg/srv/grab.h"
 #include "geometry_msgs/msg/point.h"
 
+// MicroROS 相关全局变量
 static rclc_executor_t executor = {0};
 static rcl_node_t node = {0};
 static rclc_support_t support = {0};
 static rcl_allocator_t allocator = {0};
 static SemaphoreHandle_t microros_rcl_mutex = NULL;
 
-// 导航，抓取模块
+// 导航模块
 static rcl_subscription_t nav_subscriber = {0};
-static rcl_service_t grab_service = {0};
-static rcl_publisher_t grab_publisher = {0};
-static rcl_publisher_t stair_publisher = {0};
 custom_msg__msg__SpeedHeading nav_pram = {0};
-static custom_msg__srv__Grab_Request grab_request = {0};
-static custom_msg__srv__Grab_Response grab_response = {0};
-static std_msgs__msg__Int8 grab_pub_pram = {0};
+
+// 控制调度模块
+static rcl_service_t control_dispatch_service = {0};
+static rcl_publisher_t control_dispatch_publisher = {0};
+static custom_msg__srv__Grab_Request control_dispatch_request = {0};
+static custom_msg__srv__Grab_Response control_dispatch_response = {0};
+static std_msgs__msg__Int8 control_dispatch_pub_pram = {0};
+
+// 台阶模块
+static rcl_publisher_t stair_publisher = {0};
 static std_msgs__msg__Int8 stair_pub_pram = {0};
 static std_msgs__msg__Int8 arm_pub_pram = {0};
 
@@ -57,8 +62,11 @@ log_data_packet_t log_data_packet = {0};
 void nav_module_init(void);
 void nav_sub_callback(const void *msgin);
 
-void grab_microros_init(void);
-void grab_microros_callback(const void *request_msg, void *response_msg);
+void control_dispatch_init(void);
+void control_dispatch_callback(const void *request_msg, void *response_msg);
+void arm_microros_init(void);
+void arm_microros_callback(const void *request_msg, void *response_msg);
+void arm_target_sub_callback(const void *msgin);
 
 void logger_module_init(void);
 void microros_log_msg_cb(const char *data, uint16_t len);
@@ -169,7 +177,7 @@ void nav_task(void *pvParameters) {
 
     nav_module_init();
     vTaskDelay(1000); // 确保导航模块先于抓取模块初始化
-    grab_microros_init();
+    control_dispatch_init();
     vTaskDelay(1000); // 确保抓取模块先于台阶模块初始化
     stair_microros_init();
 
@@ -221,33 +229,33 @@ void nav_sub_callback(const void *msgin) {
  * @brief 初始化抓取模块
  * 
  */
-void grab_microros_init(void) {
+void control_dispatch_init(void) {
     rcl_ret_t ret = rclc_service_init_default(
-        &grab_service, &node,
-        ROSIDL_GET_SRV_TYPE_SUPPORT(custom_msg, srv, Grab), "/grab_service");
+        &control_dispatch_service, &node,
+        ROSIDL_GET_SRV_TYPE_SUPPORT(custom_msg, srv, ControlDispatch), "/control_dispatch_srv");
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR,
-                    "grab_microros_init: service init failed, ret=%d\n",
+                    "control_dispatch_init: service init failed, ret=%d\n",
                     (int)ret);
     }else{
-        log_message(LOG_INFO, "grab_microros_init: service init successed");
+        log_message(LOG_INFO, "control_dispatch_init: service init successed");
     }
     
     ret = rclc_publisher_init_default(
-        &grab_publisher, &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/grab_topic");
+        &control_dispatch_publisher, &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/control_dispatch_topic");
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR,
-                    "grab_microros_init: publisher init failed, ret=%d\n",
+                    "control_dispatch_init: publisher init failed, ret=%d\n",
                     (int)ret);
     }
     
-    ret = rclc_executor_add_service(&executor, &grab_service, &grab_request,
-                                    &grab_response, &grab_microros_callback);
+    ret = rclc_executor_add_service(&executor, &control_dispatch_service, &control_dispatch_request,
+                                    &control_dispatch_response, &control_dispatch_callback);
     if (ret != RCL_RET_OK) {
-        log_message(LOG_ERROR, "grab_microros_init: add service failed");
+        log_message(LOG_ERROR, "control_dispatch_init: add service failed");
     }else{
-        log_message(LOG_INFO, "grab_microros_init: add service successed");
+        log_message(LOG_INFO, "control_dispatch_init: add service successed");
     }
 }
 
@@ -313,26 +321,26 @@ void stair_microros_publish(int8_t status) {
 /**
  * @brief 夹爪动作状态发布函数
  */
-void grab_microros_publish(int8_t status) {
-    grab_pub_pram.data = status;
+void control_dispatch_publish(int8_t status) {
+    control_dispatch_pub_pram.data = status;
     if (microros_rcl_mutex != NULL &&
         xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        rcl_ret_t pub_ret = rcl_publish(&grab_publisher, &grab_pub_pram, NULL);
+        rcl_ret_t pub_ret = rcl_publish(&control_dispatch_publisher, &control_dispatch_pub_pram, NULL);
         if (pub_ret != RCL_RET_OK) {
-            log_message(LOG_ERROR, "grab_microros_publish: publish failed\n");
+            log_message(LOG_ERROR, "control_dispatch_publish: publish failed\n");
         }
         xSemaphoreGive(microros_rcl_mutex);
     }
 }
 
 /**
- * @brief 抓取服务回调函数
+ * @brief 控制服务回调函数
  * 
  * @param request_msg 
  * @param response_msg 
  * @note 后续可扩展为多动作的控制指令发布，如上下台阶，机械臂控制等
  */
-void grab_microros_callback(const void *request_msg, void *response_msg) {
+void control_dispatch_callback(const void *request_msg, void *response_msg) {
     custom_msg__srv__Grab_Request *req_in =
         (custom_msg__srv__Grab_Request *)request_msg;
     log_message(LOG_INFO, "Received request, event = %d", req_in->event);

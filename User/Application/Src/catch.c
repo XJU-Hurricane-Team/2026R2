@@ -75,37 +75,31 @@ static const catch_motor_target_t g_catch_motor_targets[CATCH_STATE_COUNT] = {
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
             .dm_target = CATCH_HEAD_DM_TARGET_RETRACT,
-            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
     [CATCH_STATE_READY] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_OPEN,
             .dm_target = CATCH_HEAD_DM_TARGET_EXTEND,
-            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
     [CATCH_STATE_GRAB] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
             .dm_target = CATCH_HEAD_DM_TARGET_EXTEND,
-            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
     [CATCH_STATE_CHECK] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
             .dm_target = CATCH_HEAD_DM_TARGET_CHECK,
-            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
     [CATCH_STATE_RECOGNIZE] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
             .dm_target = CATCH_HEAD_DM_TARGET_CHECK,
-            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
     [CATCH_STATE_DONE] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_OPEN,
             .dm_target = CATCH_HEAD_DM_TARGET_CHECK,
-            .dji_target = CATCH_HEAD_DJI_TARGET_HOME,
         },
 };
 
@@ -168,7 +162,6 @@ static void catch_apply_state(catch_state_t state) {
     }
     catch_head_set_servo_target(g_catch_motor_targets[state].servo_target);
     catch_head_set_dm_target(g_catch_motor_targets[state].dm_target);
-    catch_head_set_dji_target(g_catch_motor_targets[state].dji_target);
 }
 
 /**
@@ -346,8 +339,11 @@ static void catch_feedback_task(void *pvParameters) {
     while (1) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-        // grab_microros_publish();
-        grab_microros_publish(1);
+      
+       while(!catch_head_is_target_reached()){
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+        control_dispatch_publish(1);
     }
 }
 
