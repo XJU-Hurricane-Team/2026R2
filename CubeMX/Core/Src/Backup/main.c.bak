@@ -99,11 +99,8 @@ int main(void)
   MX_LPUART1_UART_Init();
   MX_USART2_UART_Init();
   MX_UART4_Init();
-<<<<<<< HEAD
   MX_TIM3_Init();
-=======
   MX_ADC3_Init();
->>>>>>> origin/dev
   /* USER CODE BEGIN 2 */
   bsp_init();
   freertos_start();

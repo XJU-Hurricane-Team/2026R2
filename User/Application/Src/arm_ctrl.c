@@ -12,8 +12,8 @@
 #include "adc.h"
 
 /* === 宏定义与配置区 === */
-#define ARM_USE_REMOTE_KEY          1           // 是否使用遥控器按键切换点位 (0:禁用, 1:启用)
-#define ARM_SWITCH_KEY              10          // 遥控器映射键值定义
+#define ARM_USE_REMOTE_KEY          99           // 是否使用遥控器按键切换点位 (0:禁用, 1:启用)
+#define ARM_SWITCH_KEY              100          // 遥控器映射键值定义
 #define ARM_REMOTE_KEY_COUNT        5U
 #define ARM_TASK_PERIOD_MS          20          // 机械臂控制任务周期 (毫秒)
 #define ARM_REACH_POS_TOL_MM         5.0f        // 位置到位判定误差 (mm)

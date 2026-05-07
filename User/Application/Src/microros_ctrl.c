@@ -19,7 +19,7 @@
 #include <std_msgs/msg/int8.h>
 #include <std_msgs/msg/bool.h>
 #include <std_srvs/srv/set_bool.h>
-#include "custom_msg/srv/grab.h"
+#include "custom_msg/srv/control_dispatch.h"
 #include "geometry_msgs/msg/point.h"
 
 // MicroROS 相关全局变量
@@ -36,8 +36,8 @@ custom_msg__msg__SpeedHeading nav_pram = {0};
 // 控制调度模块
 static rcl_service_t control_dispatch_service = {0};
 static rcl_publisher_t control_dispatch_publisher = {0};
-static custom_msg__srv__Grab_Request control_dispatch_request = {0};
-static custom_msg__srv__Grab_Response control_dispatch_response = {0};
+static custom_msg__srv__ControlDispatch_Request control_dispatch_request = {0};
+static custom_msg__srv__ControlDispatch_Response control_dispatch_response = {0};
 static std_msgs__msg__Int8 control_dispatch_pub_pram = {0};
 
 // 台阶模块
@@ -180,10 +180,7 @@ void nav_task(void *pvParameters) {
     control_dispatch_init();
     vTaskDelay(1000); // 确保抓取模块先于台阶模块初始化
     stair_microros_init();
-<<<<<<< HEAD
     // arm_microros_init();
-=======
->>>>>>> origin/dev
 
     while (1) {
         if (microros_rcl_mutex != NULL &&
@@ -345,8 +342,8 @@ void control_dispatch_publish(int8_t status) {
  * @note 后续可扩展为多动作的控制指令发布，如上下台阶，机械臂控制等
  */
 void control_dispatch_callback(const void *request_msg, void *response_msg) {
-    custom_msg__srv__Grab_Request *req_in =
-        (custom_msg__srv__Grab_Request *)request_msg;
+    custom_msg__srv__ControlDispatch_Request *req_in =
+        (custom_msg__srv__ControlDispatch_Request *)request_msg;
     log_message(LOG_INFO, "Received request, event = %d", req_in->event);
     if (req_in->event == 0) {
         switch (req_in->command_mode) {
@@ -411,8 +408,8 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
         }
     }
 
-    custom_msg__srv__Grab_Response *res_in =
-        (custom_msg__srv__Grab_Response *)response_msg;
+    custom_msg__srv__ControlDispatch_Response *res_in =
+        (custom_msg__srv__ControlDispatch_Response *)response_msg;
     res_in->success = true;
 }
 

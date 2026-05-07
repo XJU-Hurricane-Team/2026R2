@@ -9,16 +9,11 @@
 #include "catch_head.h"
 #include "logger/logger.h"  
 
-
 /* 夹取机构的 DM 执行电机及目标位管理 */
 static dm_handle_t g_dm_motor;
 static catch_head_dm_joint_t g_dm_joint = {
 	.motor_handle = &g_dm_motor,
-<<<<<<< HEAD
 	.target_position_rad = {0.00f, 1.50f , 3.14f},
-=======
-	.target_position_rad = {1.57f, 3.14f , 4.71f},
->>>>>>> origin/dev
 	.target_index = 0,
 };
 
@@ -39,11 +34,7 @@ static void catch_head_apply_default_targets(void);
  * @note 使用 TIM1 CH1 作为舵机输出通道，并配置上下限脉宽
  */
 void catch_head_servo_init(void) {
-<<<<<<< HEAD
 	servo_init(&g_gripper_servo, &htim3, TIM_CHANNEL_3, 4100, 2250);
-=======
-	servo_init(&g_gripper_servo, &htim1, TIM_CHANNEL_1, 4100,2250);
->>>>>>> origin/dev
 }
 
 /**

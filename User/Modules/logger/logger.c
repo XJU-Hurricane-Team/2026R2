@@ -192,11 +192,7 @@ void log_task(void *pvParameters) {
         });
 
         /* ---------------- 数据日志处理块 ---------------- */
-<<<<<<< HEAD
-        EXECUTE_EVERY_MS(100, t_data, {
-=======
         EXECUTE_EVERY_MS(50, t_data, {
->>>>>>> origin/dev
             if (log_data_queue != NULL && log_data_output_function != NULL) {
                 uint8_t process_count = 0;
 

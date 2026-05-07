@@ -86,12 +86,12 @@ static const catch_motor_target_t g_catch_motor_targets[CATCH_STATE_COUNT] = {
             .servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
             .dm_target = CATCH_HEAD_DM_TARGET_EXTEND,
         },
-    [CATCH_STATE_CHECK] =
-        {
-            .servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
-            .dm_target = CATCH_HEAD_DM_TARGET_CHECK,
-        },
     [CATCH_STATE_RECOGNIZE] =
+        {
+            .servo_target = CATCH_HEAD_SERVO_TARGET_OPEN,
+            .dm_target = CATCH_HEAD_DM_TARGET_EXTEND,
+        },
+    [CATCH_STATE_CHECK] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
             .dm_target = CATCH_HEAD_DM_TARGET_CHECK,
@@ -307,7 +307,7 @@ static void catch_handle_recognize(void) {
 
     if ((distance_mm < VL53L1_APPLY_DISTANCE_THRESHOLD_MM) &&
         !recognize_published) {
-        stair_microros_publish(1);
+        stair_microros_publish(0);
         recognize_published = true;
     }
 }
