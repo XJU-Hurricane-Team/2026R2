@@ -47,18 +47,18 @@ void start_task(void *pvParameters) {
     can_list_add_can(can2_selected, 4, 4);
     can_list_add_can(can3_selected, 4, 4);
 
-    // if (microros_init() != 0) {
-    //     log_message(LOG_ERROR, "start_task: microros_init failed");
-    //     Error_Handler();
-    // }
+    if (microros_init() != 0) {
+        log_message(LOG_ERROR, "start_task: microros_init failed");
+        Error_Handler();
+    }
 
-    // logger_module_init();
+    logger_module_init();
 
-    // if (xTaskCreate(nav_task, "nav_task", 128 * 10, NULL, 3,
-    //                 &nav_task_handle) != pdPASS) {
-    //     log_message(LOG_ERROR, "start_task: nav_task create failed");
-    //     Error_Handler();
-    // }
+    if (xTaskCreate(nav_task, "nav_task", 128 * 10, NULL, 3,
+                    &nav_task_handle) != pdPASS) {
+        log_message(LOG_ERROR, "start_task: nav_task create failed");
+        Error_Handler();
+    }
 
     chassis_init();
     catch_init();

@@ -257,7 +257,7 @@ static void robot_arm_check_target_reached(void) {
 			return;
 
 			#else
-			grab_microros_publish(1);
+			control_dispatch_publish(1);
 			return;
 			#endif
 		}
@@ -269,11 +269,11 @@ static void robot_arm_check_target_reached(void) {
 			return;
 			
 			#else
-			grab_microros_publish(1);
+			control_dispatch_publish(1);
 			return;
 			#endif
 		}
-		grab_microros_publish(1);
+		control_dispatch_publish(1);
 	}
 }
 
@@ -294,7 +294,7 @@ static void pump_check_ready(void) {
 
 	if (g_pump_wait_state == PUMP_WAIT_CATCH) {
 		if (adc_value > PUMP_ADC_READY_HIGH) {
-			grab_microros_publish(1);
+			control_dispatch_publish(1);
 			g_pump_wait_state = PUMP_WAIT_NONE;
 		}
 		return;
@@ -302,7 +302,7 @@ static void pump_check_ready(void) {
 
 	if (g_pump_wait_state == PUMP_WAIT_PLACE) {
 		if (adc_value < PUMP_ADC_READY_LOW) {
-			grab_microros_publish(1);
+			control_dispatch_publish(1);
 			g_pump_wait_state = PUMP_WAIT_NONE;
 		}
 	}

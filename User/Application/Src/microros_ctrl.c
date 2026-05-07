@@ -64,9 +64,9 @@ void nav_sub_callback(const void *msgin);
 
 void control_dispatch_init(void);
 void control_dispatch_callback(const void *request_msg, void *response_msg);
-void arm_microros_init(void);
-void arm_microros_callback(const void *request_msg, void *response_msg);
-void arm_target_sub_callback(const void *msgin);
+
+void stair_microros_init(void);
+void stair_microros_publish(int8_t status);
 
 void logger_module_init(void);
 void microros_log_msg_cb(const char *data, uint16_t len);
