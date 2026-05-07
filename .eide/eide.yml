@@ -21,7 +21,25 @@ virtualFolder:
         - path: User/Bsp/Damiao-Motor/damiao.c
         - path: User/Bsp/servo/servo.c
         - path: User/Bsp/npn_switch/npn_switch.c
-      folders: []
+        - path: User/Bsp/iic/iic.c
+        - path: User/Bsp/vl53l1/vl53l1_apply.c
+      folders:
+        - name: VL53L1
+          files:
+            - path: User/Bsp/vl53l1/vl53l1_api.c
+            - path: User/Bsp/vl53l1/vl53l1_api_calibration.c
+            - path: User/Bsp/vl53l1/vl53l1_api_core.c
+            - path: User/Bsp/vl53l1/vl53l1_api_debug.c
+            - path: User/Bsp/vl53l1/vl53l1_api_preset_modes.c
+            - path: User/Bsp/vl53l1/vl53l1_api_strings.c
+            - path: User/Bsp/vl53l1/vl53l1_core.c
+            - path: User/Bsp/vl53l1/vl53l1_core_support.c
+            - path: User/Bsp/vl53l1/vl53l1_error_strings.c
+            - path: User/Bsp/vl53l1/vl53l1_platform.c
+            - path: User/Bsp/vl53l1/vl53l1_register_funcs.c
+            - path: User/Bsp/vl53l1/vl53l1_silicon_core.c
+            - path: User/Bsp/vl53l1/vl53l1_wait.c
+          folders: []
     - name: Application
       files:
         - path: User/Application/Src/rtos_tasks.c
@@ -116,6 +134,7 @@ targets:
         - User/Middlewares/microros_humble/extra_sources
         - User/Middlewares/microros_humble/libmicroros/microros_include
         - User/Middlewares/CMSIS_DSP/1.16.2/Include
+        - User/Bsp/vl53l1
       libList:
         - User/Middlewares/microros_humble/libmicroros
     excludeList:

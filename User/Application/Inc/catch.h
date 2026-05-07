@@ -23,7 +23,7 @@ typedef enum {
 	CATCH_STATE_READY,     /* 准备就绪，等待首次稳定检测到物体 */
 	CATCH_STATE_GRAB,      /* 抓取状态，等待二次稳定检测到物体 */
 	CATCH_STATE_CHECK,     /* 检测状态，等待检测完成 */
-	CATCH_STATE_ASSEMBLY,  /* 拼接状态 */
+	CATCH_STATE_RECOGNIZE, /* 识别状态 */
 	CATCH_STATE_DONE,      /* 完成状态 */
 	CATCH_STATE_COUNT,     /* 状态数量 */
 } catch_state_t;

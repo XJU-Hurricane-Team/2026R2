@@ -29,6 +29,13 @@ static float arm_wrap_pi(float angle) {
 }
 
 /**
+ * @brief 判断小臂是否接近目标以触发三关节同步修正
+ */
+static uint8_t arm_small_arm_sync_ready(float target, float current) {
+	return (fabsf(current - target) <= ARM_TAKEOUT_SMALL_ARM_SYNC_ERR_RAD);
+}
+
+/**
  * @brief 获取逆解算坐标所处的象限 (判断目标在正前还是正后)
  * @return 1 为正向(前)，-1 为反向(后)
  */
@@ -57,11 +64,11 @@ static void arm_get_unwrapped_target(RobotArm *arm, float y, float z, float pitc
 	// 大臂硬限位：任何模式下都不允许小于 0
 	if (out_joints[0] < ARM_BIG_ARM_MIN_ANGLE_RAD) out_joints[0] = ARM_BIG_ARM_MIN_ANGLE_RAD;
 
-	// 3. 末端吸盘 (damiao_4) 的物理防撞限位保护 (允许区间: -0.1 到 1.83 弧度)
+	// 3. 末端吸盘 (damiao_4) 的物理防撞限位保护 (允许区间: -0.1 到 2.8 弧度)
 	float target2 = out_joints[2];
 	float diff2 = target2 - arm->damiao_4.position;
 	
-	// 尝试做最短路径映射，但如果映射后的角度超出了物理限位 (-0.1 ~ 1.83)，则放弃该映射方向
+	// 尝试做最短路径映射，但如果映射后的角度超出了物理限位 (-0.1 ~ 2.8)，则放弃该映射方向
 	while (diff2 > PI) { 
 		if (target2 - 2.0f * PI < -0.1f) {
 			break;  // 超出下限，放弃映射
@@ -70,7 +77,7 @@ static void arm_get_unwrapped_target(RobotArm *arm, float y, float z, float pitc
 		target2 -= 2.0f * PI; 
 	}
 	while (diff2 < -PI) { 
-		if (target2 + 2.0f * PI > 1.83f) {
+		if (target2 + 2.0f * PI > 2.8f) {
 			break;  // 超出上限，放弃映射
 		}
 		diff2 += 2.0f * PI; 
@@ -79,7 +86,7 @@ static void arm_get_unwrapped_target(RobotArm *arm, float y, float z, float pitc
 	
 	// 4. 进行最终的硬限幅
 	if (target2 < -0.1f) target2 = -0.1f;
-	if (target2 > 1.83f) target2 = 1.83f;
+	if (target2 > 2.8f) target2 = 2.8f;
 	
 	out_joints[2] = target2;
 }
@@ -100,13 +107,20 @@ static void arm_update_transition_gate(RobotArm *arm) {
 			arm->flags.suction_wait_locked_inited = 0;
 			arm->wait_start_tick = HAL_GetTick(); 
 		} else if ((prev == ARM_STATE_PLACE) && (arm->status == ARM_STATE_TAKEOUT)) {
-			// 从放置转取出：重置所有等待
-			arm->flags.takeout_wait_latched = 0;
+			// 从放置转取出：先锁住小臂/吸盘，让大臂先过冲
+			arm->flags.takeout_wait_latched = 1;
 			arm->flags.suction_wait_latched = 0;
 			arm->flags.small_arm_wait_latched = 0;
 			arm->flags.small_arm_wait_locked_inited = 0;
 			arm->flags.suction_wait_locked_inited = 0;
-			arm->wait_start_tick = HAL_GetTick(); 
+			arm->wait_start_tick = HAL_GetTick();
+
+			arm->takeout_sync_active = 1;
+			arm->takeout_sync_phase = 1;
+			arm->takeout_small_target_inited = 0;
+			arm->big_arm_overshoot_rad = ARM_PLACE_TAKEOUT_BIG_ARM_OVERSHOOT_RAD;
+			arm->big_arm_overshoot_armed = 1;
+			arm->big_arm_overshoot_phase = 0;
 		} else if ((prev == ARM_STATE_PLACE) && (arm->status == ARM_STATE_CATCH)) {
 			// 从放置转抓取：小臂锁定等待，确保空手状态下安全复位
 			arm->flags.small_arm_wait_latched = 1;
@@ -116,6 +130,12 @@ static void arm_update_transition_gate(RobotArm *arm) {
 			arm->wait_start_tick = HAL_GetTick(); 
 		}
 		arm->last_status = arm->status;
+	}
+
+	if (arm->status != ARM_STATE_TAKEOUT) {
+		arm->takeout_sync_active = 0;
+		arm->takeout_sync_phase = 0;
+		arm->takeout_small_target_inited = 0;
 	}
 }
 
@@ -164,6 +184,7 @@ void robot_arm_set_ctrl_dt(RobotArm *arm, float dt_s) {
  */
 void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch) {
 	arm->target_mode = ARM_TARGET_CARTESIAN;
+	arm->flags.place_exit_safety_active = 0;
 
 	int8_t target_quadrant = arm_get_ik_quadrant(y, z, pitch);
 	arm->flip_transition_dir = 0;
@@ -182,15 +203,39 @@ void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch) {
 	uint8_t delay_overshoot = 0; 
 
 	// === 多点路径规划逻辑 ===
+	// 从放置态退出到任意非放置态时，先走一个放置点(y/z)+100mm的安全过渡点
+	// 但 PLACE->TAKEOUT 不走该过渡点
+	if (arm->last_status == ARM_STATE_PLACE && arm->status != ARM_STATE_PLACE &&
+	    arm->status != ARM_STATE_TAKEOUT && arm->status != ARM_STATE_INIT) {
+		arm->multi_trans_active = 1;
+		arm->multi_trans_index = 0;
+		arm->multi_trans_count = 1;
+
+		arm->trans_y[0] = arm->final_target_y + 100.0f;
+		arm->trans_z[0] = arm->final_target_z + 100.0f;
+		arm->trans_pitch[0] = pitch;
+
+		arm->final_target_y = y;
+		arm->final_target_z = z;
+		arm->final_target_pitch = pitch;
+
+		arm->arm_target_y = arm->trans_y[0];
+		arm->arm_target_z = arm->trans_z[0];
+		arm->arm_target_pitch = arm->trans_pitch[0];
+
+		arm->flags.has_transition = 0;
+		arm->flags.place_exit_safety_active = 1;
+	}
+
 	// 如果发生从 CATCH 到 PLACE 的长距离运动，自动插入 3 个高空过渡点，防止刮蹭底盘
-	if (arm->last_status == ARM_STATE_CATCH && arm->status == ARM_STATE_PLACE) {
+	else if (arm->last_status == ARM_STATE_CATCH && arm->status == ARM_STATE_PLACE) {
 		arm->multi_trans_active = 1;
 		arm->multi_trans_index = 0;
 		arm->multi_trans_count = 3; 
 		
 		// 预设三个安全提升和转移路点
 		arm->trans_y[0] = 468.158f; arm->trans_z[0] = 183.510f; arm->trans_pitch[0] = 0.0f;
-		arm->trans_y[1] = 422.826f; arm->trans_z[1] = 775.271f; arm->trans_pitch[1] = 0.0f;
+		arm->trans_y[1] = 422.826f; arm->trans_z[1] = 775.271f; arm->trans_pitch[1] = PI/2.0f;
 		arm->trans_y[2] = 229.258f; arm->trans_z[2] = 785.030f; arm->trans_pitch[2] = PI/2.0f;
 		
 		arm->final_target_y = y;
@@ -205,7 +250,9 @@ void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch) {
 		arm->flags.has_transition = 0; 
 		delay_overshoot = 1; // 延迟使能过冲，等到达高空再进行翻转
 		
-	} else if (arm->status == ARM_STATE_CATCH || arm->status == ARM_STATE_PLACE) {
+	}
+
+	else if (arm->status == ARM_STATE_CATCH || arm->status == ARM_STATE_PLACE) {
 		// 单点防撞避让逻辑：生成一个偏离目标点高度(Z)和距离(Y)的临时点
 		arm->multi_trans_active = 0;
 		arm->flags.has_transition = 1;
@@ -227,6 +274,9 @@ void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch) {
 		arm->multi_trans_active = 0;
 		arm->flags.has_transition = 0;
 		arm->flags.transition_done = 1; 
+		arm->final_target_y = y;
+		arm->final_target_z = z;
+		arm->final_target_pitch = pitch;
 		arm->arm_target_y = y;
 		arm->arm_target_z = z;
 		arm->arm_target_pitch = pitch;
@@ -301,7 +351,7 @@ void robot_arm_update(RobotArm *arm) {
 		
 		// 强制防碰撞保护
 		if (joint_target[2] < -0.1f) joint_target[2] = -0.1f;
-		if (joint_target[2] > 1.83f) joint_target[2] = 1.83f;
+		if (joint_target[2] > 2.8f) joint_target[2] = 2.8f;
 		
 	} else {
 		// 笛卡尔模式：首先求取当前目标点对应的 IK 逆解关节角
@@ -315,12 +365,16 @@ void robot_arm_update(RobotArm *arm) {
 			}
 			// 限幅
 			if (actual_suction_target < -0.1f) actual_suction_target = -0.1f;
-			if (actual_suction_target > 1.83f) actual_suction_target = 1.83f;
+			if (actual_suction_target > 2.8f) actual_suction_target = 2.8f;
 
 			// 计算三个关节与当前目标的误差
 			float err0 = fabsf(arm->damiao_1.position - joint_target[0]);
 			float err1 = fabsf(arm->damiao_3.position - joint_target[1]);
 			float err2 = fabsf(arm->damiao_4.position - actual_suction_target);
+
+			if (arm->status == ARM_STATE_TAKEOUT && arm->takeout_sync_active && arm->takeout_sync_phase >= 2) {
+				err0 = 0.0f; // 大臂过冲保持阶段允许途经点继续推进
+			}
 			
 			// 如果全部到达允许的容差内 (< 0.15弧度)，切换至下一个途经点
 			if (err0 < 0.15f && err1 < 0.15f && err2 < 0.15f) {
@@ -333,14 +387,17 @@ void robot_arm_update(RobotArm *arm) {
 				} else {
 					// 途径点全部走完，恢复最终目标
 					arm->multi_trans_active = 0;
+					arm->flags.place_exit_safety_active = 0;
 					arm->arm_target_y = arm->final_target_y;
 					arm->arm_target_z = arm->final_target_z;
 					arm->arm_target_pitch = arm->final_target_pitch;
 					arm_get_unwrapped_target(arm, arm->arm_target_y, arm->arm_target_z, arm->arm_target_pitch, joint_target);
 					
-					// 使能过冲动作确保到达
-					arm->big_arm_overshoot_rad = ARM_BIG_ARM_FLIP_OVERSHOOT_FORCE_RAD;
-					arm->big_arm_overshoot_armed = 1;
+					// 使能过冲动作确保到达 (PLACE->TAKEOUT 特殊序列期间不重复触发)
+					if (!arm->takeout_sync_active) {
+						arm->big_arm_overshoot_rad = ARM_BIG_ARM_FLIP_OVERSHOOT_FORCE_RAD;
+						arm->big_arm_overshoot_armed = 1;
+					}
 				}
 			}
 		} 
@@ -361,6 +418,18 @@ void robot_arm_update(RobotArm *arm) {
 		}
 	}
 
+	// PLACE->TAKEOUT 小臂接近目标判定的目标锁存
+	if (arm->status == ARM_STATE_TAKEOUT && arm->takeout_sync_active && !arm->takeout_small_target_inited) {
+		if (arm->target_mode == ARM_TARGET_JOINT) {
+			arm->takeout_small_target = arm->arm_joint_target[1];
+		} else {
+			float final_joint_target[3];
+			arm_get_unwrapped_target(arm, arm->final_target_y, arm->final_target_z, arm->final_target_pitch, final_joint_target);
+			arm->takeout_small_target = final_joint_target[1];
+		}
+		arm->takeout_small_target_inited = 1;
+	}
+
 	// === 处理翻转过冲状态机 (Phase 0 -> 1 -> 2 -> 0) ===
 	if (arm->big_arm_overshoot_armed) {
 		float overshoot_sign = -1.0f;
@@ -376,6 +445,10 @@ void robot_arm_update(RobotArm *arm) {
 		}
 
 		arm->big_arm_overshoot_joint = joint_target[0] + overshoot_sign * arm->big_arm_overshoot_rad;
+
+		if (arm->big_arm_overshoot_joint < ARM_BIG_ARM_MIN_ANGLE_RAD) {
+        	arm->big_arm_overshoot_joint = ARM_BIG_ARM_MIN_ANGLE_RAD;
+    	} 
 		
 		arm->big_arm_overshoot_phase = 1; // 进入过冲阶段1：施加额外角度
 		arm->big_arm_overshoot_armed = 0;
@@ -383,35 +456,56 @@ void robot_arm_update(RobotArm *arm) {
 
 	if (arm->big_arm_overshoot_phase == 1) {
 		joint_target[0] = arm->big_arm_overshoot_joint; 
+
 		// 等待到达过冲临时点位
 		if (fabsf(arm->damiao_1.position - arm->big_arm_overshoot_joint) < 0.12f) {
-			
-			uint8_t suction_ready = 0;
-			uint8_t small_arm_ready = 0;
-
-			// 检查吸盘和小臂是否也已准备就绪，确保整体姿态安全
-			if (arm->status == ARM_STATE_TAKEOUT) {
-				suction_ready = 1;
-				small_arm_ready = 1;
-			} else {
-				float actual_suction_target = joint_target[2];
-				if (arm->status == ARM_STATE_PLACE) {
-					actual_suction_target -= ARM_PLACE_SUCTION_OFFSET_RAD;
+			if (arm->status == ARM_STATE_TAKEOUT && arm->takeout_sync_active) {
+				if (arm->takeout_sync_phase == 1) {
+					// 过冲到位后释放小臂/吸盘，让其先走半程
+					arm->flags.takeout_wait_latched = 0;
+					arm->flags.small_arm_wait_locked_inited = 0;
+					arm->flags.suction_wait_locked_inited = 0;
+					arm->takeout_sync_phase = 2;
 				}
-				
-				if (actual_suction_target < -0.1f) actual_suction_target = -0.1f;
-				if (actual_suction_target > 1.83f) actual_suction_target = 1.83f;
 
-				float suction_err = arm_wrap_pi(arm->damiao_4.position - actual_suction_target);
-				if (fabsf(suction_err) < 0.08f) suction_ready = 1;
+				if (arm->takeout_sync_phase == 2 && arm->takeout_small_target_inited) {
+					uint8_t sync_ready = arm_small_arm_sync_ready(
+						arm->takeout_small_target,
+						arm->damiao_3.position
+					);
+					if (sync_ready) {
+						arm->big_arm_overshoot_phase = 2;
+						arm->takeout_sync_phase = 3;
+					}
+				}
+			} else {
+				uint8_t suction_ready = 0;
+				uint8_t small_arm_ready = 0;
 
-				float small_arm_err = arm_wrap_pi(arm->damiao_3.position - joint_target[1]);
-				if (fabsf(small_arm_err) < 0.08f) small_arm_ready = 1;
-			}
+				// 检查吸盘和小臂是否也已准备就绪，确保整体姿态安全
+				if (arm->status == ARM_STATE_TAKEOUT) {
+					suction_ready = 1;
+					small_arm_ready = 1;
+				} else {
+					float actual_suction_target = joint_target[2];
+					if (arm->status == ARM_STATE_PLACE) {
+						actual_suction_target -= ARM_PLACE_SUCTION_OFFSET_RAD;
+					}
+					
+					if (actual_suction_target < -0.1f) actual_suction_target = -0.1f;
+					if (actual_suction_target > 2.8f) actual_suction_target = 2.8f;
 
-			// 都准备好了，进入阶段2：回弹到真实的设定点
-			if (suction_ready && small_arm_ready) {
-				arm->big_arm_overshoot_phase = 2; 
+					float suction_err = arm_wrap_pi(arm->damiao_4.position - actual_suction_target);
+					if (fabsf(suction_err) < 0.3f) suction_ready = 1;
+
+					float small_arm_err = arm_wrap_pi(arm->damiao_3.position - joint_target[1]);
+					if (fabsf(small_arm_err) < 0.3f) small_arm_ready = 1;
+				}
+
+				// 都准备好了，进入阶段2：回弹到真实的设定点
+				if (suction_ready && small_arm_ready) {
+					arm->big_arm_overshoot_phase = 2; 
+				}
 			}
 		}
 	} else if (arm->big_arm_overshoot_phase == 2) {
@@ -420,6 +514,11 @@ void robot_arm_update(RobotArm *arm) {
 		if (fabsf(arm->damiao_1.position - arm->big_arm_final_joint) < 0.05f) {
 			arm->big_arm_overshoot_phase = 0;
 			arm->flip_transition_dir = 0;
+			if (arm->takeout_sync_phase == 3) {
+				arm->takeout_sync_active = 0;
+				arm->takeout_sync_phase = 0;
+				arm->takeout_small_target_inited = 0;
+			}
 		}
 	}
 
@@ -484,6 +583,10 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
 		small_speed_base = ARM_SMALL_CATCH_SPEED_BASE;
 		small_speed_gain = ARM_SMALL_CATCH_SPEED_GAIN;
 		small_speed_max = ARM_SMALL_CATCH_SPEED_MAX;
+	} else if (arm->flags.place_exit_safety_active) {
+		small_speed_base = ARM_SMALL_PLACE_EXIT_SPEED_BASE;
+		small_speed_gain = ARM_SMALL_PLACE_EXIT_SPEED_GAIN;
+		small_speed_max = ARM_SMALL_PLACE_EXIT_SPEED_MAX;
 	} else {
 		small_speed_base = ARM_SMALL_SPEED_BASE;
 		small_speed_gain = ARM_SMALL_SPEED_GAIN;
@@ -518,9 +621,13 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
 	if ((joint0_err * arm->damiao_1.speed) < 0.0f) cmd_speed = fminf(cmd_speed, ARM_J8006_FINE_SPEED_MAX);
 	
 	// 在过冲回弹的第2阶段限速，防止太猛
-	if ((arm->big_arm_overshoot_phase == 2) && (err_abs < 0.20f)) {
+	if (arm->big_arm_overshoot_phase == 2) {
 		float phase2_limit = (arm->flip_transition_dir != 0) ? ARM_J8006_PHASE2_Q2TOQ1_SPEED_MAX : ARM_J8006_NEAR_SPEED_MAX;
 		cmd_speed = fminf(cmd_speed, phase2_limit);
+	}
+
+	if (arm->flags.place_exit_safety_active) {
+		cmd_speed = fminf(cmd_speed, ARM_BIG_PLACE_EXIT_SPEED_MAX);
 	}
 	cmd_speed = arm_clampf(cmd_speed, 0.06f, ARM_J8006_CMD_SPEED_MAX);
 
@@ -605,7 +712,7 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
 
 	// 最终安全限幅
 	if (joint2_final_cmd < -0.1f) joint2_final_cmd = -0.1f;
-	if (joint2_final_cmd > 1.83f) joint2_final_cmd = 1.83f;
+	if (joint2_final_cmd > 2.8f) joint2_final_cmd = 2.8f;
 
 	dm_pvt_ctrl(&arm->damiao_1, arm->big_arm_cmd_filtered, cmd_speed, 0.65f);
 	dm_pvt_ctrl(&arm->damiao_2, -arm->big_arm_cmd_filtered, cmd_speed, 0.65f);
@@ -634,6 +741,12 @@ void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3]) {
     x = x1 + DEFAULT_X; 
     z = z1 + DEFAULT_Z;
 
+	if(x < 0)
+	{
+		x += ARM_3;
+		z += ARM_3;
+	}
+
     // 2. 姿态解耦，求腕关节坐标
     x_w = x - ARM_3 * cosf(pitch_angle) - (DEFAULT_ARM3_X - DEFAULT_ARM_1_2) * cosf(pitch_angle);
     z_w = z - ARM_3 * sinf(pitch_angle);
@@ -654,7 +767,7 @@ void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3]) {
 	arm_atan2_f32(a2, a, &angle2_inner);
 
 	// 根据目标所在的象限分别计算输出角度
-	if (x >= 0) {
+	if (x1 >= 0) {
 		// 第一象限：保持原有的几何构型解
 		angle[0] = DEFAULT_ANGLE_1 + PI / 2 - angle1_1 - angle1_2;
 		angle[1] = angle2_inner - DEFAULT_ANGLE_2;
@@ -687,32 +800,38 @@ void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3]) {
  * 可用于上位机遥测、UI显示以及闭环校验。
  */
 void robot_arm_fk(float joint1, float joint2, float joint3, float *y_out, float *z_out, float *pitch_out) {
-	float theta_L1, angle2_inner, theta_L2;
+	float joint2_norm = joint2;
+	float theta_L1, theta_L2, angle2_inner;
 	float pitch;
-	
+
+	// 将第二关节规范到 [0, 2PI)，保证跨零点时仍能落到和逆解一致的支链分支
+	while (joint2_norm < 0.0f) {
+		joint2_norm += 2.0f * PI;
+	}
+	while (joint2_norm >= 2.0f * PI) {
+		joint2_norm -= 2.0f * PI;
+	}
+
 	// 通过各个电机的角度换算出真实的 Pitch 倾角
-	pitch = -joint3 - joint1 + joint2 + DEFAULT_ANGLE_3;
-	
-	// 逆向推算连杆所在的空间夹角，考虑象限和折叠情况
-	if (joint2 < PI) { 
-		theta_L1 = DEFAULT_ANGLE_1 + (PI / 2.0f) - joint1;
-		angle2_inner = joint2 + DEFAULT_ANGLE_2;
+	pitch = -joint3 - joint1 + joint2_norm + DEFAULT_ANGLE_3;
+
+	// 由逆解的两支公式反推腕点所在的两连杆空间构型
+	theta_L1 = DEFAULT_ANGLE_1 + (PI / 2.0f) - joint1;
+	if (joint2_norm < PI) {
+		angle2_inner = joint2_norm + DEFAULT_ANGLE_2;
 		theta_L2 = theta_L1 - (PI - angle2_inner);
 	} else {
-		theta_L1 = DEFAULT_ANGLE_1 + (PI / 2.0f) - joint1;
-		angle2_inner = 2.0f * PI + DEFAULT_ANGLE_2 - joint2;
+		angle2_inner = 2.0f * PI + DEFAULT_ANGLE_2 - joint2_norm;
 		theta_L2 = theta_L1 + (PI - angle2_inner);
 	}
-	
-	// 用简单的三角函数投影求出二连杆交点坐标
+
+	// 用三角函数投影回推腕点坐标，再叠加吸盘末端长度得到末端坐标
 	float x_w = ARM_1 * cosf(theta_L1) + ARM_2 * cosf(theta_L2);
 	float z_w = ARM_1 * sinf(theta_L1) + ARM_2 * sinf(theta_L2);
-	
-	// 加上腕部的补偿值计算出最终世界坐标
-	float eff_L3_x = ARM_3 + (DEFAULT_ARM3_X - DEFAULT_ARM_1_2); 
+	float eff_L3_x = ARM_3 + (DEFAULT_ARM3_X - DEFAULT_ARM_1_2);
 	float x = x_w + eff_L3_x * cosf(pitch);
 	float z = z_w + ARM_3 * sinf(pitch);
-	
+
 	// 减去默认基座原点偏移后输出
 	*y_out = x - DEFAULT_X;
 	*z_out = z - DEFAULT_Z;
