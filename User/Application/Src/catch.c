@@ -310,6 +310,7 @@ static void catch_handle_recognize(void) {
     if (!vl53l1_apply_get_distance_mm(&distance_mm)) {
         return;
     }
+    log_data(LOG_CHASSIS,distance_mm);
 
     if ((distance_mm < VL53L1_APPLY_DISTANCE_THRESHOLD_MM) &&
         !recognize_published) {
