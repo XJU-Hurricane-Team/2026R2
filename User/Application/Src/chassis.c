@@ -166,6 +166,12 @@ static void chassis_switch_mode(uint8_t key, remote_key_event_t event) {
             chassis_handle.mode = (chassis_handle.mode == CHASSIS_MODE_AUTO)
                                       ? CHASSIS_MODE_MANUAL
                                       : CHASSIS_MODE_AUTO;
+            /* 更新LED1：亮表示自动模式，灭表示手动模式 */
+            if (chassis_handle.mode == CHASSIS_MODE_AUTO) {
+                LED1_ON();
+            } else {
+                LED1_OFF();
+            }
             lift_set_chassis_mode(chassis_handle.mode == CHASSIS_MODE_AUTO);
             log_message(LOG_INFO, (chassis_handle.mode == CHASSIS_MODE_AUTO) ? "Switch to auto mode. " : "Switch to manual mode. ");
             break;
@@ -262,6 +268,13 @@ static void chassis_set_halt(bool enable) {
     }
 
     chassis_handle.halt = enable;
+
+    /* 更新LED3：亮表示自锁，灭表示非自锁 */
+    if (enable) {
+        LED3_ON();
+    } else {
+        LED3_OFF();
+    }
 
     for (int i = 0; i < 4; i++) {
         chassis_pid_clear_state(&dji_3508_speed_pid[i]);

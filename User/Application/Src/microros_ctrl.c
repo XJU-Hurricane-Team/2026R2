@@ -183,7 +183,7 @@ void nav_task(void *pvParameters) {
     grab_microros_init();
     vTaskDelay(1000); // 确保抓取模块先于台阶模块初始化
     stair_microros_init();
-    arm_microros_init();
+    // arm_microros_init();
 
     while (1) {
         if (microros_rcl_mutex != NULL &&

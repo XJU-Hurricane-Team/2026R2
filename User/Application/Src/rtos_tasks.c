@@ -47,18 +47,18 @@ void start_task(void *pvParameters) {
     can_list_add_can(can2_selected, 4, 4);
     can_list_add_can(can3_selected, 4, 4);
 
-    if (microros_init() != 0) {
-        log_message(LOG_ERROR, "start_task: microros_init failed");
-        Error_Handler();
-    }
+    // if (microros_init() != 0) {
+    //     log_message(LOG_ERROR, "start_task: microros_init failed");
+    //     Error_Handler();
+    // }
 
-    logger_module_init();
+    // logger_module_init();
 
-    if (xTaskCreate(nav_task, "nav_task", 128 * 10, NULL, 3,
-                    &nav_task_handle) != pdPASS) {
-        log_message(LOG_ERROR, "start_task: nav_task create failed");
-        Error_Handler();
-    }
+    // if (xTaskCreate(nav_task, "nav_task", 128 * 10, NULL, 3,
+    //                 &nav_task_handle) != pdPASS) {
+    //     log_message(LOG_ERROR, "start_task: nav_task create failed");
+    //     Error_Handler();
+    // }
 
     chassis_init();
     catch_init();
@@ -81,13 +81,12 @@ void start_task(void *pvParameters) {
 void task1(void *pvParameters) {
     UNUSED(pvParameters);
     LED0_OFF();
-    LED1_ON();
+    // LED1_ON();  // LED1 由 chassis_mode_task 控制
 
-    uint8_t count = 0;
+    // uint8_t count = 0;
 
     while (1) {
         LED0_TOGGLE();
-        LED1_TOGGLE();
 
         /* Print stack usage every 5 seconds to avoid flooding the log output. */
         // if (++count >= 5) {

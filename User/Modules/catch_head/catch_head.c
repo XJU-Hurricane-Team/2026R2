@@ -22,7 +22,7 @@ static catch_head_dji_joint_t g_catch_rod_joint = {
 static dm_handle_t g_dm_motor;
 static catch_head_dm_joint_t g_dm_joint = {
 	.motor_handle = &g_dm_motor,
-	.target_position_rad = {1.57f, 0.0f , -1.57f},
+	.target_position_rad = {0.00f, 1.50f , 3.14f},
 	.target_index = 0,
 };
 
@@ -43,7 +43,7 @@ static void catch_head_apply_default_targets(void);
  * @note 使用 TIM1 CH1 作为舵机输出通道，并配置上下限脉宽
  */
 void catch_head_servo_init(void) {
-	servo_init(&g_gripper_servo, &htim1, TIM_CHANNEL_1, 3150, 4300);
+	servo_init(&g_gripper_servo, &htim3, TIM_CHANNEL_3, 4100, 2250);
 }
 
 /**
