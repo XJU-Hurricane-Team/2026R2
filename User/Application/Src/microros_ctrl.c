@@ -19,37 +19,34 @@
 #include <std_msgs/msg/int8.h>
 #include <std_msgs/msg/bool.h>
 #include <std_srvs/srv/set_bool.h>
-#include "custom_msg/srv/grab.h"
+#include "custom_msg/srv/control_dispatch.h"
 #include "geometry_msgs/msg/point.h"
 
+// MicroROS 相关全局变量
 static rclc_executor_t executor = {0};
 static rcl_node_t node = {0};
 static rclc_support_t support = {0};
 static rcl_allocator_t allocator = {0};
 static SemaphoreHandle_t microros_rcl_mutex = NULL;
 
-// 导航，抓取模块
+// 导航模块
 static rcl_subscription_t nav_subscriber = {0};
-static rcl_service_t grab_service = {0};
-static rcl_publisher_t grab_publisher = {0};
-static rcl_publisher_t stair_publisher = {0};
 custom_msg__msg__SpeedHeading nav_pram = {0};
-static custom_msg__srv__Grab_Request grab_request = {0};
-static custom_msg__srv__Grab_Response grab_response = {0};
-static std_msgs__msg__Int8 grab_pub_pram = {0};
+
+// 控制调度模块
+static rcl_service_t control_dispatch_service = {0};
+static rcl_publisher_t control_dispatch_publisher = {0};
+static custom_msg__srv__ControlDispatch_Request control_dispatch_request = {0};
+static custom_msg__srv__ControlDispatch_Response control_dispatch_response = {0};
+static std_msgs__msg__Int8 control_dispatch_pub_pram = {0};
+
+// 台阶模块
+static rcl_publisher_t stair_publisher = {0};
 static std_msgs__msg__Int8 stair_pub_pram = {0};
+static std_msgs__msg__Int8 arm_pub_pram = {0};
 
 // 机械臂模块
-static arm_status_t arm_microros_state = ARM_STATE_INIT;
-static geometry_msgs__msg__Point arm_target_cache = {0};
-static bool arm_target_cache_valid = false;
-static rcl_subscription_t arm_target_subscriber = {0};
 static geometry_msgs__msg__Point arm_target_msg = {0};
-static rcl_service_t arm_service = {0};
-static rcl_publisher_t arm_ready_publisher = {0};
-static std_msgs__msg__Bool arm_ready_msg = {0};
-static std_srvs__srv__SetBool_Request arm_request = {0};
-static std_srvs__srv__SetBool_Response arm_response = {0};
 
 // 日志模块句柄
 static rcl_publisher_t log_msg_publisher = {0};
@@ -65,11 +62,11 @@ log_data_packet_t log_data_packet = {0};
 void nav_module_init(void);
 void nav_sub_callback(const void *msgin);
 
-void grab_microros_init(void);
-void grab_microros_callback(const void *request_msg, void *response_msg);
-void arm_microros_init(void);
-void arm_microros_callback(const void *request_msg, void *response_msg);
-void arm_target_sub_callback(const void *msgin);
+void control_dispatch_init(void);
+void control_dispatch_callback(const void *request_msg, void *response_msg);
+
+void stair_microros_init(void);
+void stair_microros_publish(int8_t status);
 
 void logger_module_init(void);
 void microros_log_msg_cb(const char *data, uint16_t len);
@@ -180,10 +177,10 @@ void nav_task(void *pvParameters) {
 
     nav_module_init();
     vTaskDelay(1000); // 确保导航模块先于抓取模块初始化
-    grab_microros_init();
+    control_dispatch_init();
     vTaskDelay(1000); // 确保抓取模块先于台阶模块初始化
     stair_microros_init();
-    arm_microros_init();
+    // arm_microros_init();
 
     while (1) {
         if (microros_rcl_mutex != NULL &&
@@ -233,33 +230,33 @@ void nav_sub_callback(const void *msgin) {
  * @brief 初始化抓取模块
  * 
  */
-void grab_microros_init(void) {
+void control_dispatch_init(void) {
     rcl_ret_t ret = rclc_service_init_default(
-        &grab_service, &node,
-        ROSIDL_GET_SRV_TYPE_SUPPORT(custom_msg, srv, Grab), "/grab_service");
+        &control_dispatch_service, &node,
+        ROSIDL_GET_SRV_TYPE_SUPPORT(custom_msg, srv, ControlDispatch), "/control_dispatch_srv");
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR,
-                    "grab_microros_init: service init failed, ret=%d\n",
+                    "control_dispatch_init: service init failed, ret=%d\n",
                     (int)ret);
     }else{
-        log_message(LOG_INFO, "grab_microros_init: service init successed");
+        log_message(LOG_INFO, "control_dispatch_init: service init successed");
     }
     
     ret = rclc_publisher_init_default(
-        &grab_publisher, &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/grab_topic");
+        &control_dispatch_publisher, &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/control_dispatch_topic");
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR,
-                    "grab_microros_init: publisher init failed, ret=%d\n",
+                    "control_dispatch_init: publisher init failed, ret=%d\n",
                     (int)ret);
     }
     
-    ret = rclc_executor_add_service(&executor, &grab_service, &grab_request,
-                                    &grab_response, &grab_microros_callback);
+    ret = rclc_executor_add_service(&executor, &control_dispatch_service, &control_dispatch_request,
+                                    &control_dispatch_response, &control_dispatch_callback);
     if (ret != RCL_RET_OK) {
-        log_message(LOG_ERROR, "grab_microros_init: add service failed");
+        log_message(LOG_ERROR, "control_dispatch_init: add service failed");
     }else{
-        log_message(LOG_INFO, "grab_microros_init: add service successed");
+        log_message(LOG_INFO, "control_dispatch_init: add service successed");
     }
 }
 
@@ -325,28 +322,28 @@ void stair_microros_publish(int8_t status) {
 /**
  * @brief 夹爪动作状态发布函数
  */
-void grab_microros_publish(int8_t status) {
-    grab_pub_pram.data = status;
+void control_dispatch_publish(int8_t status) {
+    control_dispatch_pub_pram.data = status;
     if (microros_rcl_mutex != NULL &&
         xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        rcl_ret_t pub_ret = rcl_publish(&grab_publisher, &grab_pub_pram, NULL);
+        rcl_ret_t pub_ret = rcl_publish(&control_dispatch_publisher, &control_dispatch_pub_pram, NULL);
         if (pub_ret != RCL_RET_OK) {
-            log_message(LOG_ERROR, "grab_microros_publish: publish failed\n");
+            log_message(LOG_ERROR, "control_dispatch_publish: publish failed\n");
         }
         xSemaphoreGive(microros_rcl_mutex);
     }
 }
 
 /**
- * @brief 抓取服务回调函数
+ * @brief 控制服务回调函数
  * 
  * @param request_msg 
  * @param response_msg 
  * @note 后续可扩展为多动作的控制指令发布，如上下台阶，机械臂控制等
  */
-void grab_microros_callback(const void *request_msg, void *response_msg) {
-    custom_msg__srv__Grab_Request *req_in =
-        (custom_msg__srv__Grab_Request *)request_msg;
+void control_dispatch_callback(const void *request_msg, void *response_msg) {
+    custom_msg__srv__ControlDispatch_Request *req_in =
+        (custom_msg__srv__ControlDispatch_Request *)request_msg;
     log_message(LOG_INFO, "Received request, event = %d", req_in->event);
     if (req_in->event == 0) {
         switch (req_in->command_mode) {
@@ -363,7 +360,7 @@ void grab_microros_callback(const void *request_msg, void *response_msg) {
                 catch_set_state(CATCH_STATE_CHECK);
                 break;
             case 4:
-                catch_set_state(CATCH_STATE_ASSEMBLY);
+                catch_set_state(CATCH_STATE_RECOGNIZE);
                 break;
             case 5:
                 catch_set_state(CATCH_STATE_DONE);
@@ -375,6 +372,28 @@ void grab_microros_callback(const void *request_msg, void *response_msg) {
         if (catch_feedback_handle != NULL) {
             xTaskNotifyGive(catch_feedback_handle);
         }
+    } else if (req_in->event == 1) {
+        log_message(LOG_INFO, "Received request, mode = %d", req_in->command_mode);
+        switch (req_in->command_mode) {
+            case 0:
+                robot_arm_set_state_index(0);
+                break;
+            case 1:
+                robot_arm_set_state_index(1);
+                break;
+            case 2:
+                robot_arm_set_state_index(2);
+                break;
+            case 3:
+                robot_arm_set_state_index(3);
+                break;
+            case 4:
+                robot_arm_set_state_index(4);
+                break;
+            default:
+                break;
+        }
+
     } else if (req_in->event == 2) {
         log_message(LOG_INFO, "Received request, command = %d", req_in->command_mode);
         switch (req_in->command_mode) {
@@ -389,8 +408,8 @@ void grab_microros_callback(const void *request_msg, void *response_msg) {
         }
     }
 
-    custom_msg__srv__Grab_Response *res_in =
-        (custom_msg__srv__Grab_Response *)response_msg;
+    custom_msg__srv__ControlDispatch_Response *res_in =
+        (custom_msg__srv__ControlDispatch_Response *)response_msg;
     res_in->success = true;
 }
 
@@ -468,116 +487,5 @@ void microros_log_data_cb(const log_data_packet_t *packet) {
             rcl_publish(&log_data_publisher, &ros_log_data, NULL);
             xSemaphoreGive(microros_rcl_mutex);
         }
-    }
-}
-
-/**
- * @brief 机械臂目标坐标订阅回调函数
- */
-void arm_target_sub_callback(const void *msgin) {
-    const geometry_msgs__msg__Point *msg = (const geometry_msgs__msg__Point *)msgin;
-    
-    // 仅在 READY 态缓存有效坐标，非 READY 态直接忽略
-    robot_arm_set_dynamic_catch_target((float)msg->x, (float)msg->y, (float)msg->z);
-    
-    log_message(LOG_INFO, "arm target received: y=%.2f z=%.2f pitch=%.2f\n",
-                (float)msg->x, (float)msg->y, (float)msg->z);
-}
-
-void arm_microros_set_state(arm_status_t state) {
-    arm_microros_state = state;
-    if (state != ARM_STATE_READY) {
-        arm_microros_clear_target();
-        return;
-    }
-
-    arm_ready_msg.data = true;
-    if (microros_rcl_mutex != NULL &&
-        xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        rcl_ret_t ret = rcl_publish(&arm_ready_publisher, &arm_ready_msg, NULL);
-        if (ret != RCL_RET_OK) {
-            log_message(LOG_ERROR, "arm_microros_set_state: publish ready failed\n");
-        }
-        xSemaphoreGive(microros_rcl_mutex);
-    }
-}
-
-void arm_microros_clear_target(void) {
-    arm_target_cache_valid = false;
-    arm_target_cache.x = 0.0f;
-    arm_target_cache.y = 0.0f;
-    arm_target_cache.z = 0.0f;
-}
-
-/**
- * @brief 初始化机械臂服务与目标订阅
- */
-void arm_microros_init(void) {
-    rcl_ret_t ret;
-
-    // 初始化机械臂目标坐标订阅 
-    ret = rclc_subscription_init_default(
-        &arm_target_subscriber, &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Point), "pos_sub");
-    if (ret != RCL_RET_OK) {
-        log_message(LOG_ERROR, "arm_microros_init: arm target sub init failed\n");
-    }
-
-    geometry_msgs__msg__Point__init(&arm_target_msg);
-
-    ret = rclc_executor_add_subscription(&executor, &arm_target_subscriber,
-                                         &arm_target_msg,
-                                         &arm_target_sub_callback,
-                                         ON_NEW_DATA);
-    if (ret != RCL_RET_OK) {
-        log_message(LOG_ERROR, "arm_microros_init: add arm target sub failed\n");
-    }
-
-    // 初始化机械臂控制服务
-    ret = rclc_service_init_default(
-        &arm_service, &node,
-        ROSIDL_GET_SRV_TYPE_SUPPORT(std_srvs, srv, SetBool), "arm_ctr_srv");
-    if (ret != RCL_RET_OK) {
-        log_message(LOG_ERROR, "arm_microros_init: service init failed, ret=%d\n", (int)ret);
-    }
-
-    std_srvs__srv__SetBool_Request__init(&arm_request);
-    std_srvs__srv__SetBool_Response__init(&arm_response);
-
-    ret = rclc_executor_add_service(&executor, &arm_service, &arm_request,
-                                    &arm_response, &arm_microros_callback);
-    if (ret != RCL_RET_OK) {
-        log_message(LOG_ERROR, "arm_microros_init: add service failed");
-    }
-}
-
-/**
- * @brief 机械臂服务回调函数
- */
-void arm_microros_callback(const void *request_msg, void *response_msg) {
-    std_srvs__srv__SetBool_Request *req_in =
-        (std_srvs__srv__SetBool_Request *)request_msg;
-    std_srvs__srv__SetBool_Response *res_in =
-        (std_srvs__srv__SetBool_Response *)response_msg;
-
-    res_in->success = false;
-
-    if (req_in->data == false) {
-        arm_microros_set_state(ARM_STATE_READY);
-        res_in->success = true;
-    } else if (arm_microros_state == ARM_STATE_READY) {
-        arm_microros_set_state(ARM_STATE_CATCH);
-        if (arm_target_cache_valid) {
-            log_message(LOG_INFO,
-                        "arm target consumed: y=%.2f z=%.2f pitch=%.2f\n",
-                        (float)arm_target_cache.x,
-                        (float)arm_target_cache.y,
-                        (float)arm_target_cache.z);
-            arm_microros_clear_target();
-        } else {
-            log_message(LOG_WARNING,
-                        "arm service: no cached target available\n");
-        }
-        res_in->success = true;
     }
 }

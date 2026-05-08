@@ -173,7 +173,7 @@ void log_task(void *pvParameters) {
 
     while (1) {
         /* ---------------- 字符串日志处理块 ---------------- */
-        EXECUTE_EVERY_MS(50, t_msg, {
+        EXECUTE_EVERY_MS(500, t_msg, {
             if (log_msg_buffer != NULL && log_msg_output_function != NULL) {
                 size_t rx_len;
                 uint8_t process_count = 0;
@@ -192,7 +192,7 @@ void log_task(void *pvParameters) {
         });
 
         /* ---------------- 数据日志处理块 ---------------- */
-        EXECUTE_EVERY_MS(10, t_data, {
+        EXECUTE_EVERY_MS(50, t_data, {
             if (log_data_queue != NULL && log_data_output_function != NULL) {
                 uint8_t process_count = 0;
 

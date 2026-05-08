@@ -36,9 +36,10 @@ typedef struct {
 
 static chassis_handle_t chassis_handle = {
     .mode = CHASSIS_MODE_MANUAL,
-    .chassis_speed = {
-        .target_rpm = {0.0f, 0.0f, 0.0f, 0.0f},
-    },
+    .chassis_speed =
+        {
+            .target_rpm = {0.0f, 0.0f, 0.0f, 0.0f},
+        },
     .world_cordinate = false,
     .halt = false,
 };
@@ -76,7 +77,8 @@ void chassis_mode_task(void *pvParameters) {
     };
 
     while (1) {
-        if ((uint8_t)chassis_handle.mode < (sizeof(mode_handlers) / sizeof(mode_handlers[0])) &&
+        if ((uint8_t)chassis_handle.mode <
+                (sizeof(mode_handlers) / sizeof(mode_handlers[0])) &&
             mode_handlers[chassis_handle.mode] != NULL) {
             mode_handlers[chassis_handle.mode]();
         }
@@ -115,7 +117,8 @@ void chassis_driver_task(void *pvParameters) {
         }
 
         if (!feedback_ready_last) {
-            log_message(LOG_INFO, "3508 feedback ready, enable chassis output.");
+            log_message(LOG_INFO,
+                        "3508 feedback ready, enable chassis output.");
         }
         feedback_ready_last = true;
 
@@ -166,13 +169,23 @@ static void chassis_switch_mode(uint8_t key, remote_key_event_t event) {
             chassis_handle.mode = (chassis_handle.mode == CHASSIS_MODE_AUTO)
                                       ? CHASSIS_MODE_MANUAL
                                       : CHASSIS_MODE_AUTO;
+            /* 更新LED1：亮表示自动模式，灭表示手动模式 */
+            if (chassis_handle.mode == CHASSIS_MODE_AUTO) {
+                LED1_ON();
+            } else {
+                LED1_OFF();
+            }
             lift_set_chassis_mode(chassis_handle.mode == CHASSIS_MODE_AUTO);
-            log_message(LOG_INFO, (chassis_handle.mode == CHASSIS_MODE_AUTO) ? "Switch to auto mode. " : "Switch to manual mode. ");
+            log_message(LOG_INFO, (chassis_handle.mode == CHASSIS_MODE_AUTO)
+                                      ? "Switch to auto mode. "
+                                      : "Switch to manual mode. ");
             break;
 
         case SWITCH_WORLD_KEY:
             chassis_handle.world_cordinate = !chassis_handle.world_cordinate;
-            log_message(LOG_INFO, chassis_handle.world_cordinate ? "Set chassis to world coordinate. " : "Set chassis to self coordinate. ");
+            log_message(LOG_INFO, chassis_handle.world_cordinate
+                                      ? "Set chassis to world coordinate. "
+                                      : "Set chassis to self coordinate. ");
             break;
 
         default:
@@ -262,6 +275,13 @@ static void chassis_set_halt(bool enable) {
     }
 
     chassis_handle.halt = enable;
+
+    /* 更新LED3：亮表示自锁，灭表示非自锁 */
+    if (enable) {
+        LED3_ON();
+    } else {
+        LED3_OFF();
+    }
 
     for (int i = 0; i < 4; i++) {
         chassis_pid_clear_state(&dji_3508_speed_pid[i]);
@@ -363,6 +383,7 @@ static void chassis_mode_manual_update(void) {
  * @brief 底盘自动模式更新：根据导航参数计算目标转速
  */
 static void chassis_mode_auto_update(void) {
-    chassis_update_target_rpm(nav_pram.linear_x, nav_pram.linear_y,
-                              nav_pram.angular_z);
+    // chassis_update_target_rpm(nav_pram.linear_x, nav_pram.linear_y,
+    //                           nav_pram.angular_z);
+    chassis_update_target_rpm(0.01, 0.0, 0.0);
 }

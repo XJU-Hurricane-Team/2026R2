@@ -16,6 +16,7 @@
 
 void arm_microros_set_state(arm_status_t state);
 void arm_microros_clear_target(void);
-void robot_arm_set_dynamic_catch_target(float y, float z, float pitch);
+void robot_arm_set_dynamic_catch_target(float x, float y, float z);
+void robot_arm_set_state_index(uint8_t index);
 
 #endif /* __ARM_CTRL_H */

@@ -15,14 +15,7 @@
                 "target/stm32g4x.cfg"
             ],
             "toolchainPrefix": "arm-none-eabi",
-            "gdbPath": "gdb-multiarch",
-            "serverpath": "/home/whyyy/openocd-xpack/bin/openocd",
-            "rtos": "FreeRTOS",
             "svdFile": ".pack/Keil/STM32G4xx_DFP.1.6.0/CMSIS/SVD/STM32G474.svd"
-            "liveWatch": {
-                "enabled": true,
-                "samplesPerSecond": 4
-            }
         },
         
         {

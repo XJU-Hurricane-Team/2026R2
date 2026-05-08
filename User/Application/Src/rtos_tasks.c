@@ -81,13 +81,12 @@ void start_task(void *pvParameters) {
 void task1(void *pvParameters) {
     UNUSED(pvParameters);
     LED0_OFF();
-    LED1_ON();
+    // LED1_ON();  // LED1 由 chassis_mode_task 控制
 
-    uint8_t count = 0;
+    // uint8_t count = 0;
 
     while (1) {
         LED0_TOGGLE();
-        LED1_TOGGLE();
 
         /* Print stack usage every 5 seconds to avoid flooding the log output. */
         // if (++count >= 5) {

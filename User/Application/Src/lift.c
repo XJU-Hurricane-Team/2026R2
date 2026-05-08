@@ -17,6 +17,7 @@
 #define CHASSIS_CAN_SELECT       can1_selected
 #define LIFT_CAN_SELECT          can2_selected
 
+#define LIFT_CATCH_DEGREE_KEY    1 /* 夹爪高度：5.049rad*/
 #define LIFT_SEQ_UP_KEY          5 /* 上台阶按键 */
 #define LIFT_SEQ_DOWN_KEY        6 /* 下台阶按键 */
 #define LIFT_UP_KEY              7 /* 抬升升起按键 */
@@ -29,9 +30,10 @@
 #define FRONT_SENSOR_PIN         GPIO_PIN_7
 #define REAR_SENSOR_PIN          GPIO_PIN_8
 
-#define LIFT_TARGET_DEG_MAX      7.93f
+#define LIFT_TARGET_CATCH_DEG    5.049f
+#define LIFT_TARGET_DEG_MAX      16.0f
 #define LIFT_TARGET_DEG_UP_SEQ   0.0f
-#define LIFT_TARGET_DEG_DOWN_SEQ 7.93f
+#define LIFT_TARGET_DEG_DOWN_SEQ 16.0f
 #define LIFT_TARGET_DEG_STEP     0.025f
 #define LIFT_TARGET_SPEED        5.0f
 
@@ -224,15 +226,20 @@ void lift_switch_mode(uint8_t key, remote_key_event_t event) {
             lift_seq_emergency_stop();
             break;
 
+        case LIFT_CATCH_DEGREE_KEY:
+            lift_set_target(LIFT_TARGET_CATCH_DEG);
+
         case LIFT_SEQ_UP_KEY:
             log_message(LOG_INFO, "Trigger Lift UP sequence.");
             lift_seq_start(1);
-            //lift_publish_if_auto(1);
+            // lift_publish_if_auto(1);
+            stair_microros_publish(1);
             break;
 
         case LIFT_SEQ_DOWN_KEY:
             log_message(LOG_INFO, "Trigger Lift DOWN sequence.");
             lift_seq_start(2);
+            stair_microros_publish(1);
             //lift_publish_if_auto(2);
             break;
 
@@ -310,6 +317,8 @@ void lift_init(void) {
     lift_bottom_init();
     lift_tasks_init();
 
+    remote_register_key_callback(LIFT_CATCH_DEGREE_KEY, REMOTE_KEY_PRESS_UP,
+                                 lift_switch_mode);
     remote_register_key_callback(LIFT_SEQ_UP_KEY, REMOTE_KEY_PRESS_UP,
                                  lift_switch_mode);
     remote_register_key_callback(LIFT_SEQ_DOWN_KEY, REMOTE_KEY_PRESS_UP,
@@ -642,7 +651,7 @@ static void lift_publish_if_auto(uint8_t code) {
         if (code == 0) {
             stair_microros_publish((int8_t)code);
         } else {
-            grab_microros_publish((int8_t)code);
+            control_dispatch_publish((int8_t)code);
         }
     }
 }
@@ -668,8 +677,9 @@ static void lift_seq_emergency_stop(void) {
 static void lift_up_step_wait_front_trigger(void) {
     if (get_front_photoelectric_rising_edge()) {
         log_message(LOG_INFO, "chassis up");
-        lift_publish_if_auto(0);
-        g_lift_handle.lift_fsm.step = 1;
+        // lift_publish_if_auto(0);
+        stair_microros_publish(0);
+        // g_lift_handle.lift_fsm.step = 1;
     }
 }
 
@@ -714,8 +724,9 @@ static void lift_down_step_wait_rear_release(void) {
     // 检查后光电的下降沿（true -> false）
     if (get_rear_photoelectric_falling_edge()) {
         log_message(LOG_INFO, "chassis down");
-        lift_publish_if_auto(0);
-        g_lift_handle.lift_fsm.step = 1;
+        // lift_publish_if_auto(0);
+        stair_microros_publish(0);
+        // g_lift_handle.lift_fsm.step = 1;
     }
 }
 

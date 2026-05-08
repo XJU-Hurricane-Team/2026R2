@@ -21,15 +21,10 @@
 #define CATCH_HEAD_RAD_TO_DEG 57.29578f
 #define CATCH_HEAD_RAD_S_TO_RPM 9.549296f
 
-#define CATCH_HEAD_DJI_POS_TOL_DEG   1.5f
 #define CATCH_HEAD_DM_POS_TOL_RAD    0.05f
 
 #define DM_SPEED 0.6f
 
-typedef enum {
-	CATCH_HEAD_DJI_TARGET_HOME = 0,
-	CATCH_HEAD_DJI_TARGET_ASSEMBLY,
-} catch_head_dji_target_t;
 
 typedef enum {
 	CATCH_HEAD_DM_TARGET_RETRACT = 0,
@@ -42,18 +37,6 @@ typedef enum {
 	CATCH_HEAD_SERVO_TARGET_OPEN,
 } catch_head_servo_target_t;
 
-/**
- * @brief DJI 电机旋转关节控制结构体
- */
-typedef struct {
-	dji_motor_handle_t *motor_handle;
-	float reduction_ratio;
-	pid_t angle_pid;
-	pid_t speed_pid;
-	Trajectory_Handler_t trajectory;
-	float target_angle_deg[CATCH_HEAD_DJI_TARGET_COUNT];
-	uint8_t target_index;
-} catch_head_dji_joint_t;
 
 /**
  * @brief DM 电机执行关节控制结构体
@@ -78,7 +61,6 @@ void catch_head_init(void);   //初始化夹取模块
 void catch_head(void);        // 夹取模块周期更新函数
 
 // 目标位设置函数
-void catch_head_set_dji_target(uint8_t target_index);
 void catch_head_set_dm_target(uint8_t target_index);
 void catch_head_set_servo_target(uint8_t target_index);
 
