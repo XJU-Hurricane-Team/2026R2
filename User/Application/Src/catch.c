@@ -192,8 +192,8 @@ static void catch_update_sensor_counter(void) {
  * 
  */
 static void catch_update(void) {
-    catch_update_sensor_counter();
-    catch_process_auto_flow();
+    // catch_update_sensor_counter();
+    // catch_process_auto_flow();
     catch_handle_recognize();
     catch_head();
 }
@@ -253,6 +253,7 @@ static void catch_remote_state_switch(uint8_t key, remote_key_event_t event) {
 
         case CATCH_STATE_RECOGNIZE_KEY: {
             catch_set_state(CATCH_STATE_RECOGNIZE);
+            stair_microros_publish(3);
         } break;
 
         case CATCH_STATE_DONE_KEY: {
@@ -303,10 +304,12 @@ static void catch_handle_recognize(void) {
     if (!vl53l1_apply_get_distance_mm(&distance_mm)) {
         return;
     }
-    log_data(LOG_CHASSIS,distance_mm);
+    // log_data(LOG_CHASSIS,distance_mm);
 
     if ((distance_mm < VL53L1_APPLY_DISTANCE_THRESHOLD_MM) &&
         !recognize_published) {
+        log_message(LOG_INFO, "Recognized! distance_mm = %d", distance_mm);
+        catch_set_state(CATCH_STATE_GRAB);
         stair_microros_publish(0);
         recognize_published = true;
     }

@@ -37,13 +37,13 @@ custom_msg__msg__SpeedHeading nav_pram = {0};
 static rcl_service_t control_dispatch_service = {0};
 static rcl_publisher_t control_dispatch_publisher = {0};
 static custom_msg__srv__ControlDispatch_Request control_dispatch_request = {0};
-static custom_msg__srv__ControlDispatch_Response control_dispatch_response = {0};
+static custom_msg__srv__ControlDispatch_Response control_dispatch_response = {
+    0};
 static std_msgs__msg__Int8 control_dispatch_pub_pram = {0};
 
 // 台阶模块
 static rcl_publisher_t stair_publisher = {0};
 static std_msgs__msg__Int8 stair_pub_pram = {0};
-static std_msgs__msg__Int8 arm_pub_pram = {0};
 
 // 机械臂模块
 static geometry_msgs__msg__Point arm_target_msg = {0};
@@ -115,6 +115,8 @@ int microros_init(void) {
                     (int)ret);
         return (int)ret;
     }
+
+
 
     rmw_init_options_t *rmw_options =
         rcl_init_options_get_rmw_init_options(&init_options);
@@ -197,7 +199,8 @@ void nav_task(void *pvParameters) {
  * 
  */
 void nav_module_init(void) {
-    rcl_ret_t ret = rclc_subscription_init_default(
+    
+    rcl_ret_t ret = rclc_subscription_init_best_effort(
         &nav_subscriber, &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(custom_msg, msg, SpeedHeading),
         "/nav_speed_heading_data");
@@ -233,29 +236,35 @@ void nav_sub_callback(const void *msgin) {
 void control_dispatch_init(void) {
     rcl_ret_t ret = rclc_service_init_default(
         &control_dispatch_service, &node,
-        ROSIDL_GET_SRV_TYPE_SUPPORT(custom_msg, srv, ControlDispatch), "/control_dispatch_srv");
+        ROSIDL_GET_SRV_TYPE_SUPPORT(custom_msg, srv, ControlDispatch),
+        "/control_dispatch_srv");
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR,
                     "control_dispatch_init: service init failed, ret=%d\n",
                     (int)ret);
-    }else{
+    } else {
         log_message(LOG_INFO, "control_dispatch_init: service init successed");
     }
-    
+
     ret = rclc_publisher_init_default(
         &control_dispatch_publisher, &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/control_dispatch_topic");
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+        "/control_dispatch_topic");
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR,
                     "control_dispatch_init: publisher init failed, ret=%d\n",
                     (int)ret);
     }
-    
-    ret = rclc_executor_add_service(&executor, &control_dispatch_service, &control_dispatch_request,
-                                    &control_dispatch_response, &control_dispatch_callback);
+    else {
+        log_message(LOG_INFO, "control_dispatch_init: publisher init successed");
+    }
+
+    ret = rclc_executor_add_service(
+        &executor, &control_dispatch_service, &control_dispatch_request,
+        &control_dispatch_response, &control_dispatch_callback);
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR, "control_dispatch_init: add service failed");
-    }else{
+    } else {
         log_message(LOG_INFO, "control_dispatch_init: add service successed");
     }
 }
@@ -269,41 +278,15 @@ void stair_microros_init(void) {
         &stair_publisher, &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/stair_topic");
     if (ret != RCL_RET_OK) {
-        log_message(LOG_ERROR, "stair_microros_init: publisher init failed, ret=%d\n", (int)ret);
+        log_message(LOG_ERROR,
+                    "stair_microros_init: publisher init failed, ret=%d\n",
+                    (int)ret);
+    } else {
+        log_message(LOG_INFO, "stair_microros_init: publisher init success");
     }
-    else{
-        log_message(LOG_INFO,"stair_microros_init: publisher init success");
-    }
-    
 }
 
-// /**
-//  * @brief 夹爪动作状态发布函数
-//  */
-// void grab_microros_publish(void) {
-//     bool success = false;
 
-//     while (1) {
-//         success = catch_head_is_target_reached();
-//         if (success) {
-//             grab_pub_pram.data = 1;
-//             if (microros_rcl_mutex != NULL &&
-//                 xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) ==
-//                     pdTRUE) {
-//                 rcl_ret_t pub_ret =
-//                     rcl_publish(&grab_publisher, &grab_pub_pram, NULL);
-//                 if (pub_ret != RCL_RET_OK) {
-//                     log_message(LOG_ERROR,
-//                                 "grab_microros_publish: publish failed\n");
-//                 }
-//                 xSemaphoreGive(microros_rcl_mutex);
-//             }
-//             grab_pub_pram.data = 0;
-//             break;
-//         }
-//         vTaskDelay(10);
-//     }
-// }
 /**
  * @brief 台阶动作状态发布函数
  */
@@ -311,7 +294,8 @@ void stair_microros_publish(int8_t status) {
     stair_pub_pram.data = status;
     if (microros_rcl_mutex != NULL &&
         xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        rcl_ret_t pub_ret = rcl_publish(&stair_publisher, &stair_pub_pram, NULL);
+        rcl_ret_t pub_ret =
+            rcl_publish(&stair_publisher, &stair_pub_pram, NULL);
         if (pub_ret != RCL_RET_OK) {
             log_message(LOG_ERROR, "stair_microros_publish: publish failed\n");
         }
@@ -326,9 +310,11 @@ void control_dispatch_publish(int8_t status) {
     control_dispatch_pub_pram.data = status;
     if (microros_rcl_mutex != NULL &&
         xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        rcl_ret_t pub_ret = rcl_publish(&control_dispatch_publisher, &control_dispatch_pub_pram, NULL);
+        rcl_ret_t pub_ret = rcl_publish(&control_dispatch_publisher,
+                                        &control_dispatch_pub_pram, NULL);
         if (pub_ret != RCL_RET_OK) {
-            log_message(LOG_ERROR, "control_dispatch_publish: publish failed\n");
+            log_message(LOG_ERROR,
+                        "control_dispatch_publish: publish failed\n");
         }
         xSemaphoreGive(microros_rcl_mutex);
     }
@@ -344,7 +330,8 @@ void control_dispatch_publish(int8_t status) {
 void control_dispatch_callback(const void *request_msg, void *response_msg) {
     custom_msg__srv__ControlDispatch_Request *req_in =
         (custom_msg__srv__ControlDispatch_Request *)request_msg;
-    log_message(LOG_INFO, "Received request, event = %d", req_in->event);
+    log_message(LOG_INFO, "Dispatch,event = %d,mode = %d", req_in->event,
+                req_in->command_mode);
     if (req_in->event == 0) {
         switch (req_in->command_mode) {
             case 0:
@@ -373,7 +360,6 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
             xTaskNotifyGive(catch_feedback_handle);
         }
     } else if (req_in->event == 1) {
-        log_message(LOG_INFO, "Received request, mode = %d", req_in->command_mode);
         switch (req_in->command_mode) {
             case 0:
                 robot_arm_set_state_index(0);
@@ -395,7 +381,6 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
         }
 
     } else if (req_in->event == 2) {
-        log_message(LOG_INFO, "Received request, command = %d", req_in->command_mode);
         switch (req_in->command_mode) {
             case 0:
                 lift_set_stair_mode(1);
@@ -459,7 +444,10 @@ void microros_log_msg_cb(const char *data, uint16_t len) {
 
     if (microros_rcl_mutex != NULL &&
         xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        rcl_publish(&log_msg_publisher, &ros_log_msg, NULL);
+        rcl_ret_t pub_ret = rcl_publish(&log_msg_publisher, &ros_log_msg, NULL);
+        if (pub_ret != RCL_RET_OK) {
+            log_message(LOG_ERROR, "microros_log_msg_cb: publish failed\n");
+        }
         xSemaphoreGive(microros_rcl_mutex);
     }
 }
@@ -484,7 +472,10 @@ void microros_log_data_cb(const log_data_packet_t *packet) {
 
         if (microros_rcl_mutex != NULL &&
             xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-            rcl_publish(&log_data_publisher, &ros_log_data, NULL);
+            rcl_ret_t pub_ret = rcl_publish(&log_data_publisher, &ros_log_data, NULL);
+            if (pub_ret != RCL_RET_OK) {
+                log_message(LOG_ERROR, "microros_log_data_cb: publish failed\n");
+            }
             xSemaphoreGive(microros_rcl_mutex);
         }
     }

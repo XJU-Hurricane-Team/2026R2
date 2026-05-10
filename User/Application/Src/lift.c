@@ -228,6 +228,7 @@ void lift_switch_mode(uint8_t key, remote_key_event_t event) {
 
         case LIFT_CATCH_DEGREE_KEY:
             lift_set_target(LIFT_TARGET_CATCH_DEG);
+            break;
 
         case LIFT_SEQ_UP_KEY:
             log_message(LOG_INFO, "Trigger Lift UP sequence.");
