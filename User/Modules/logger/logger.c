@@ -209,15 +209,6 @@ void log_task(void *pvParameters) {
 }
 #endif /* LOG_USE_RTOS */
 
-
-/**
- * @brief 日志底层输出函数弱定义，（使用逻辑待完善）
- */
-__weak void log_transport_init(void)
-{
-    /* 用户可以重定义此函数以实现不同的日志输出方式 */
-}
-
 /**
  * @brief 设置当前日志级别
  *

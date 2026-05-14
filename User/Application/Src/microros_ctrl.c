@@ -116,8 +116,6 @@ int microros_init(void) {
         return (int)ret;
     }
 
-
-
     rmw_init_options_t *rmw_options =
         rcl_init_options_get_rmw_init_options(&init_options);
     if (rmw_options == NULL) {
@@ -199,7 +197,7 @@ void nav_task(void *pvParameters) {
  * 
  */
 void nav_module_init(void) {
-    
+
     rcl_ret_t ret = rclc_subscription_init_best_effort(
         &nav_subscriber, &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(custom_msg, msg, SpeedHeading),
@@ -254,9 +252,9 @@ void control_dispatch_init(void) {
         log_message(LOG_ERROR,
                     "control_dispatch_init: publisher init failed, ret=%d\n",
                     (int)ret);
-    }
-    else {
-        log_message(LOG_INFO, "control_dispatch_init: publisher init successed");
+    } else {
+        log_message(LOG_INFO,
+                    "control_dispatch_init: publisher init successed");
     }
 
     ret = rclc_executor_add_service(
@@ -286,7 +284,6 @@ void stair_microros_init(void) {
     }
 }
 
-
 /**
  * @brief 台阶动作状态发布函数
  */
@@ -299,12 +296,17 @@ void stair_microros_publish(int8_t status) {
         if (pub_ret != RCL_RET_OK) {
             log_message(LOG_ERROR, "stair_microros_publish: publish failed\n");
         }
+        else {
+            log_message(LOG_INFO,
+                        "stair_microros_publish: pub successed, status=%d\n",
+                        status);
+        }
         xSemaphoreGive(microros_rcl_mutex);
     }
 }
 
 /**
- * @brief 夹爪动作状态发布函数
+ * @brief 底层控制状态发布函数
  */
 void control_dispatch_publish(int8_t status) {
     control_dispatch_pub_pram.data = status;
@@ -315,6 +317,9 @@ void control_dispatch_publish(int8_t status) {
         if (pub_ret != RCL_RET_OK) {
             log_message(LOG_ERROR,
                         "control_dispatch_publish: publish failed\n");
+        } else {
+            log_message(LOG_INFO,
+                        "dispatch_publish: pub successed, status=%d\n", status);
         }
         xSemaphoreGive(microros_rcl_mutex);
     }
@@ -332,6 +337,7 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
         (custom_msg__srv__ControlDispatch_Request *)request_msg;
     log_message(LOG_INFO, "Dispatch,event = %d,mode = %d", req_in->event,
                 req_in->command_mode);
+    bool skip = false;
     if (req_in->event == 0) {
         switch (req_in->command_mode) {
             case 0:
@@ -341,22 +347,20 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 catch_set_state(CATCH_STATE_READY);
                 break;
             case 2:
-                catch_set_state(CATCH_STATE_GRAB);
+                catch_set_state(CATCH_STATE_RECOGNIZE);
+                skip = true;
                 break;
             case 3:
                 catch_set_state(CATCH_STATE_CHECK);
                 break;
             case 4:
-                catch_set_state(CATCH_STATE_RECOGNIZE);
-                break;
-            case 5:
                 catch_set_state(CATCH_STATE_DONE);
                 break;
             default:
                 break;
         }
 
-        if (catch_feedback_handle != NULL) {
+        if (catch_feedback_handle != NULL && !skip) {
             xTaskNotifyGive(catch_feedback_handle);
         }
     } else if (req_in->event == 1) {
@@ -369,6 +373,8 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 break;
             case 2:
                 robot_arm_set_state_index(2);
+                robot_arm_set_dynamic_catch_target(
+                    req_in->point.x, req_in->point.y, req_in->point.z);
                 break;
             case 3:
                 robot_arm_set_state_index(3);
@@ -376,6 +382,8 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
             case 4:
                 robot_arm_set_state_index(4);
                 break;
+            case 5:
+                robot_arm_set_state_index(5);
             default:
                 break;
         }
@@ -472,9 +480,11 @@ void microros_log_data_cb(const log_data_packet_t *packet) {
 
         if (microros_rcl_mutex != NULL &&
             xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-            rcl_ret_t pub_ret = rcl_publish(&log_data_publisher, &ros_log_data, NULL);
+            rcl_ret_t pub_ret =
+                rcl_publish(&log_data_publisher, &ros_log_data, NULL);
             if (pub_ret != RCL_RET_OK) {
-                log_message(LOG_ERROR, "microros_log_data_cb: publish failed\n");
+                log_message(LOG_ERROR,
+                            "microros_log_data_cb: publish failed\n");
             }
             xSemaphoreGive(microros_rcl_mutex);
         }

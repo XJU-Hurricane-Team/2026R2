@@ -31,9 +31,9 @@
 #define REAR_SENSOR_PIN          GPIO_PIN_8
 
 #define LIFT_TARGET_CATCH_DEG    5.049f
-#define LIFT_TARGET_DEG_MAX      16.0f
+#define LIFT_TARGET_DEG_MAX      12.275f
 #define LIFT_TARGET_DEG_UP_SEQ   0.0f
-#define LIFT_TARGET_DEG_DOWN_SEQ 16.0f
+#define LIFT_TARGET_DEG_DOWN_SEQ 12.275f
 #define LIFT_TARGET_DEG_STEP     0.025f
 #define LIFT_TARGET_SPEED        5.0f
 
@@ -678,9 +678,8 @@ static void lift_seq_emergency_stop(void) {
 static void lift_up_step_wait_front_trigger(void) {
     if (get_front_photoelectric_rising_edge()) {
         log_message(LOG_INFO, "chassis up");
-        // lift_publish_if_auto(0);
-        stair_microros_publish(0);
-        // g_lift_handle.lift_fsm.step = 1;
+        lift_publish_if_auto(0);
+        g_lift_handle.lift_fsm.step = 1;
     }
 }
 
@@ -725,9 +724,8 @@ static void lift_down_step_wait_rear_release(void) {
     // 检查后光电的下降沿（true -> false）
     if (get_rear_photoelectric_falling_edge()) {
         log_message(LOG_INFO, "chassis down");
-        // lift_publish_if_auto(0);
-        stair_microros_publish(0);
-        // g_lift_handle.lift_fsm.step = 1;
+        lift_publish_if_auto(0);
+        g_lift_handle.lift_fsm.step = 1;
     }
 }
 
