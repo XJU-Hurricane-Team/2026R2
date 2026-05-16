@@ -30,9 +30,8 @@ extern "C" {
 /* 公共模块头文件 */
 #include "remote_ctrl/remote_ctrl.h"
 #include "message-protocol/msg_protocol.h"
-#include "logger/logger.h"  
+#include "logger/logger.h"
 #include "robot_arm/robot_arm.h"
-
 
 void chassis_init(void);
 void catch_init(void);
@@ -40,7 +39,6 @@ void msg_process_init(void);
 int microros_init(void);
 void logger_module_init(void);
 void robot_arm_init(void);
-
 
 void freertos_start(void);
 

@@ -13,7 +13,7 @@
 static dm_handle_t g_dm_motor;
 static catch_head_dm_joint_t g_dm_joint = {
 	.motor_handle = &g_dm_motor,
-	.target_position_rad = {0.00f, 1.50f , 3.14f},
+	.target_position_rad = {0.00f, 1.50f , 3.12f},
 	.target_index = 0,
 };
 
@@ -34,7 +34,7 @@ static void catch_head_apply_default_targets(void);
  * @note 使用 TIM1 CH1 作为舵机输出通道，并配置上下限脉宽
  */
 void catch_head_servo_init(void) {
-	servo_init(&g_gripper_servo, &htim3, TIM_CHANNEL_3, 4100, 2250);
+	servo_init(&g_gripper_servo, &htim3, TIM_CHANNEL_3, 1300, 500);
 }
 
 /**
@@ -43,7 +43,7 @@ void catch_head_servo_init(void) {
  */
 void catch_head_motor_init(void) {
 
-	int res = dm_motor_init(&g_dm_motor, 0x15, 0x05, DM_MODE_POS_SPEED, DM_J4310, 3.14f, 45.0f,
+	int res = dm_motor_init(&g_dm_motor, 0x15, 0x05, DM_MODE_POS_SPEED, DM_J4310, 12.5f, 45.0f,
                   20.0f, can2_selected);
 	if (res != 0) {
 		g_ready = 0;

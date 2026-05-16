@@ -24,8 +24,8 @@ QueueHandle_t log_data_queue;         // 实体定义
 #include <stdarg.h>
 #include <stdio.h>
 
-#define MAX_MSG_PROCESS_PER_SLICE  5  /* 每次最多处理 5 条字符串日志 */
-#define MAX_DATA_PROCESS_PER_SLICE 10 /* 每次最多处理 10 条数据日志 */
+#define MAX_MSG_PROCESS_PER_SLICE  3  /* 每次最多处理 3 条字符串日志 */
+#define MAX_DATA_PROCESS_PER_SLICE 5 /* 每次最多处理 5 条数据日志 */
 #define EXECUTE_EVERY_MS(ms, last_time_var, code_block)                        \
     do {                                                                       \
         TickType_t _now = xTaskGetTickCount();                                 \
@@ -208,15 +208,6 @@ void log_task(void *pvParameters) {
     }
 }
 #endif /* LOG_USE_RTOS */
-
-
-/**
- * @brief 日志底层输出函数弱定义，（使用逻辑待完善）
- */
-__weak void log_transport_init(void)
-{
-    /* 用户可以重定义此函数以实现不同的日志输出方式 */
-}
 
 /**
  * @brief 设置当前日志级别

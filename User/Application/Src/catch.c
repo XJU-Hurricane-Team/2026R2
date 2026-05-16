@@ -10,7 +10,7 @@
 #include "catch.h"
 #include "microros_ctrl.h"
 #include "vl53l1/vl53l1_apply.h"
-#include "npn_switch/npn_switch.h"
+
 
 #define CATCH_AUTO_FLOW_ENABLE   0U
 #define CATCH_TASK_PERIOD_MS     5U
@@ -44,11 +44,8 @@ typedef struct {
 } catch_motor_target_t;
 
 static catch_state_t catch_state = CATCH_STATE_INIT;
-static catch_flow_t catch_flow = CATCH_FLOW_WAIT_FIRST_DETECT;
 static bool recognize_published = false;
 
-/* 传感器稳定计数：active 连续达到阈值才认为状态有效 */
-static uint8_t sensor_active_cnt = 0;
 static TaskHandle_t catch_task_handle;
 TaskHandle_t catch_feedback_handle;
 
@@ -56,15 +53,12 @@ static void catch_task(void *pvParameters);
 static void catch_tasks_init(void);
 static void catch_update(void);
 void catch_set_state(catch_state_t state);
-static void catch_update_flow_for_state(catch_state_t state);
+
 static void catch_remote_state_switch(uint8_t key, remote_key_event_t event);
 static void catch_apply_state(catch_state_t state);
-static uint8_t catch_is_sensor_active(void);
-static void catch_update_sensor_counter(void);
-static void catch_process_auto_flow(void);
+
 static void catch_handle_recognize(void);
 
-bool check_sensor_active(void);
 
 /**
  * @brief 夹爪整体各阶段下电机状态
@@ -122,34 +116,9 @@ void catch_set_state(catch_state_t state) {
         recognize_published = false;
     }
     catch_apply_state(catch_state);
-    catch_update_flow_for_state(catch_state);
+
 }
 
-/**
- * @brief 更新状态对应的流程
- * 
- * @param state 
- */
-static void catch_update_flow_for_state(catch_state_t state) {
-    switch (state) {
-        case CATCH_STATE_INIT:
-        case CATCH_STATE_READY: {
-            catch_flow = CATCH_FLOW_WAIT_FIRST_DETECT;
-        } break;
-
-        case CATCH_STATE_GRAB: {
-            catch_flow = CATCH_FLOW_WAIT_SECOND_DETECT;
-        } break;
-
-        case CATCH_STATE_CHECK:
-        case CATCH_STATE_RECOGNIZE:
-        default: {
-            catch_flow = CATCH_FLOW_DONE;
-        } break;
-    }
-
-    sensor_active_cnt = 0;
-}
 
 /**
  * @brief 更新电机状态
@@ -164,36 +133,13 @@ static void catch_apply_state(catch_state_t state) {
     catch_head_set_dm_target(g_catch_motor_targets[state].dm_target);
 }
 
-/**
- * @brief 判断传感器是否被触发
- * 
- * @return uint8_t 
- */
-static uint8_t catch_is_sensor_active(void) {
-    return (uint8_t)(npn_switch_read_level() == GPIO_PIN_RESET);
-}
-
-/**
- * @brief 更新传感器计数器
- * 
- */
-static void catch_update_sensor_counter(void) {
-    if (catch_is_sensor_active()) {
-        if (sensor_active_cnt < CATCH_SENSOR_COUNT) {
-            sensor_active_cnt++;
-        }
-    } else {
-        sensor_active_cnt = 0;
-    }
-}
 
 /**
  * @brief 夹取状态更新，更新传感器状态，处理自动流程，更新电机状态
  * 
  */
 static void catch_update(void) {
-    catch_update_sensor_counter();
-    catch_process_auto_flow();
+
     catch_handle_recognize();
     catch_head();
 }
@@ -207,7 +153,7 @@ void catch_init(void) {
     vl53l1_apply_init();
 
     catch_state = CATCH_STATE_INIT;
-    catch_update_flow_for_state(catch_state);
+
     catch_apply_state(catch_state);
 
     remote_register_key_callback(CATCH_STATE_INIT_KEY, REMOTE_KEY_PRESS_UP,
@@ -263,35 +209,6 @@ static void catch_remote_state_switch(uint8_t key, remote_key_event_t event) {
     }
 }
 
-/**
- * @brief 夹取自动流程
- * 
- */
-static void catch_process_auto_flow(void) {
-#if CATCH_AUTO_FLOW_ENABLE
-    switch (catch_flow) {
-        case CATCH_FLOW_WAIT_FIRST_DETECT: {
-            if (catch_state == CATCH_STATE_READY &&
-                sensor_active_cnt >= CATCH_SENSOR_COUNT) {
-                catch_set_state(CATCH_STATE_GRAB);
-            }
-        } break;
-
-        case CATCH_FLOW_WAIT_SECOND_DETECT: {
-            if (catch_state == CATCH_STATE_GRAB &&
-                sensor_active_cnt >= CATCH_SENSOR_COUNT) {
-                catch_set_state(CATCH_STATE_RECOGNIZE);
-            }
-        } break;
-
-        case CATCH_FLOW_DONE:
-        default: {
-        } break;
-    }
-#else
-    UNUSED(catch_flow);
-#endif
-}
 
 static void catch_handle_recognize(void) {
     uint16_t distance_mm = 0;
@@ -303,11 +220,14 @@ static void catch_handle_recognize(void) {
     if (!vl53l1_apply_get_distance_mm(&distance_mm)) {
         return;
     }
-    log_data(LOG_CHASSIS,distance_mm);
+    // log_data(LOG_CHASSIS,distance_mm);
 
     if ((distance_mm < VL53L1_APPLY_DISTANCE_THRESHOLD_MM) &&
         !recognize_published) {
+        log_message(LOG_INFO, "Recognized! distance_mm = %d", distance_mm);
+        catch_set_state(CATCH_STATE_GRAB);
         stair_microros_publish(0);
+        xTaskNotifyGive(catch_feedback_handle);
         recognize_published = true;
     }
 }
@@ -322,14 +242,13 @@ static void catch_task(void *pvParameters) {
 
     while (1) {
         catch_update();
-        check_sensor_active();
         vTaskDelay(pdMS_TO_TICKS(CATCH_TASK_PERIOD_MS));
     }
 }
 
 /**
  * @brief 夹取反馈任务函数
- * @note 该任务等待通知触发，触发后调用 grab_microros_publish(),检测动作是否完成， 发布成功失败到 ROS2.
+ * @note 该任务等待通知触发，触发后检测动作是否完成， 发布成功到 ROS2.
  * 
  * @param pvParameters 
  */
@@ -343,6 +262,7 @@ static void catch_feedback_task(void *pvParameters) {
        while(!catch_head_is_target_reached()){
             vTaskDelay(pdMS_TO_TICKS(10));
         }
+        // vTaskDelay(pdMS_TO_TICKS(2000)); 
         control_dispatch_publish(1);
     }
 }
@@ -357,15 +277,4 @@ static void catch_tasks_init(void) {
                 &catch_feedback_handle);
 }
 
-bool check_sensor_active(void) {
-    // 读取 PE8 引脚的状态
-    static int8_t count = 0;
-    if (HAL_GPIO_ReadPin(GPIOE, GPIO_PIN_7) == GPIO_PIN_SET && count == 0 ) {
-        // log_message(LOG_INFO, "Target Detected!");
-        count = 1;
-        return true;
-    } else {
-        count = 0;
-        return false;
-    }
-}
+
