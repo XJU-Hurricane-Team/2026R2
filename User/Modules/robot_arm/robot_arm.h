@@ -2,8 +2,8 @@
  * @file robot_arm.h
  * @author xinglu
  * @brief 机械臂底层驱动模块 (解算与运动学参数定义)
- * @version 3.0
- * @date 2026-05-15
+ * @version 3.1
+ * @date 2026-05-17
  */
 
 #ifndef ROBOT_ARM_H
@@ -53,9 +53,9 @@
 #define ARM_SMALL_PLACE_EXIT_SPEED_BASE     1.20f   /**< 退出放置态小臂基础速度 */
 #define ARM_SMALL_PLACE_EXIT_SPEED_GAIN     1.35f   /**< 退出放置态小臂速度增益 */
 #define ARM_SMALL_PLACE_EXIT_SPEED_MAX      1.60f   /**< 退出放置态小臂最大速度 */
-#define ARM_SMALL_CATCH_SPEED_BASE          0.80f   /**< 抓取动作时小臂基础速度 */
-#define ARM_SMALL_CATCH_SPEED_GAIN          0.85f   /**< 抓取动作时小臂速度增益 */
-#define ARM_SMALL_CATCH_SPEED_MAX           1.20f   /**< 抓取动作时小臂最大速度 */
+#define ARM_SMALL_CATCH_SPEED_BASE          1.50f   /**< 抓取动作时小臂基础速度 */
+#define ARM_SMALL_CATCH_SPEED_GAIN          1.90f   /**< 抓取动作时小臂速度增益 */
+#define ARM_SMALL_CATCH_SPEED_MAX           2.30f   /**< 抓取动作时小臂最大速度 */
 #define ARM_BIG_PLACE_EXIT_SPEED_MAX        0.45f   /**< 退出放置态大臂限速 */
 
 #define ARM_SUCTION_SPEED_MAX               1.80f   /**< 吸盘最大速度 */
@@ -71,26 +71,34 @@
 #define ARM_SUCTION_PLACE_BRAKE_SPEED_MAX   0.16f   /**< 刹车阶段最大速度 */
 #define ARM_PLACE_SUCTION_OFFSET_RAD        -0.0f   /**< 放置下压预紧力 */
 
-#define ARM_SUCTION_WAIT_HOLD_SPEED         0.0f   /**< 吸盘锁死保持速度 */
+#define ARM_SUCTION_WAIT_HOLD_SPEED         0.0f    /**< 吸盘锁死保持速度 */
 #define ARM_SUCTION_WAIT_TIMEOUT_MS         2000U   /**< 吸盘等待超时时间 (ms) */
 #define ARM_TAKEOUT_WAIT_TIMEOUT_MS         4000U   /**< 取出动作超时时间 (ms) */
 #define ARM_SMALL_WAIT_HOLD_SPEED           0.30f   /**< 小臂锁死保持速度 */
 
+/* ================== 俯瞰态速度参数 ================== */
+#define ARM_OVERLOOK_BIG_SPEED      0.65f          /**< 俯瞰态大臂速度 (rad/s) */
+#define ARM_OVERLOOK_SMALL_SPEED    3.00f          /**< 俯瞰态小臂速度 (rad/s) */
+#define ARM_OVERLOOK_SUCTION_SPEED  2.20f          /**< 俯瞰态吸盘速度 (rad/s) */
+
 /* ================== 取出动作序列参数 ================== */
 #define ARM_TAKEOUT_SEQ_BIG_ARM_STEP_RAD    0.3746f /**< 取出时大臂预移动步长 (rad) */
-#define ARM_TAKEOUT_SEQ_SMALL_ARM_STEP_RAD  0.8f   /**< 取出时小臂预移动步长 (rad) */
+#define ARM_TAKEOUT_SEQ_SMALL_ARM_STEP_RAD  1.20f   /**< 取出时小臂预移动步长 (rad) */
 #define ARM_TAKEOUT_SEQ_ERR_TOLERANCE_RAD   0.12f   /**< 序列步骤到位误差阈值 (rad) */
 
 /**
  * @brief 机械臂工作状态枚举
  */
 typedef enum {
-    ARM_STATE_INIT = 0,        /**< 初始零点状态 */
-    ARM_STATE_READY = 1,       /**< 准备抓取状态 */
-    ARM_STATE_CATCH = 2,       /**< 抓取动作执行状态 */
-    ARM_STATE_PLACE = 3,       /**< 放置动作执行状态 */
-    ARM_STATE_WAIT_TAKEOUT = 4,/**< 待取出动作执行状态 */
-    ARM_STATE_TAKEOUT = 5,     /**< 取出动作执行状态 */
+    ARM_STATE_INIT = 0,        /**< 初始状态 */
+    ARM_STATE_READY_1 = 1,     /**< 就绪态1 (从下往上看) */
+    ARM_STATE_READY_2 = 2,     /**< 就绪态2 (从上往下看) */
+    ARM_STATE_CATCH = 3,       /**< 抓取动作执行状态 */
+    ARM_STATE_PLACE = 4,       /**< 放置动作执行状态 */
+    ARM_STATE_WAIT_TAKEOUT = 5,/**< 待取出动作执行状态 */
+    ARM_STATE_TAKEOUT_1 = 6,   /**< 取出动作执行状态 (放置二层) */
+    ARM_STATE_TAKEOUT_2 = 7,   /**< 取出动作执行状态 (放置三层)*/
+    ARM_STATE_OVERLOOK = 8     /**< 俯瞰态 */
 } arm_status_t;
 
 /**
@@ -178,10 +186,10 @@ typedef struct {
     float trans_pitch[4];       /**< 过渡点 Pitch 姿态数组 */
 
     /* 运行状态反馈与模式 */
-    uint8_t arm_motion_active;     /**< 机械臂运动活跃标志 (1:正在移动, 0:已到达目标并静止) */
-    arm_target_mode_t target_mode; /**< 当前采用的控制模式 (坐标系解算/关节直驱) */
-    arm_status_t status;           /**< 当前应用层设定的目标状态 */
-    arm_status_t last_status;      /**< 上一时刻的状态机状态 (用于检测状态切换边沿) */
+    uint8_t arm_motion_active;       /**< 机械臂运动活跃标志 (1:正在移动, 0:已到达目标并静止) */
+    arm_target_mode_t target_mode;   /**< 当前采用的控制模式 (坐标系解算/关节直驱) */
+    arm_status_t status;             /**< 当前应用层设定的目标状态 */
+    arm_status_t last_status;        /**< 上一时刻的状态机状态 (用于检测状态切换边沿) */
     arm_motion_state_t motion_state; /**< 集中式运动状态机 */
 
     /* 取出动作序列控制 */
@@ -245,8 +253,10 @@ void robot_arm_set_ctrl_dt(RobotArm *arm, float dt_s);
 uint8_t robot_arm_start_takeout_sequence(RobotArm *arm, float y, float z, 
                             float pitch, float wait_takeout_suction_angle);
 uint8_t robot_arm_is_takeout_sequence_active(RobotArm *arm);
-void robot_arm_fk(float joint1, float joint2, float joint3, 
+void robot_arm_fk(float joint1, float joint2, float joint3,
                             float *y_out, float *z_out, float *pitch_out);
 void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3]);
+uint8_t arm_is_ready_state(RobotArm *arm);
+uint8_t arm_is_takeout_state(RobotArm *arm);
 
 #endif /* ROBOT_ARM_H */

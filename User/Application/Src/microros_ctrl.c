@@ -337,6 +337,7 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
     log_message(LOG_INFO, "Dispatch,event = %d,mode = %d", req_in->event,
                 req_in->command_mode);
     bool skip = false;
+    static int8_t last_command_mode = -1;
     if (req_in->event == 0) {
         switch (req_in->command_mode) {
             case 0:
@@ -363,19 +364,28 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
             xTaskNotifyGive(catch_feedback_handle);
         }
     } else if (req_in->event == 1) {
-        switch (req_in->command_mode) {
+         switch (req_in->command_mode) {
             case 0:
                 robot_arm_set_state_index(0);
                 break;
             case 1:
                 robot_arm_set_state_index(1);
+                last_command_mode = 1;
+                 break;
                 break;
             case 2:
                 robot_arm_set_state_index(2);
-                robot_arm_set_dynamic_catch_target(
-                    req_in->point.x, req_in->point.y, req_in->point.z);
+                last_command_mode = 2;
                 break;
             case 3:
+                if(last_command_mode == 1) {
+                    robot_arm_set_dynamic_catch_target_up(
+                        req_in->point.x, req_in->point.y, req_in->point.z);
+                } else if(last_command_mode == 2) {
+                 robot_arm_set_dynamic_catch_target_down(
+                    req_in->point.x, req_in->point.y, req_in->point.z);
+                 }
+                last_command_mode = 0;
                 robot_arm_set_state_index(3);
                 break;
             case 4:
@@ -383,6 +393,13 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 break;
             case 5:
                 robot_arm_set_state_index(5);
+                break;
+            case 6:
+                robot_arm_set_state_index(6);
+                break;
+            case 7:
+                robot_arm_set_state_index(7);
+                break;
             default:
                 break;
         }

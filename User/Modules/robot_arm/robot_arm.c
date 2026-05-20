@@ -2,8 +2,8 @@
  * @file robot_arm.c
  * @author xinglu
  * @brief 机械臂驱动模块 (核心算法与动力学层)
- * @version 3.0 
- * @date 2026-05-15
+ * @version 3.1
+ * @date 2026-05-17
  */
 
 #include "robot_arm.h"
@@ -28,7 +28,18 @@ static float arm_wrap_pi(float angle)
 
 static uint8_t arm_is_place_like(arm_status_t status)
 {
-    return (status == ARM_STATE_PLACE) || (status == ARM_STATE_WAIT_TAKEOUT);
+    return (status == ARM_STATE_PLACE) || (status == ARM_STATE_WAIT_TAKEOUT) ||
+           (status == ARM_STATE_TAKEOUT_1) || (status == ARM_STATE_TAKEOUT_2);
+}
+
+uint8_t arm_is_ready_state(RobotArm *arm)
+{
+    return (arm->status == ARM_STATE_READY_1) || (arm->status == ARM_STATE_READY_2);
+}
+
+uint8_t arm_is_takeout_state(RobotArm *arm)
+{
+    return (arm->status == ARM_STATE_TAKEOUT_1) || (arm->status == ARM_STATE_TAKEOUT_2);
 }
 
 static int8_t arm_get_ik_quadrant(float y, float z, float pitch)
@@ -93,7 +104,7 @@ static void arm_detect_state_change(RobotArm *arm)
         arm->latch_type = ARM_LATCH_SUCTION_WAIT;
         arm->suction_wait_start_tick = now;
     }
-    else if (arm_is_place_like(prev) && (curr == ARM_STATE_TAKEOUT)) {
+    else if (arm_is_place_like(prev) && arm_is_takeout_state(arm)) {
         /* 如果已经启动了三步序列，不要覆盖其锁存和过冲设置 */
         if (arm->motion_state == ARM_MOTION_STATE_TAKEOUT_SEQ_BIG) {
             /* 三步序列已启动，保持 SEQ_BIG_ARM_ONLY 锁存，不触发额外过冲 */
@@ -138,7 +149,7 @@ static void arm_update_motion_state(RobotArm *arm, float joint_target[3])
                     if (overshoot_by_layer < 0.0f) overshoot_by_layer = 0.0f;
                     arm->big_arm_overshoot_rad = overshoot_by_layer;
 
-                    if (overshoot_by_layer <= 0.0f) {
+                    if (overshoot_by_layer < 0.0f) {
                         /* 无过冲，直接进入小臂吸盘阶段 */
                         arm->motion_state = ARM_MOTION_STATE_PLACE_SMALL_SUCTION;
                         arm->latch_type = ARM_LATCH_PLACE_SMALL_SUCTION;
@@ -306,6 +317,19 @@ static void arm_update_overshoot(RobotArm *arm, float joint_target[3])
 
 /* ---------------- 锁存处理 ---------------- */
 
+/**
+ * @brief 应用锁存逻辑，控制各关节的运动状态
+ * @param arm 机械臂结构体指针
+ * @param joint_des 期望的三关节角度 [大臂, 小臂, 吸盘]
+ * @param out_joint1_cmd 输出的小臂目标位置
+ * @param out_joint1_speed 输出的小臂目标速度
+ * @param out_joint2_cmd 输出的吸盘目标位置
+ * @param out_joint2_speed 输出的吸盘目标速度
+ * @param small_speed_base 小臂基础速度
+ * @param small_speed_gain 小臂速度增益
+ * @param small_speed_max 小臂最大速度限制
+ * @note 根据当前的锁存类型(latch_type)决定各关节的运动策略
+ */
 static void arm_apply_latch(RobotArm *arm, float joint_des[3], float *out_joint1_cmd, float *out_joint1_speed,
                              float *out_joint2_cmd, float *out_joint2_speed,
                              float small_speed_base, float small_speed_gain, float small_speed_max)
@@ -550,7 +574,7 @@ void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch)
     }
 
     if (arm_is_place_like(arm->last_status) && !arm_is_place_like(arm->status) &&
-        arm->status != ARM_STATE_TAKEOUT && arm->status != ARM_STATE_INIT) {
+        !arm_is_takeout_state(arm) && arm->status != ARM_STATE_INIT) {
         arm->motion_state = ARM_MOTION_STATE_SINGLE_TRANS;
         arm->flags.has_transition = 1;
         arm->flags.transition_done = 0;
@@ -563,6 +587,19 @@ void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch)
         arm->arm_target_pitch = pitch;
 
         arm->flags.place_exit_safety_active = 1;
+    }
+    else if (arm->status == ARM_STATE_CATCH) {
+        /* CATCH: 添加过渡点 (y-200, z+200) */
+        arm->motion_state = ARM_MOTION_STATE_SINGLE_TRANS;
+        arm->flags.has_transition = 1;
+        arm->flags.transition_done = 0;
+
+        arm->final_target_y = y;
+        arm->final_target_z = z;
+        arm->final_target_pitch = pitch;
+        arm->arm_target_y = y - 20.0f;
+        arm->arm_target_z = z + 20.0f;
+        arm->arm_target_pitch = pitch;
     }
     else if (arm->last_status != arm->status && arm_is_place_like(arm->status)) {
         arm->motion_state = ARM_MOTION_STATE_MULTI_TRANS;
@@ -620,7 +657,7 @@ void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch)
         if (arm_is_place_like(arm->status)) {
             arm->big_arm_overshoot_rad = ARM_BIG_ARM_FLIP_OVERSHOOT_FORCE_RAD;
             arm->big_arm_overshoot_armed = 1;
-        } else if (arm->status == ARM_STATE_TAKEOUT) {
+        } else if (arm_is_takeout_state(arm)) {
             arm->big_arm_overshoot_rad = ARM_UPPER_TAKEOUT_BIG_ARM_OVERSHOOT_RAD;
             arm->big_arm_overshoot_armed = 1;
         } else if (arm->flip_transition_dir == 1 && z < 800.0f) {
@@ -839,6 +876,13 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3])
         small_speed_base = ARM_SMALL_CATCH_SPEED_BASE;
         small_speed_gain = ARM_SMALL_CATCH_SPEED_GAIN;
         small_speed_max = ARM_SMALL_CATCH_SPEED_MAX;
+    } else if (arm->status == ARM_STATE_OVERLOOK) {
+        // 小臂速度
+        small_speed_base = ARM_SMALL_SPEED_MAX;
+        small_speed_gain = 2.0f;
+        small_speed_max = ARM_OVERLOOK_SMALL_SPEED;
+        // 吸盘速度
+        suction_speed_max = ARM_OVERLOOK_SUCTION_SPEED;
     } else if (arm->flags.place_exit_safety_active) {
         small_speed_base = ARM_SMALL_PLACE_EXIT_SPEED_BASE;
         small_speed_gain = ARM_SMALL_PLACE_EXIT_SPEED_GAIN;
@@ -892,7 +936,7 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3])
                     &joint2_final_cmd, &joint2_final_speed,
                     small_speed_base, small_speed_gain, small_speed_max);
 
-    uint8_t place_like_mode = arm_is_place_like(arm->status) || (arm->status == ARM_STATE_TAKEOUT);
+    uint8_t place_like_mode = arm_is_place_like(arm->status) || arm_is_takeout_state(arm);
 
     if (arm->latch_type == ARM_LATCH_NONE) {
         if (place_like_mode) {
@@ -933,6 +977,7 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3])
  */
 void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3])
 {
+    // 1. 坐标平移
     float x = x1 + DEFAULT_X;
     float z = z1 + DEFAULT_Z;
 
@@ -941,39 +986,48 @@ void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3])
         z += ARM_3;
     }
 
+    // 2. 姿态解耦，求腕关节坐标
     float x_w = x - ARM_3 * cosf(pitch_angle) - (DEFAULT_ARM3_X - DEFAULT_ARM_1_2) * cosf(pitch_angle);
     float z_w = z - ARM_3 * sinf(pitch_angle);
     float m_2 = x_w * x_w + z_w * z_w;
     float m, b, b2, angle1_1, angle1_2, a, a2, angle2_inner;
     arm_sqrt_f32(m_2, &m);
 
+    // 3. 求大臂角度
     b = arm_clampf((ARM_1 * ARM_1 + m_2 - ARM_2 * ARM_2) / (2 * ARM_1 * m), -1.0f, 1.0f);
     arm_sqrt_f32(1 - b * b, &b2);
     arm_atan2_f32(b2, b, &angle1_1);
     arm_atan2_f32(z_w, x_w, &angle1_2);
 
+    // 4. 求小臂角度
     a = arm_clampf((ARM_1 * ARM_1 + ARM_2 * ARM_2 - m_2) / (2 * ARM_1 * ARM_2), -1.0f, 1.0f);
     arm_sqrt_f32(1 - a * a, &a2);
     arm_atan2_f32(a2, a, &angle2_inner);
 
+    // 根据目标所在的象限分别计算输出角度
     if (x1 >= 0) {
+        // 第一象限：保持原有的几何构型解
         angle[0] = DEFAULT_ANGLE_1 + PI / 2 - angle1_1 - angle1_2;
         angle[1] = angle2_inner - DEFAULT_ANGLE_2;
     } else {
+        // 第二象限：切换到另一个解
         angle[0] = DEFAULT_ANGLE_1 + PI / 2 + angle1_1 - angle1_2;
         angle[1] = 2 * PI + (DEFAULT_ANGLE_2 - angle2_inner);
     }
 
+    // 保证大臂不往后倒撞到已放置的箱子
     if (angle[0] < 0.0f) angle[0] = 0;
 
+    // 5. 求吸盘角度
     angle[2] = -pitch_angle - angle[0] + angle[1] + DEFAULT_ANGLE_3;
 
+    // 防止吸盘反转
     if (angle[2] < -0.1f) angle[2] += 2 * PI;
     if (angle[2] > 2 * PI) angle[2] -= 2 * PI;
 }
 
 /**
- * @brief 正运动学解算
+ * @brief 正运动学解算(由于吸盘关节电机回传数据有问题，暂时无法使用)
  * @param joint1 大臂角度
  * @param joint2 小臂角度
  * @param joint3 吸盘角度
