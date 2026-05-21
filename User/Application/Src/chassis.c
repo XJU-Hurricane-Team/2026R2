@@ -383,7 +383,7 @@ static void chassis_mode_manual_update(void) {
  * @brief 底盘自动模式更新：根据导航参数计算目标转速
  */
 static void chassis_mode_auto_update(void) {
-    chassis_update_target_rpm(nav_pram.linear_x, nav_pram.linear_y,
-                              nav_pram.angular_z);
+    chassis_update_target_rpm(nav_sub_pram.linear_x, nav_sub_pram.linear_y,
+                              nav_sub_pram.angular_z);
 
 }

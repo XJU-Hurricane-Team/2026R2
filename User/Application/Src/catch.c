@@ -226,7 +226,7 @@ static void catch_handle_recognize(void) {
         !recognize_published) {
         log_message(LOG_INFO, "Recognized! distance_mm = %d", distance_mm);
         catch_set_state(CATCH_STATE_GRAB);
-        stair_microros_publish(0);
+        nav_publish(0);
         xTaskNotifyGive(catch_feedback_handle);
         recognize_published = true;
     }

@@ -108,8 +108,6 @@ static arm_status_t arm_status_from_index(uint8_t index) {
  */
 void robot_arm_set_dynamic_catch_target_up(float y, float x, float z) {
     /* 将米单位转换为毫米，并校准摄像头与吸盘中心的偏移补偿 */
-    // g_dynamic_target.y = y * 1000.0f + 200.0f - 55.0f + 20.0f;
-    // g_dynamic_target.z = z * 1000.0f + 10.0f + 90.0f;
     g_dynamic_target.y = y * 1000.0f + 200.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
     g_dynamic_target.z = z * 1000.0f + 10.0f + CAM_TO_CAT_Z_OFFSET + 30.0f;
 
@@ -124,22 +122,12 @@ void robot_arm_set_dynamic_catch_target_up(float y, float x, float z) {
  * @param z 动态 Z 坐标 (m)
  */
 void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
-    /* 将米单位转换为毫米，并校准摄像头与吸盘中心的偏移补偿 */
-    // g_dynamic_target.y = (y * 1000.0f + 200.0f - 55.0f + 20.0f) * cosf(- CATCH_READY_2_ANGEL);
-    // g_dynamic_target.z = - (y * 1000.0f + 10.0f + 90.0f) * sinf(- CATCH_READY_2_ANGEL);
-    // g_has_dynamic_target = 1;
-
-    /* 摄像头坐标 (带偏移补偿) */
-    // float y_cam = y * 1000.0f + 200.0f - 55.0f + 20.0f;
-    // float z_cam = z * 1000.0f + 10.0f + 90.0f;
     float theta = CATCH_READY_2_ANGEL;
 
     float y_cam = y * cosf(theta) - z * sinf(theta);
     float z_cam = y * sinf(theta) + z * cosf(theta);
 
     /* 旋转到机械臂水平坐标系 */
-    // g_dynamic_target.y = y_cam * 1000.0f + 420.0f - 55.0f * sin(theta) + 20.0f;
-    // g_dynamic_target.z = z_cam * 1000.0f - 50.0f + 75.0f * cosf(theta);
     g_dynamic_target.y = y_cam * 1000.0f + 420.0f - (CAM_TO_CAT_Y_OFFSET * cosf(theta) + CAM_TO_CAT_Z_OFFSET * sinf(theta)) + 20.0f;
     g_dynamic_target.z = z_cam * 1000.0f - 50.0f + (CAM_TO_CAT_Y_OFFSET * sinf(theta) + CAM_TO_CAT_Z_OFFSET * cosf(theta)) + 30.0f;
     g_has_dynamic_target = 1;
