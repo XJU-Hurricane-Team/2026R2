@@ -383,17 +383,17 @@ static uint8_t pump_read_adc(uint16_t *out_value)
         return 0;
     }
 
-    if (HAL_ADC_Start(&hadc3) != HAL_OK) {
+    if (HAL_ADC_Start(&hadc1) != HAL_OK) {
         return 0;
     }
 
-    if (HAL_ADC_PollForConversion(&hadc3, 2) != HAL_OK) {
-        HAL_ADC_Stop(&hadc3);
+    if (HAL_ADC_PollForConversion(&hadc1, 2) != HAL_OK) {
+        HAL_ADC_Stop(&hadc1);
         return 0;
     }
 
-    *out_value = (uint16_t)HAL_ADC_GetValue(&hadc3);
-    HAL_ADC_Stop(&hadc3);
+    *out_value = (uint16_t)HAL_ADC_GetValue(&hadc1);
+    HAL_ADC_Stop(&hadc1);
 
     return 1;
 }
