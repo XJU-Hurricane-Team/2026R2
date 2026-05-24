@@ -182,6 +182,7 @@ static void catch_remote_state_switch(uint8_t key, remote_key_event_t event) {
 
         case CATCH_STATE_RECOGNIZE_KEY: {
             catch_set_state(CATCH_STATE_RECOGNIZE);
+            nav_publish(3); 
         } break;
 
         case CATCH_STATE_DONE_KEY: {
