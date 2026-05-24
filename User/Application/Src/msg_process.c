@@ -8,7 +8,7 @@
 
 #include "includes.h"
 
-#define REMOTE_UART_HANDLE &huart1
+#define REMOTE_UART_HANDLE &huart2
 #define NUC_UART_HANDLE    &huart5
 #define REMOTE_SEND_PERIOD 100 /* 数据上报周期，单位: ms */
 
