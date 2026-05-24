@@ -27,15 +27,19 @@
 
 #define SENSOR_GPIO_PORT_0       GPIOE
 #define SENSOR_GPIO_PORT_1       GPIOF
+#define PROXIMITY_SENSOR_PORT    GPIOC
 #define FRONT_SENSOR_PIN_0       GPIO_PIN_2
 #define FRONT_SENSOR_PIN_1       GPIO_PIN_2
 #define MIDDLE_SENSOR_PIN_0      GPIO_PIN_4
 #define MIDDLE_SENSOR_PIN_1      GPIO_PIN_9
 #define REAR_SENSOR_PIN_0        GPIO_PIN_5
 #define REAR_SENSOR_PIN_1        GPIO_PIN_10
+#define PROXIMITY_SENSOR_PIN_0   GPIO_PIN_2
+#define PROXIMITY_SENSOR_PIN_1   GPIO_PIN_3
 
 #define LIFT_TARGET_CATCH_DEG    5.0f
-#define LIFT_TARGET_DEG_MAX      12.275f
+#define LIFT_TARGET_DEG_UP_MAX   5.82f
+#define LIFT_TARGET_DEG_DOWN_MAX 12.275f
 #define LIFT_TARGET_DEG_UP_SEQ   0.0f
 #define LIFT_TARGET_DEG_DOWN_SEQ 12.275f
 #define LIFT_TARGET_DEG_STEP     0.025f
@@ -111,6 +115,8 @@ static TaskHandle_t lift_state_task_handle;
 static void lift_state_task(void *pvParameters);
 static TaskHandle_t lift_sequence_task_handle;
 static void lift_sequence_task(void *pvParameters);
+static TaskHandle_t chassis_proximity_switch_task_handle;
+static void chassis_proximity_switch_task(void *pvParameters);
 
 static void lift_bottom_init(void);
 static void lift_tasks_init(void);
@@ -223,6 +229,25 @@ static void lift_sequence_task(void *pvParameters) {
     }
 }
 
+static bool g_chassis_proximity_check_active = false;
+
+static void chassis_proximity_switch_task(void *pvParameters) {
+    (void)pvParameters;
+    while (1) {
+        if (!g_chassis_proximity_check_active) {
+            (void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+            continue;
+        }
+        bool proximity_1_low = (HAL_GPIO_ReadPin(PROXIMITY_SENSOR_PORT, PROXIMITY_SENSOR_PIN_0) == GPIO_PIN_RESET);
+        bool proximity_2_low = (HAL_GPIO_ReadPin(PROXIMITY_SENSOR_PORT, PROXIMITY_SENSOR_PIN_1) == GPIO_PIN_RESET);
+        if (proximity_1_low || proximity_2_low) {
+            nav_publish(0);
+            g_chassis_proximity_check_active = false; 
+        }
+        vTaskDelay(5); 
+    }
+}
+
 // 切换模式：遥控按键回调处理
 void lift_switch_mode(uint8_t key, remote_key_event_t event) {
     /* 抬升处于动作序列，禁止LIFT_STOP_KEY以外的按键 */
@@ -322,6 +347,13 @@ bool lift_is_sequence_running(void) {
     return (g_lift_handle.lift_fsm.action != 0);
 }
 
+void chassis_proximity_switch(void) {
+    g_chassis_proximity_check_active = true;
+    if (chassis_proximity_switch_task_handle != NULL) {
+        xTaskNotifyGive(chassis_proximity_switch_task_handle); // 唤醒接近开关任务
+    }
+}
+
 // 初始化抬升模块：电机、任务、按键回调
 void lift_init(void) {
     lift_bottom_init();
@@ -382,6 +414,11 @@ static void lift_tasks_init(void) {
     if (xTaskCreate(lift_sequence_task, "lift_sequence_task", 256, NULL, 4,
                     &lift_sequence_task_handle) != pdPASS) {
         log_message(LOG_ERROR, "Failed to create lift_sequence_task.");
+    }
+
+    if (xTaskCreate(chassis_proximity_switch_task, "chassis_proximity_switch_task", 256, NULL, 4,
+                    &chassis_proximity_switch_task_handle) != pdPASS) {
+        log_message(LOG_ERROR, "Failed to create chassis_proximity_switch_task.");
     }
 }
 
@@ -635,12 +672,12 @@ static bool dm_position_check(lift_state_t state) {
 
 // 限制目标角度在最大范围内
 static float lift_limit_target(float target_degree) {
-    /* 正向限位为 +6.0f，负向限位为 -LIFT_TARGET_DEG_MAX（-16.0f） */
-    if (target_degree > 5.82f) {
-        return 5.82f;
+    /* 正向限位为 +6.0f，负向限位为 -LIFT_TARGET_DEG_DOWN_MAX（-16.0f） */
+    if (target_degree > LIFT_TARGET_DEG_UP_MAX) {
+        return LIFT_TARGET_DEG_UP_MAX;
     }
-    if (target_degree < -LIFT_TARGET_DEG_MAX) {
-        return -LIFT_TARGET_DEG_MAX;
+    if (target_degree < -LIFT_TARGET_DEG_DOWN_MAX) {
+        return -LIFT_TARGET_DEG_DOWN_MAX;
     }
     return target_degree;
 }

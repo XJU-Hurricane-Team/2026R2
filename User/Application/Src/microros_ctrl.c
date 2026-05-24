@@ -428,6 +428,8 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
             case 1:
                 lift_set_stair_mode(2); // 下台阶
                 break;
+            case 2:
+                chassis_proximity_switch();
             default:
                 break;
         }
