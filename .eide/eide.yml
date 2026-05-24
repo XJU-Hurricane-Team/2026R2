@@ -22,6 +22,7 @@ virtualFolder:
         - path: User/Bsp/servo/servo.c
         - path: User/Bsp/npn_switch/npn_switch.c
         - path: User/Bsp/iic/iic.c
+        - path: User/Bsp/ws2812/ws2812.c
       folders:
         - name: VL53L1
           files:
@@ -167,6 +168,8 @@ targets:
       - CubeMX/Core/Src/Backup
       - CubeMX/Core/Src/sysmem.c
       - CubeMX/Core/Src/syscalls.c
+    settings:
+      debugger: cortex-debug
     toolchain: GCC
     toolchainConfigMap:
       AC6:
@@ -272,4 +275,4 @@ targets:
         resetMode: default
         runAfterProgram: true
         speed: 4000
-    uploader: JLink
+    uploader: OpenOCD

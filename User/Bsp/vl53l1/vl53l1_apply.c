@@ -10,10 +10,10 @@
 
 // XSHUT 引脚定义（低电平有效，拉低=复位，拉高=使能）
 #define VL53L1_1_XSHUT_GPIO_PORT          GPIOA
-#define VL53L1_1_XSHUT_GPIO_PIN           GPIO_PIN_1 // 根据实际情况填写
+#define VL53L1_1_XSHUT_GPIO_PIN           GPIO_PIN_6 // 根据实际情况填写
 
 #define VL53L1_2_XSHUT_GPIO_PORT          GPIOA
-#define VL53L1_2_XSHUT_GPIO_PIN           GPIO_PIN_2 // 根据实际情况填写
+#define VL53L1_2_XSHUT_GPIO_PIN           GPIO_PIN_7 // 根据实际情况填写
 
 VL53L1_Dev_t g_vl53l1_dev;                  // 数据结构体
 VL53L1_DEV g_vl53l1_handle = &g_vl53l1_dev; // 设备句柄
@@ -79,23 +79,39 @@ void vl53l1_apply_init(void) {
     HAL_GPIO_WritePin(VL53L1_1_XSHUT_GPIO_PORT, VL53L1_1_XSHUT_GPIO_PIN, GPIO_PIN_SET);
     vTaskDelay(pdMS_TO_TICKS(2)); // 等待2ms确保传感器启动
 
-    g_vl53l1_handle->I2cDevAddr = VL53L1_APPLY_I2C_ADDR;  // 0x52
+    // 【修复1】传感器1刚唤醒，硬件地址是默认的 0x52，句柄必须用 0x52 才能连上它
+    g_vl53l1_handle->I2cDevAddr = VL53L1_2_APPLY_I2C_ADDR;  // 0x52
     if (VL53L1_WaitDeviceBooted(g_vl53l1_handle) != VL53L1_ERROR_NONE) return;
 
-    // 修改传感器1的地址为 0x54
+    // 【修复2】通过 0x52 地址发送指令，把硬件地址修改为 0x54
     if (VL53L1_SetDeviceAddress(g_vl53l1_handle, VL53L1_APPLY_I2C_ADDR) != VL53L1_ERROR_NONE) return;
-    g_vl53l1_handle->I2cDevAddr = VL53L1_2_APPLY_I2C_ADDR;  // 更新句柄地址为 0x54
+    
+    // 【修复3】硬件地址修改成功后，将句柄目标地址同步为 0x54！
+    g_vl53l1_handle->I2cDevAddr = VL53L1_APPLY_I2C_ADDR;    // 0x54
 
+    // 此时句柄为 0x54，开始配置测距参数
     g_vl53l1_ready = vl53l1_apply_configure(g_vl53l1_handle);
 
     // ========== 第三步：初始化传感器2（用默认地址） ==========
     HAL_GPIO_WritePin(VL53L1_2_XSHUT_GPIO_PORT, VL53L1_2_XSHUT_GPIO_PIN, GPIO_PIN_SET);
     vTaskDelay(pdMS_TO_TICKS(2));
 
-    g_vl53l1_handle2->I2cDevAddr = VL53L1_2_APPLY_I2C_ADDR;  
+    // 传感器2保持默认的 0x52 即可
+    g_vl53l1_handle2->I2cDevAddr = VL53L1_2_APPLY_I2C_ADDR; // 0x52
     if (VL53L1_WaitDeviceBooted(g_vl53l1_handle2) != VL53L1_ERROR_NONE) return;
 
     g_vl53l1_ready &= vl53l1_apply_configure(g_vl53l1_handle2);
+
+    // HAL_GPIO_WritePin(VL53L1_2_XSHUT_GPIO_PORT, VL53L1_2_XSHUT_GPIO_PIN, GPIO_PIN_SET); 
+    // vTaskDelay(pdMS_TO_TICKS(2));
+	// g_vl53l1_handle->I2cDevAddr = VL53L1_2_APPLY_I2C_ADDR;
+
+	// if (VL53L1_WaitDeviceBooted(g_vl53l1_handle) != VL53L1_ERROR_NONE) {
+	// 	return;
+	// }
+
+	// g_vl53l1_ready = vl53l1_apply_configure(g_vl53l1_handle);
+	// return;
 }
 
 

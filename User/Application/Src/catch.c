@@ -245,8 +245,8 @@ static void catch_feedback_task(void *pvParameters) {
 
                 while (catch_state == CATCH_STATE_RECOGNIZE) {
                     uint16_t dist = 0;
-                    if (vl53l1_apply_get_distance_mm(&dist, g_vl53l1_handle)) {
-                        if (dist < VL53L1_APPLY_DISTANCE_THRESHOLD_MM) {
+                    if (vl53l1_apply_get_distance_mm(&dist, g_vl53l1_handle2)) {
+                        if (dist < VL53L1_APPLY_DISTANCE_THRESHOLD_MM && dist > 0) {
                             log_message(LOG_INFO, "Recognized! dist = %d",
                                         dist);
                             nav_publish(0);
@@ -269,14 +269,14 @@ static void catch_feedback_task(void *pvParameters) {
 
                     for (int i = 0; i < 3; i++) {
                         if (vl53l1_apply_get_distance_mm(&dist,
-                                                         g_vl53l1_handle2)) {
+                                                         g_vl53l1_handle)) {
                             total_dist += dist;
                             valid_count++;
                         }
                         vTaskDelay(pdMS_TO_TICKS(30));
                     }
 
-                    if (valid_count > 0 && (total_dist / valid_count) <= 100) {
+                    if (total_dist > 0 && valid_count > 0 && (total_dist / valid_count) <= 100) {
                         control_dispatch_publish(1); // 成功抓取
                     } else {
                         control_dispatch_publish(2); // 抓取失败
