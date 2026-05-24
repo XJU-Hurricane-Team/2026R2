@@ -1,9 +1,9 @@
 /**
  * @file arm_ctrl.h
  * @author xinglu
- * @brief »úĞµ±Û¿ØÖÆ (Ó¦ÓÃ²ã½Ó¿ÚÓë×´Ì¬¹ÜÀí)
- * @version 3.0
- * @date 2026-05-15
+ * @brief æœºæ¢°è‡‚æ§åˆ¶ (åº”ç”¨å±‚æ¥å£ä¸çŠ¶æ€ç®¡ç†)
+ * @version 3.1
+ * @date 2026-05-17
  */
 
 #ifndef __ARM_CTRL_H
@@ -11,81 +11,57 @@
 
 #include "robot_arm/robot_arm.h"
 
-/* ================== Ó¦ÓÃ²ãºê¶¨Òå ================== */
-#define ARM_USE_REMOTE_KEY          0           /**< ÊÇ·ñÊ¹ÓÃÒ£¿ØÆ÷°´¼üÇĞ»»×´Ì¬Î» (0:½ûÓÃ, 1:ÆôÓÃ) */
-#define ARM_SWITCH_KEY              10          /**< Ò£¿ØÆ÷Ó³ÉäÆğÊ¼¼üÖµ */
-#define ARM_REMOTE_KEY_COUNT        6U          /**< Ö§³ÖµÄÒ£¿ØÆ÷°´¼üÊıÁ¿ */
-#define ARM_TASK_PERIOD_MS          20          /**< »úĞµ±Û¿ØÖÆÈÎÎñÖÜÆÚ (ºÁÃë) */
-#define ARM_REACH_POS_TOL_MM        5.0f        /**< Î»ÖÃµ½Î»ÅĞ¶¨Èİ²î (mm) */
-#define ARM_REACH_JOINT_TOL_RAD     0.05f       /**< ¹Ø½Ú½Çµ½Î»ÅĞ¶¨Èİ²î (rad) */
+/* ================== åº”ç”¨å±‚å®å®šä¹‰ ================== */
+#define ARM_USE_REMOTE_KEY                                                     \
+    0 /**< æ˜¯å¦ä½¿ç”¨é¥æ§å™¨æŒ‰é”®åˆ‡æ¢çŠ¶æ€ä½ (0:ç¦ç”¨, 1:å¯ç”¨) */
+#define ARM_SWITCH_KEY          10    /**< é¥æ§å™¨æ˜ å°„èµ·å§‹é”®å€¼ */
+#define ARM_REMOTE_KEY_COUNT    9U    /**< æ”¯æŒçš„é¥æ§å™¨æŒ‰é”®æ•°é‡ */
+#define ARM_TASK_PERIOD_MS      20    /**< æœºæ¢°è‡‚æ§åˆ¶ä»»åŠ¡å‘¨æœŸ (æ¯«ç§’) */
+#define ARM_REACH_POS_TOL_MM    5.0f  /**< ä½ç½®åˆ°ä½åˆ¤å®šå®¹å·® (mm) */
+#define ARM_REACH_JOINT_TOL_RAD 0.05f /**< å…³èŠ‚è§’åˆ°ä½åˆ¤å®šå®¹å·® (rad) */
 
-#define ARM_USE_PUMP_ADC_CHECK       0           /**< ÊÇ·ñÊ¹ÓÃÆø±ÃADCÑ¹Á¦¼ì²â */
-#define PUMP_ADC_CHANNEL             ADC_CHANNEL_7
-#define PUMP_ADC_GPIO_PORT           GPIOD
-#define PUMP_ADC_GPIO_PIN            GPIO_PIN_10
-#define PUMP_ADC_READY_HIGH          3000U       /**< ×¥È¡³É¹¦ÅĞ¶¨µÄ¸ßÑ¹ãĞÖµ */
-#define PUMP_ADC_READY_LOW           300U        /**< ÊÍ·Å³É¹¦ÅĞ¶¨µÄµÍÑ¹ãĞÖµ */
+#define ARM_USE_PUMP_ADC_CHECK  1     /**< æ˜¯å¦ä½¿ç”¨æ°”æ³µADCå‹åŠ›æ£€æµ‹ */
+#define PUMP_ADC_READY_LOW      2000U /**< æŠ“å–æˆåŠŸåˆ¤å®šçš„ä½å‹é˜ˆå€¼ */
+#define PUMP_ADC_READY_HIGH     3000U /**< é‡Šæ”¾æˆåŠŸåˆ¤å®šçš„é«˜å‹é˜ˆå€¼ */
 
-#define FIRST_POINT_Z               (493.991)    /**< µÚÒ»ÅÅµ×²ã»ù×¼¸ß¶È (mm) */
-#define FIRST_POINT_Z_LOW           280.0f       /**< ×¥È¡Î»ÖÃ»ù×¼¸ß¶È (mm) */
+#define CATCH_READY_2_ANGEL                                                    \
+    -0.893f /**< READY_2 å¸ç›˜å…³èŠ‚ç›¸å¯¹äºæ°´å¹³é¢æ—‹è½¬è§’åº¦ (rad) */
+#define FIRST_POINT_Z     (493.991) /**< ç¬¬ä¸€æ’åº•å±‚åŸºå‡†é«˜åº¦ (mm) */
+#define FIRST_POINT_Z_LOW 280.0f    /**< æŠ“å–ä½ç½®åŸºå‡†é«˜åº¦ (mm) */
 
-/* ================== Ó¦ÓÃ²ã½á¹¹ÌåÓëÃ¶¾Ù ================== */
+#define CAM_TO_CAT_Y_OFFSET                                                    \
+    66.445f /**< æ‘„åƒå¤´åæ ‡ç³»ä¸å¸ç›˜åæ ‡ç³» Y è½´åç§» (mm) */
+#define CAM_TO_CAT_Z_OFFSET                                                    \
+    66.374f /**< æ‘„åƒå¤´åæ ‡ç³»ä¸å¸ç›˜åæ ‡ç³» Z è½´åç§» (mm) */
+
+/* ================== åº”ç”¨å±‚ç»“æ„ä½“ä¸æšä¸¾ ================== */
 
 /**
- * @brief Ä¿±êµãÎ»½á¹¹Ìå (µÑ¿¨¶û¿Õ¼ä)
+ * @brief ç›®æ ‡ç‚¹ä½ç»“æ„ä½“ (ç¬›å¡å°”ç©ºé—´)
  */
 typedef struct {
-    float y;        /**< Ç°ºó·½Ïò×ø±ê (mm) */
-    float z;        /**< ´¹Ö±¸ß¶È (mm) */
-    float pitch;    /**< Ä©¶ËÎüÅÌ×ËÌ¬ (»¡¶È£¬Ë®Æ½Îª0£¬ÏÂÇãÎª¸º) */
+    float y;     /**< å‰åæ–¹å‘åæ ‡ (mm) */
+    float z;     /**< å‚ç›´é«˜åº¦ (mm) */
+    float pitch; /**< æœ«ç«¯å¸ç›˜å§¿æ€ (å¼§åº¦ï¼Œæ°´å¹³ä¸º0ï¼Œä¸‹å€¾ä¸ºè´Ÿ) */
 } arm_target_point_t;
 
 /**
- * @brief Æø±ÃµÈ´ı×´Ì¬Ã¶¾Ù
+ * @brief æ°”æ³µç­‰å¾…çŠ¶æ€æšä¸¾
  */
 typedef enum {
-    PUMP_WAIT_NONE = 0,    /**< ÎŞµÈ´ı×´Ì¬ */
-    PUMP_WAIT_CATCH,       /**< µÈ´ı×¥È¡³É¹¦ */
-    PUMP_WAIT_PLACE,       /**< µÈ´ıÊÍ·Å³É¹¦ */
+    PUMP_WAIT_NONE = 0, /**< æ— ç­‰å¾…çŠ¶æ€ */
+    PUMP_WAIT_CATCH,    /**< ç­‰å¾…æŠ“å–æˆåŠŸ */
+    PUMP_WAIT_PLACE,    /**< ç­‰å¾…é‡Šæ”¾æˆåŠŸ */
 } pump_wait_state_t;
 
-/* ================== API ÉùÃ÷ ================== */
+/* ================== API å£°æ˜ ================== */
 
-/**
- * @brief ³õÊ¼»¯»úĞµ±ÛÓ¦ÓÃ²ãÓë RTOS ÈÎÎñ
- */
 void robot_arm_init(void);
-
-/**
- * @brief ÉèÖÃ»úĞµ±Ûµ±Ç°Ä¿±ê×´Ì¬Ë÷Òı
- * @param index ×´Ì¬Ë÷Òı (0~5)
- */
 void robot_arm_set_state_index(uint8_t index);
-
-/**
- * @brief Ó¦ÓÃ/ÏÂ·¢Ô¤ÉèÄ¿±êµãÎ»
- * @param index ×´Ì¬Ë÷Òı
- */
 void robot_arm_apply_target(uint8_t index);
-
-/**
- * @brief ×¢²á¶¯Ì¬×¥È¡Ä¿±ê (ÓÉ MicroROS µ÷ÓÃ)
- * @param x ¶¯Ì¬ X ×ø±ê (m)
- * @param y ¶¯Ì¬ Y ×ø±ê (m)
- * @param z ¶¯Ì¬ Z ×ø±ê (m)
- */
-void robot_arm_set_dynamic_catch_target(float x, float y, float z);
-
-/**
- * @brief ÊÖ¶¯ÉèÖÃ·ÅÖÃ²ã¼¶Ë÷Òı
- * @param place_idx ·ÅÖÃ²ã¼¶Ë÷Òı (0~2)
- */
+void robot_arm_set_dynamic_catch_target_up(float y, float x, float z);
+void robot_arm_set_dynamic_catch_target_down(float y, float x, float z);
 void robot_arm_set_place_index(uint8_t place_idx);
-
-/**
- * @brief ÊÖ¶¯ÉèÖÃ´ıÈ¡³ö²ã¼¶Ë÷Òı
- * @param takeout_idx È¡³ö²ã¼¶Ë÷Òı (0~2)
- */
 void robot_arm_set_wait_takeout_index(uint8_t takeout_idx);
 
 #endif /* __ARM_CTRL_H */

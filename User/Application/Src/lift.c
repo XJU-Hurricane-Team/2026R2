@@ -243,13 +243,13 @@ void lift_switch_mode(uint8_t key, remote_key_event_t event) {
             log_message(LOG_INFO, "Trigger Lift UP sequence.");
             lift_seq_start(1);
             // lift_publish_if_auto(1);
-            stair_microros_publish(1);
+            nav_publish(1);
             break;
 
         case LIFT_SEQ_DOWN_KEY:
             log_message(LOG_INFO, "Trigger Lift DOWN sequence.");
             lift_seq_start(2);
-            stair_microros_publish(1);
+            nav_publish(1);
             //lift_publish_if_auto(2);
             break;
 
@@ -654,7 +654,7 @@ static void lift_set_target(float target_degree) {
 static void lift_publish_if_auto(uint8_t code) {
     if (g_lift_handle.is_auto_mode) {
         if (code == 0) {
-            stair_microros_publish((int8_t)code);
+            nav_publish((int8_t)code);
         } else {
             control_dispatch_publish((int8_t)code);
         }

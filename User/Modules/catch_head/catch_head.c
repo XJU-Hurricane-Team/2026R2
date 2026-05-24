@@ -31,7 +31,7 @@ static void catch_head_apply_default_targets(void);
 
 /**
  * @brief 初始化夹爪舵机
- * @note 使用 TIM4 CH2 作为舵机输出通道，并配置上下限脉宽
+ * @note 使用 TIM1 CH1 作为舵机输出通道，并配置上下限脉宽
  */
 void catch_head_servo_init(void) {
 	servo_init(&g_gripper_servo, &htim4, TIM_CHANNEL_2, 1300, 500);

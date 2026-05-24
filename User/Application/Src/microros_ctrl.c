@@ -4,6 +4,11 @@
  * @brief   MicroROS 控制模块.
  * @version 1.0
  * @date    2026-04-7
+ * * * @details 本文件包含 MicroROS 节点的核心控制逻辑，按功能划分为以下四大子模块：
+ * 1. 【任务执行模块】 (MicroROS): 节点/执行器的初始化与 RTOS 轮询任务。
+ * 2. 【导航控制模块】 (Nav): 处理底盘速度订阅与导航状态发布。
+ * 3. 【底层控制调度】 (Dispatch): 处理多动作指令（如机械臂、夹爪，上下台阶）的服务回调。
+ * 4. 【日志传输模块】 (Logger): 负责系统字符串与数组数据的 ROS 话题发布。
  */
 
 #include "includes.h"
@@ -31,7 +36,14 @@ static SemaphoreHandle_t microros_rcl_mutex = NULL;
 
 // 导航模块
 static rcl_subscription_t nav_subscriber = {0};
-custom_msg__msg__SpeedHeading nav_pram = {0};
+custom_msg__msg__SpeedHeading nav_sub_pram = {0};
+static rcl_publisher_t nav_publisher = {0};
+static std_msgs__msg__Int8 nav_pub_pram = {0};
+
+void nav_module_init(void);
+void nav_sub_callback(const void *msgin);
+void nav_publish(int8_t status);
+
 
 // 控制调度模块
 static rcl_service_t control_dispatch_service = {0};
@@ -41,12 +53,10 @@ static custom_msg__srv__ControlDispatch_Response control_dispatch_response = {
     0};
 static std_msgs__msg__Int8 control_dispatch_pub_pram = {0};
 
-// 台阶模块
-static rcl_publisher_t stair_publisher = {0};
-static std_msgs__msg__Int8 stair_pub_pram = {0};
+void control_dispatch_init(void);
+void control_dispatch_callback(const void *request_msg, void *response_msg);
+void control_dispatch_publish(int8_t status);
 
-// 机械臂模块
-static geometry_msgs__msg__Point arm_target_msg = {0};
 
 // 日志模块句柄
 static rcl_publisher_t log_msg_publisher = {0};
@@ -54,23 +64,19 @@ static rcl_publisher_t log_data_publisher = {0};
 std_msgs__msg__String ros_log_msg = {0};
 std_msgs__msg__Float32MultiArray ros_log_data = {0};
 static char ros_string_buffer[LOG_MSG_BUFFER_SIZE] = {0};
-static float ros_data_buffer[LOG_DATA_COUNT + 1] = {
-    0}; /* 预留第一个元素存放数据个数 */
+static float ros_data_buffer[LOG_DATA_COUNT + 1] = {0}; // 预留第一个元素存放数据个数 
 log_msg_packet_t log_msg_packet = {0};
 log_data_packet_t log_data_packet = {0};
-
-void nav_module_init(void);
-void nav_sub_callback(const void *msgin);
-
-void control_dispatch_init(void);
-void control_dispatch_callback(const void *request_msg, void *response_msg);
-
-void stair_microros_init(void);
-void stair_microros_publish(int8_t status);
 
 void logger_module_init(void);
 void microros_log_msg_cb(const char *data, uint16_t len);
 void microros_log_data_cb(const log_data_packet_t *packet);
+
+
+/* ======================== 【任务执行模块】 ============================ */
+#pragma region MicroROS_Task
+/** @defgroup MicroROS_Task 任务执行模块，负责MicroROS节点的执行 */
+/** @{ */
 
 /**
  * @brief 初始化MicroROS
@@ -150,7 +156,7 @@ int microros_init(void) {
         return (int)ret;
     }
 
-    ret = rclc_node_init_default(&node, "chassis", "", &support);
+    ret = rclc_node_init_default(&node, "board", "", &support);
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR, "microros_init: node init failed, ret=%d\n",
                     (int)ret);
@@ -168,36 +174,44 @@ int microros_init(void) {
 }
 
 /**
- * @brief 导航任务
+ * @brief MicroROS任务
  * 
  * @param pvParameters 
  */
-void nav_task(void *pvParameters) {
+void microros_task(void *pvParameters) {
     UNUSED(pvParameters);
 
     nav_module_init();
-    vTaskDelay(1000); // 确保导航模块先于抓取模块初始化
+    vTaskDelay(1000); // 初始化缓冲
     control_dispatch_init();
-    vTaskDelay(1000); // 确保抓取模块先于台阶模块初始化
-    stair_microros_init();
+    vTaskDelay(1000); // 初始化缓冲
+
 
     while (1) {
         if (microros_rcl_mutex != NULL &&
             xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-            rclc_executor_spin_some(&executor, 5000000); /* 5ms */
+            rclc_executor_spin_some(&executor, 5000000); // 5ms
             xSemaphoreGive(microros_rcl_mutex);
         }
         vTaskDelay(5);
     }
 }
 
+/** @} */
+#pragma endregion
+
+/* ======================== 【导航控制模块】 ============================ */
+#pragma region Nav
+/** @defgroup Nav 导航控制模块, 负责与导航交互 */
+/** @{ */
+
 /**
  * @brief 初始化导航模块
  * 
  */
 void nav_module_init(void) {
-
-    rcl_ret_t ret = rclc_subscription_init_best_effort(
+    rcl_ret_t ret = 0;
+     ret |= rclc_subscription_init_best_effort(
         &nav_subscriber, &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(custom_msg, msg, SpeedHeading),
         "/nav_speed_heading_data");
@@ -206,14 +220,48 @@ void nav_module_init(void) {
                     "nav_module_init: subscription init failed, ret=%d\n",
                     (int)ret);
         return;
-    } else {
-        log_message(LOG_INFO, "nav_module_init: subscription init success\n");
-    }
+    } 
 
-    ret = rclc_executor_add_subscription(&executor, &nav_subscriber, &nav_pram,
+    ret |= rclc_executor_add_subscription(&executor, &nav_subscriber, &nav_sub_pram,
                                          &nav_sub_callback, ON_NEW_DATA);
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR, "nav_module_init: add subscription failed");
+    }
+
+    ret |= rclc_publisher_init_default(
+        &nav_publisher, &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/nav_topic");
+    if (ret != RCL_RET_OK) {
+        log_message(LOG_ERROR,
+                    "nav_module_init: publisher init failed, ret=%d\n",
+                    (int)ret);
+    } 
+
+    if (ret == RCL_RET_OK)
+    {
+        log_message(LOG_INFO, "nav_module init successed");
+    }
+    
+   
+}
+
+/**
+ * @brief 导航动作状态发布函数
+ */
+void nav_publish(int8_t status) {
+    nav_pub_pram.data = status;
+    if (microros_rcl_mutex != NULL &&
+        xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        rcl_ret_t pub_ret =
+            rcl_publish(&nav_publisher, &nav_pub_pram, NULL);
+        if (pub_ret != RCL_RET_OK) {
+            log_message(LOG_ERROR, "nav_publish: publish failed\n");
+        } else {
+            log_message(LOG_INFO,
+                        "nav_publish: pub successed, status=%d\n",
+                        status);
+        }
+        xSemaphoreGive(microros_rcl_mutex);
     }
 }
 
@@ -223,11 +271,19 @@ void nav_module_init(void) {
  * @param msgin 
  */
 void nav_sub_callback(const void *msgin) {
-    nav_pram = *(const custom_msg__msg__SpeedHeading *)msgin;
+    nav_sub_pram = *(const custom_msg__msg__SpeedHeading *)msgin;
 }
 
+/** @} */
+#pragma endregion
+
+/* ======================== 【底层控制调度模块】 ============================ */
+#pragma region Dispatch
+/** @defgroup Dispatch 底层控制调度模块。负责底层夹爪，机械臂等与上位机的交互 */
+/** @{ */
+
 /**
- * @brief 初始化抓取模块
+ * @brief 初始化底层控制模块
  * 
  */
 void control_dispatch_init(void) {
@@ -266,43 +322,6 @@ void control_dispatch_init(void) {
     }
 }
 
-/**
- * @brief 台阶MicroROS初始化
- */
-void stair_microros_init(void) {
-
-    rcl_ret_t ret = rclc_publisher_init_default(
-        &stair_publisher, &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/stair_topic");
-    if (ret != RCL_RET_OK) {
-        log_message(LOG_ERROR,
-                    "stair_microros_init: publisher init failed, ret=%d\n",
-                    (int)ret);
-    } else {
-        log_message(LOG_INFO, "stair_microros_init: publisher init success");
-    }
-}
-
-/**
- * @brief 台阶动作状态发布函数
- */
-void stair_microros_publish(int8_t status) {
-    stair_pub_pram.data = status;
-    if (microros_rcl_mutex != NULL &&
-        xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        rcl_ret_t pub_ret =
-            rcl_publish(&stair_publisher, &stair_pub_pram, NULL);
-        if (pub_ret != RCL_RET_OK) {
-            log_message(LOG_ERROR, "stair_microros_publish: publish failed\n");
-        }
-        else {
-            log_message(LOG_INFO,
-                        "stair_microros_publish: pub successed, status=%d\n",
-                        status);
-        }
-        xSemaphoreGive(microros_rcl_mutex);
-    }
-}
 
 /**
  * @brief 底层控制状态发布函数
@@ -329,14 +348,14 @@ void control_dispatch_publish(int8_t status) {
  * 
  * @param request_msg 
  * @param response_msg 
- * @note 后续可扩展为多动作的控制指令发布，如上下台阶，机械臂控制等
+ * @note 多动作的控制指令发布，如上下台阶，机械臂控制等
  */
 void control_dispatch_callback(const void *request_msg, void *response_msg) {
     custom_msg__srv__ControlDispatch_Request *req_in =
         (custom_msg__srv__ControlDispatch_Request *)request_msg;
     log_message(LOG_INFO, "Dispatch,event = %d,mode = %d", req_in->event,
                 req_in->command_mode);
-    bool skip = false;
+    static int8_t last_command_mode = -1;
     if (req_in->event == 0) {
         switch (req_in->command_mode) {
             case 0:
@@ -347,7 +366,6 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 break;
             case 2:
                 catch_set_state(CATCH_STATE_RECOGNIZE);
-                skip = true;
                 break;
             case 3:
                 catch_set_state(CATCH_STATE_CHECK);
@@ -359,30 +377,45 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 break;
         }
 
-        if (catch_feedback_handle != NULL && !skip) {
-            xTaskNotifyGive(catch_feedback_handle);
-        }
     } else if (req_in->event == 1) {
         switch (req_in->command_mode) {
             case 0:
-                robot_arm_set_state_index(0);
+                robot_arm_set_state_index(0); // 初始化
                 break;
             case 1:
-                robot_arm_set_state_index(1);
+                robot_arm_set_state_index(1); // 准备（向上抓取）
+                last_command_mode = 1;
                 break;
             case 2:
-                robot_arm_set_state_index(2);
-                robot_arm_set_dynamic_catch_target(
-                    req_in->point.x, req_in->point.y, req_in->point.z);
+                robot_arm_set_state_index(2); // 准备（向下抓取）
+                last_command_mode = 2;
                 break;
             case 3:
-                robot_arm_set_state_index(3);
+                if (last_command_mode == 1) {
+                    robot_arm_set_dynamic_catch_target_up(
+                        req_in->point.x, req_in->point.y, req_in->point.z);
+                } else if (last_command_mode == 2) {
+                    robot_arm_set_dynamic_catch_target_down(
+                        req_in->point.x, req_in->point.y, req_in->point.z);
+                }
+                last_command_mode = 0;
+                robot_arm_set_state_index(3); // 抓取（动态目标覆盖）
                 break;
             case 4:
-                robot_arm_set_state_index(4);
+                robot_arm_set_state_index(4); // 放置
                 break;
             case 5:
-                robot_arm_set_state_index(5);
+                robot_arm_set_state_index(5); // 准备取出
+                break;
+            case 6:
+                robot_arm_set_state_index(6); // 放置2层
+                break;
+            case 7:
+                robot_arm_set_state_index(7); // 放置3层
+                break;
+            case 8:
+                robot_arm_set_state_index(8); // 摄象头识别位
+                break;
             default:
                 break;
         }
@@ -390,10 +423,10 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
     } else if (req_in->event == 2) {
         switch (req_in->command_mode) {
             case 0:
-                lift_set_stair_mode(1);
+                lift_set_stair_mode(1); // 上台阶
                 break;
             case 1:
-                lift_set_stair_mode(2);
+                lift_set_stair_mode(2); // 下台阶
                 break;
             default:
                 break;
@@ -404,6 +437,14 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
         (custom_msg__srv__ControlDispatch_Response *)response_msg;
     res_in->success = true;
 }
+
+/** @} */
+#pragma endregion
+
+/* ======================== 【日志传输模块】 ============================ */
+#pragma region Logger
+/** @defgroup Logger 日志传输模块 */
+/** @{ */
 
 /**
  * @brief 初始化日志模块
@@ -489,3 +530,6 @@ void microros_log_data_cb(const log_data_packet_t *packet) {
         }
     }
 }
+
+/** @} */
+#pragma endregion
