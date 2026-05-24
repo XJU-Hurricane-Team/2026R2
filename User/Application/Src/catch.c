@@ -11,27 +11,13 @@
 #include "microros_ctrl.h"
 #include "vl53l1/vl53l1_apply.h"
 
-
-#define CATCH_AUTO_FLOW_ENABLE   0U
-#define CATCH_TASK_PERIOD_MS     5U
-#define CATCH_SENSOR_COUNT       6U
-
-#define CATCH_STATE_INIT_KEY     11U
-#define CATCH_STATE_READY_KEY    12U
-#define CATCH_STATE_GRAB_KEY     13U
-#define CATCH_STATE_CHECK_KEY    14U
+#define CATCH_TASK_PERIOD_MS      5U
+#define CATCH_STATE_INIT_KEY      11U
+#define CATCH_STATE_READY_KEY     12U
+#define CATCH_STATE_GRAB_KEY      13U
+#define CATCH_STATE_CHECK_KEY     14U
 #define CATCH_STATE_RECOGNIZE_KEY 15U
-#define CATCH_STATE_DONE_KEY     16U
-
-/**
- * @brief 状态内流程定义
- * 
- */
-typedef enum {
-    CATCH_FLOW_WAIT_FIRST_DETECT = 0, /* 在 READY 阶段等待首次检测到物体 */
-    CATCH_FLOW_WAIT_SECOND_DETECT,    /* 二次检测，确认下一阶段条件成立 */
-    CATCH_FLOW_DONE,                  /* Detection done, enter recognize */
-} catch_flow_t;
+#define CATCH_STATE_DONE_KEY      16U
 
 /**
  * @brief 电机目标状态定义
@@ -56,9 +42,6 @@ void catch_set_state(catch_state_t state);
 
 static void catch_remote_state_switch(uint8_t key, remote_key_event_t event);
 static void catch_apply_state(catch_state_t state);
-
-static void catch_handle_recognize(void);
-
 
 /**
  * @brief 夹爪整体各阶段下电机状态
@@ -117,8 +100,10 @@ void catch_set_state(catch_state_t state) {
     }
     catch_apply_state(catch_state);
 
+    if (catch_feedback_handle != NULL) {
+        xTaskNotifyGive(catch_feedback_handle);
+    }
 }
-
 
 /**
  * @brief 更新电机状态
@@ -133,14 +118,12 @@ static void catch_apply_state(catch_state_t state) {
     catch_head_set_dm_target(g_catch_motor_targets[state].dm_target);
 }
 
-
 /**
  * @brief 夹取状态更新，更新传感器状态，处理自动流程，更新电机状态
  * 
  */
 static void catch_update(void) {
 
-    catch_handle_recognize();
     catch_head();
 }
 
@@ -199,6 +182,7 @@ static void catch_remote_state_switch(uint8_t key, remote_key_event_t event) {
 
         case CATCH_STATE_RECOGNIZE_KEY: {
             catch_set_state(CATCH_STATE_RECOGNIZE);
+            nav_publish(3); 
         } break;
 
         case CATCH_STATE_DONE_KEY: {
@@ -206,29 +190,6 @@ static void catch_remote_state_switch(uint8_t key, remote_key_event_t event) {
         } break;
         default: {
         } break;
-    }
-}
-
-
-static void catch_handle_recognize(void) {
-    uint16_t distance_mm = 0;
-
-    if (catch_state != CATCH_STATE_RECOGNIZE) {
-        return;
-    }
-
-    if (!vl53l1_apply_get_distance_mm(&distance_mm)) {
-        return;
-    }
-    // log_data(LOG_CHASSIS,distance_mm);
-
-    if ((distance_mm < VL53L1_APPLY_DISTANCE_THRESHOLD_MM) &&
-        !recognize_published) {
-        log_message(LOG_INFO, "Recognized! distance_mm = %d", distance_mm);
-        catch_set_state(CATCH_STATE_GRAB);
-        nav_publish(0);
-        xTaskNotifyGive(catch_feedback_handle);
-        recognize_published = true;
     }
 }
 
@@ -258,12 +219,75 @@ static void catch_feedback_task(void *pvParameters) {
     while (1) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
-      
-       while(!catch_head_is_target_reached()){
+        catch_state_t current_state = catch_state;
+        while (!catch_head_is_target_reached()) {
+            // 防止状态突然改变
+            if (catch_state != current_state) {
+                break;
+            }
             vTaskDelay(pdMS_TO_TICKS(10));
         }
-        // vTaskDelay(pdMS_TO_TICKS(2000)); 
-        control_dispatch_publish(1);
+
+        if (catch_state != current_state) {
+            continue; // 状态已被打断，重新等待新通知
+        }
+
+        // 电机到位后，根据不同任务执行不同逻辑
+        switch (current_state) {
+
+            case CATCH_STATE_INIT:
+            case CATCH_STATE_READY:
+            case CATCH_STATE_GRAB:
+            case CATCH_STATE_DONE:
+                control_dispatch_publish(1);
+                break;
+
+            case CATCH_STATE_RECOGNIZE:
+
+                while (catch_state == CATCH_STATE_RECOGNIZE) {
+                    uint16_t dist = 0;
+                    if (vl53l1_apply_get_distance_mm(&dist, g_vl53l1_handle2)) {
+                        if (dist < VL53L1_APPLY_DISTANCE_THRESHOLD_MM && dist > 0) {
+                            log_message(LOG_INFO, "Recognized! dist = %d",
+                                        dist);
+                            nav_publish(0);
+
+                            // 发现物体，触发下一步抓取
+                            catch_set_state(CATCH_STATE_GRAB);
+                            break;
+                        }
+                    }
+                    vTaskDelay(pdMS_TO_TICKS(30)); // 给 I2C 留出刷新时间
+                }
+                break;
+
+            case CATCH_STATE_CHECK:
+                // 检测抓取是否成功。
+                {
+                    uint16_t dist = 0;
+                    uint32_t total_dist = 0;
+                    uint8_t valid_count = 0;
+
+                    for (int i = 0; i < 3; i++) {
+                        if (vl53l1_apply_get_distance_mm(&dist,
+                                                         g_vl53l1_handle)) {
+                            total_dist += dist;
+                            valid_count++;
+                        }
+                        vTaskDelay(pdMS_TO_TICKS(30));
+                    }
+
+                    if (total_dist > 0 && valid_count > 0 && (total_dist / valid_count) <= 100) {
+                        control_dispatch_publish(1); // 成功抓取
+                    } else {
+                        control_dispatch_publish(2); // 抓取失败
+                    }
+                }
+                break;
+
+            default:
+                break;
+        }
     }
 }
 
@@ -276,5 +300,3 @@ static void catch_tasks_init(void) {
     xTaskCreate(catch_feedback_task, "catch_feedback_task", 256, NULL, 3,
                 &catch_feedback_handle);
 }
-
-

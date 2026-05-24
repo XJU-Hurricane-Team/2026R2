@@ -20,12 +20,9 @@
 #define ARM_REACH_POS_TOL_MM    5.0f  /**< 位置到位判定容差 (mm) */
 #define ARM_REACH_JOINT_TOL_RAD 0.05f /**< 关节角到位判定容差 (rad) */
 
-#define ARM_USE_PUMP_ADC_CHECK  0 /**< 是否使用气泵ADC压力检测 */
-#define PUMP_ADC_CHANNEL        ADC_CHANNEL_12
-#define PUMP_ADC_GPIO_PORT      GPIOB
-#define PUMP_ADC_GPIO_PIN       GPIO_PIN_2
-#define PUMP_ADC_READY_HIGH     3000U /**< 抓取成功判定的高压阈值 */
-#define PUMP_ADC_READY_LOW      300U  /**< 释放成功判定的低压阈值 */
+#define ARM_USE_PUMP_ADC_CHECK  1     /**< 是否使用气泵ADC压力检测 */
+#define PUMP_ADC_READY_LOW      2000U /**< 抓取成功判定的低压阈值 */
+#define PUMP_ADC_READY_HIGH     3000U /**< 释放成功判定的高压阈值 */
 
 #define CATCH_READY_2_ANGEL                                                    \
     -0.893f /**< READY_2 吸盘关节相对于水平面旋转角度 (rad) */

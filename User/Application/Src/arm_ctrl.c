@@ -24,7 +24,7 @@ static void arm_remote_state_switch(uint8_t key, remote_key_event_t event);
 #endif
 
 static RobotArm g_robot_arm;                 /* 机械臂控制对象 */
-static uint8_t g_arm_target_index;           /* 当前目标状态索引 (0~7) */
+static uint8_t g_arm_target_index;           /* 当前目标状态索引 (0~8) */
 static TaskHandle_t g_robot_arm_task_handle; /* 机械臂任务句柄 */
 static uint8_t g_last_target_index;          /* 上一次下发的目标状态索引 */
 
@@ -33,16 +33,18 @@ static uint8_t g_wait_takeout_target_index = 2;   /* 待取出层级索引 (0~2)
 static arm_target_point_t g_dynamic_target = {0}; /* 动态抓取目标点 (mm/rad) */
 static uint8_t g_has_dynamic_target = 0;          /* 是否存在动态抓取目标 */
 
-static float g_arm_reach_target_joint[2] = {0.0f,
+static float g_arm_reach_target_joint[3] = {0.0f, 0.0f,
                                             0.0f}; /* 到位判定的关节角目标 */
-static uint8_t g_arm_reach_pending = 0;            /* 是否等待到位判定 */
+// static uint8_t g_arm_reach_pending = 0;            /* 是否等待到位判定 (暂时不用，标志位总是不对) */
 static pump_wait_state_t g_pump_wait_state = PUMP_WAIT_NONE; /* 气泵等待状态 */
 static uint8_t g_last_switch_key = 0xFF;    /* 上一次遥控器切换键值 */
 static uint32_t g_pump_wait_start_tick = 0; /* 气泵等待开始时间戳 */
+static uint8_t g_adc_check_retry_count = 0; /* ADC检查重试次数 */
+static float g_pump_retry_offset_y = 0.0f;  /* 气泵重试Y轴累积偏移量 (mm) */
 
 /* ---------------- 预设目标点位 ---------------- */
 
-static const arm_target_point_t g_arm_target_points[8] = {
+static const arm_target_point_t g_arm_target_points[9] = {
     {139.95f + 20.0f + 50.0f, 102.70f + 30.0f, 0.6955f}, /* 0: INIT */
     {200.000f, 10.0f, 0.0f},                             /* 1: READY_1 */
     {420.000f, -50.0f, CATCH_READY_2_ANGEL},             /* 2: READY_2 */
@@ -72,7 +74,7 @@ static const arm_target_point_t g_arm_wait_takeout_points[3] = {
 
 /**
  * @brief 状态索引转换为应用层枚举
- * @param index 状态索引 (0~7)
+ * @param index 状态索引 (0~8)
  * @return 对应的机械臂状态枚举值
  */
 static arm_status_t arm_status_from_index(uint8_t index) {
@@ -108,6 +110,8 @@ static arm_status_t arm_status_from_index(uint8_t index) {
  */
 void robot_arm_set_dynamic_catch_target_up(float y, float x, float z) {
     /* 将米单位转换为毫米，并校准摄像头与吸盘中心的偏移补偿 */
+    // g_dynamic_target.y = y * 1000.0f + 200.0f - 55.0f + 20.0f;
+    // g_dynamic_target.z = z * 1000.0f + 10.0f + 90.0f;
     g_dynamic_target.y = y * 1000.0f + 200.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
     g_dynamic_target.z = z * 1000.0f + 10.0f + CAM_TO_CAT_Z_OFFSET + 30.0f;
 
@@ -122,14 +126,30 @@ void robot_arm_set_dynamic_catch_target_up(float y, float x, float z) {
  * @param z 动态 Z 坐标 (m)
  */
 void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
+    /* 将米单位转换为毫米，并校准摄像头与吸盘中心的偏移补偿 */
+    // g_dynamic_target.y = (y * 1000.0f + 200.0f - 55.0f + 20.0f) * cosf(- CATCH_READY_2_ANGEL);
+    // g_dynamic_target.z = - (y * 1000.0f + 10.0f + 90.0f) * sinf(- CATCH_READY_2_ANGEL);
+    // g_has_dynamic_target = 1;
+
+    /* 摄像头坐标 (带偏移补偿) */
+    // float y_cam = y * 1000.0f + 200.0f - 55.0f + 20.0f;
+    // float z_cam = z * 1000.0f + 10.0f + 90.0f;
     float theta = CATCH_READY_2_ANGEL;
 
     float y_cam = y * cosf(theta) - z * sinf(theta);
     float z_cam = y * sinf(theta) + z * cosf(theta);
 
     /* 旋转到机械臂水平坐标系 */
-    g_dynamic_target.y = y_cam * 1000.0f + 420.0f - (CAM_TO_CAT_Y_OFFSET * cosf(theta) + CAM_TO_CAT_Z_OFFSET * sinf(theta)) + 20.0f;
-    g_dynamic_target.z = z_cam * 1000.0f - 50.0f + (CAM_TO_CAT_Y_OFFSET * sinf(theta) + CAM_TO_CAT_Z_OFFSET * cosf(theta)) + 30.0f;
+    // g_dynamic_target.y = y_cam * 1000.0f + 420.0f - 55.0f * sin(theta) + 20.0f;
+    // g_dynamic_target.z = z_cam * 1000.0f - 50.0f + 75.0f * cosf(theta);
+    g_dynamic_target.y = y_cam * 1000.0f + 420.0f -
+                         (CAM_TO_CAT_Y_OFFSET * cosf(theta) +
+                          CAM_TO_CAT_Z_OFFSET * sinf(theta)) +
+                         20.0f;
+    g_dynamic_target.z = z_cam * 1000.0f - 50.0f +
+                         (CAM_TO_CAT_Y_OFFSET * sinf(theta) +
+                          CAM_TO_CAT_Z_OFFSET * cosf(theta)) +
+                         30.0f;
     g_has_dynamic_target = 1;
     log_message(LOG_INFO, "Set target: y=%.1fmm, z=%.1fmm\n",
                 g_dynamic_target.y, g_dynamic_target.z);
@@ -242,6 +262,12 @@ void robot_arm_apply_target(uint8_t index) {
     g_robot_arm.status = arm_status_from_index(index);
     g_robot_arm.last_status = prev_status;
 
+    /* 离开抓取状态时清除重试偏移 */
+    if (prev_status == ARM_STATE_CATCH &&
+        g_robot_arm.status != ARM_STATE_CATCH) {
+        g_pump_retry_offset_y = 0.0f;
+    }
+
     float target_y = g_arm_target_points[index].y;
     float target_z = g_arm_target_points[index].z;
     float target_pitch = g_arm_target_points[index].pitch;
@@ -333,16 +359,18 @@ static void robot_arm_mark_reach_target(float y, float z, float pitch) {
 
     g_arm_reach_target_joint[0] = joint_angles[0];
     g_arm_reach_target_joint[1] = joint_angles[1];
-    g_arm_reach_pending = 1;
+    g_arm_reach_target_joint[2] = joint_angles[2];
+    // g_arm_reach_pending = 1;
 }
 
 /**
  * @brief 检查机械臂是否到达目标点，并触发后续动作
  */
 static void robot_arm_check_target_reached(void) {
-    if (!g_arm_reach_pending) {
-        return;
-    }
+    /* 如果没有等待到位判定，则直接返回（暂时不使用这个标志位，因为存在标志位覆盖） */
+    // if (!g_arm_reach_pending) {
+    //     return;
+    // }
 
     /* 关节角误差判定到位 */
     float err_j1 = arm_ctrl_wrap_pi(g_robot_arm.damiao_1.position -
@@ -361,13 +389,15 @@ static void robot_arm_check_target_reached(void) {
         return;
     }
 
-    g_arm_reach_pending = 0;
+    // g_arm_reach_pending = 0;
     g_robot_arm.arm_motion_active = 0;
 
     if (g_robot_arm.status == ARM_STATE_CATCH) {
         /* 抓取到位：打开气泵并根据配置等待压力建立 */
         pump_set_state(1);
         g_pump_wait_start_tick = HAL_GetTick();
+        g_adc_check_retry_count = 0;  /* 重置ADC检查重试计数器 */
+        g_pump_retry_offset_y = 0.0f; /* 重置重试偏移 */
 #if ARM_USE_PUMP_ADC_CHECK
         g_pump_wait_state = PUMP_WAIT_CATCH;
         return;
@@ -403,11 +433,44 @@ static void pump_check_ready(void) {
         return;
     }
 
-    /* 检查是否超过5秒超时时间 */
+    /* 检查是否超过2秒超时时间 */
     uint32_t elapsed = HAL_GetTick() - g_pump_wait_start_tick;
-    if (elapsed >= 5000U && ARM_USE_PUMP_ADC_CHECK == 0) {
+    if (elapsed >= 2000U) {
+#if ARM_USE_PUMP_ADC_CHECK
+        /* ADC检查开启时，抓取状态2秒超时后沿Y方向推进10mm重试 */
+        if (g_pump_wait_state == PUMP_WAIT_CATCH &&
+            g_adc_check_retry_count < 5) {
+            g_pump_retry_offset_y += 10.0f;
+            float new_y = g_robot_arm.final_target_y + g_pump_retry_offset_y;
+            float new_z = g_robot_arm.final_target_z;
+            float new_pitch = g_robot_arm.final_target_pitch;
+
+            /* 重新计算关节角目标值用于到位判定 */
+            robot_arm_mark_reach_target(new_y, new_z, new_pitch);
+
+            /* 直接更新 arm_target，不调用 robot_arm_set_target，
+               避免污染 final_target_y 和触发不必要的 SINGLE_TRANS */
+            g_robot_arm.arm_target_y = new_y;
+            g_robot_arm.arm_target_z = new_z;
+            g_robot_arm.arm_target_pitch = new_pitch;
+            g_robot_arm.motion_state = ARM_MOTION_STATE_DIRECT_MOVE;
+            g_robot_arm.target_mode = ARM_TARGET_CARTESIAN;
+
+            /* 重置计时器和增加重试计数 */
+            g_pump_wait_start_tick = HAL_GetTick();
+            g_adc_check_retry_count++;
+
+            log_message(LOG_INFO,
+                        "ADC check timeout, retry %d/5, target y += 10mm\n",
+                        g_adc_check_retry_count);
+            return;
+        }
+#endif
+        /* 不开启ADC检查或放置状态超时或重试次数用尽，直接发送完成信号 */
         control_dispatch_publish(1);
         g_pump_wait_state = PUMP_WAIT_NONE;
+        g_adc_check_retry_count = 0;
+        g_pump_retry_offset_y = 0.0f;
         return;
     }
 
@@ -423,13 +486,17 @@ static void pump_check_ready(void) {
 
     /* 根据等待状态判断抓取/释放完成 */
     if (g_pump_wait_state == PUMP_WAIT_CATCH &&
-        adc_value > PUMP_ADC_READY_HIGH) {
+        adc_value < PUMP_ADC_READY_LOW) {
         control_dispatch_publish(1);
         g_pump_wait_state = PUMP_WAIT_NONE;
+        g_adc_check_retry_count = 0;
+        g_pump_retry_offset_y = 0.0f;
     } else if (g_pump_wait_state == PUMP_WAIT_PLACE &&
-               adc_value < PUMP_ADC_READY_LOW) {
+               adc_value > PUMP_ADC_READY_HIGH) {
         control_dispatch_publish(1);
         g_pump_wait_state = PUMP_WAIT_NONE;
+        g_adc_check_retry_count = 0;
+        g_pump_retry_offset_y = 0.0f;
     }
 }
 
@@ -452,17 +519,17 @@ static uint8_t pump_read_adc(uint16_t *out_value) {
         return 0;
     }
 
-    if (HAL_ADC_Start(&hadc3) != HAL_OK) {
+    if (HAL_ADC_Start(&hadc1) != HAL_OK) {
+        return 0;
+    }
+    
+    if (HAL_ADC_PollForConversion(&hadc1, 2) != HAL_OK) {
+        HAL_ADC_Stop(&hadc1);
         return 0;
     }
 
-    if (HAL_ADC_PollForConversion(&hadc3, 2) != HAL_OK) {
-        HAL_ADC_Stop(&hadc3);
-        return 0;
-    }
-
-    *out_value = (uint16_t)HAL_ADC_GetValue(&hadc3);
-    HAL_ADC_Stop(&hadc3);
+    *out_value = (uint16_t)HAL_ADC_GetValue(&hadc1);
+    HAL_ADC_Stop(&hadc1);
 
     return 1;
 }

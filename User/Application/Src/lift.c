@@ -2,13 +2,14 @@
  * @file    lift.c
  * @author  Dominate0017
  * @brief   抬升与2006控制模块
- * @version 1.1
- * @date    2026-05-02
+ * @version 1.2
+ * @date    2026-05-17
  * ********************************************************************************
  *    Date    | Version |   Author    | Version Info
  * -----------+---------+-------------+----------------------------------------
  * 2026-04-28 |   1.0   | Dominate0017 | 改用上升/下降沿式判断光电状态
  * 2026-05-02 |   1.1   | Dominate0017 | 修改光电状态残留问题，代码重构
+ * 2026-05-17 |   1.2   | Dominate0017 | 增加前后光电个数，优化上升/下降沿判定逻辑
  */
 #include "includes.h"
 #include "microros_ctrl.h"
@@ -24,14 +25,21 @@
 #define LIFT_DOWN_KEY            8 /* 抬升下降按键 */
 #define LIFT_STOP_KEY            9 /* 中断序列并复位按键 */
 
-#define SENSOR_GPIO_PORT         GPIOE
-#define MIDDLE_SENSOR_PIN_1      GPIO_PIN_5
-#define MIDDLE_SENSOR_PIN_0      GPIO_PIN_6
-#define FRONT_SENSOR_PIN         GPIO_PIN_7
-#define REAR_SENSOR_PIN          GPIO_PIN_8
+#define SENSOR_GPIO_PORT_0       GPIOE
+#define SENSOR_GPIO_PORT_1       GPIOF
+#define PROXIMITY_SENSOR_PORT    GPIOC
+#define FRONT_SENSOR_PIN_0       GPIO_PIN_2
+#define FRONT_SENSOR_PIN_1       GPIO_PIN_2
+#define MIDDLE_SENSOR_PIN_0      GPIO_PIN_4
+#define MIDDLE_SENSOR_PIN_1      GPIO_PIN_9
+#define REAR_SENSOR_PIN_0        GPIO_PIN_5
+#define REAR_SENSOR_PIN_1        GPIO_PIN_10
+#define PROXIMITY_SENSOR_PIN_0   GPIO_PIN_2
+#define PROXIMITY_SENSOR_PIN_1   GPIO_PIN_3
 
-#define LIFT_TARGET_CATCH_DEG    5.0f
-#define LIFT_TARGET_DEG_MAX      12.275f
+#define LIFT_TARGET_CATCH_DEG    1.0748f
+#define LIFT_TARGET_DEG_UP_MAX   5.42f
+#define LIFT_TARGET_DEG_DOWN_MAX 12.275f
 #define LIFT_TARGET_DEG_UP_SEQ   0.0f
 #define LIFT_TARGET_DEG_DOWN_SEQ 12.275f
 #define LIFT_TARGET_DEG_STEP     0.025f
@@ -107,6 +115,8 @@ static TaskHandle_t lift_state_task_handle;
 static void lift_state_task(void *pvParameters);
 static TaskHandle_t lift_sequence_task_handle;
 static void lift_sequence_task(void *pvParameters);
+static TaskHandle_t chassis_proximity_switch_task_handle;
+static void chassis_proximity_switch_task(void *pvParameters);
 
 static void lift_bottom_init(void);
 static void lift_tasks_init(void);
@@ -124,6 +134,11 @@ static bool get_rear_photoelectric_rising_edge(void);
 static bool get_rear_photoelectric_falling_edge(void);
 static bool get_middle_photoelectric_rising_edge(void);
 static bool get_middle_photoelectric_falling_edge(void);
+static bool photoelectric_get_stable_state(photoelectric_debounce_t *debounce,
+                                           GPIO_TypeDef *port_0,
+                                           uint16_t pin_0,
+                                           GPIO_TypeDef *port_1,
+                                           uint16_t pin_1);
 static void photoelectric_sync_state(photoelectric_debounce_t *debounce,
                                      bool raw_state);
 static void lift_sync_photoelectric_state(void);
@@ -214,6 +229,25 @@ static void lift_sequence_task(void *pvParameters) {
     }
 }
 
+static bool g_chassis_proximity_check_active = false;
+
+static void chassis_proximity_switch_task(void *pvParameters) {
+    (void)pvParameters;
+    while (1) {
+        if (!g_chassis_proximity_check_active) {
+            (void)ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+            continue;
+        }
+        bool proximity_1_low = (HAL_GPIO_ReadPin(PROXIMITY_SENSOR_PORT, PROXIMITY_SENSOR_PIN_0) == GPIO_PIN_RESET);
+        bool proximity_2_low = (HAL_GPIO_ReadPin(PROXIMITY_SENSOR_PORT, PROXIMITY_SENSOR_PIN_1) == GPIO_PIN_RESET);
+        if (proximity_1_low || proximity_2_low) {
+            nav_publish(0);
+            g_chassis_proximity_check_active = false; 
+        }
+        vTaskDelay(5); 
+    }
+}
+
 // 切换模式：遥控按键回调处理
 void lift_switch_mode(uint8_t key, remote_key_event_t event) {
     /* 抬升处于动作序列，禁止LIFT_STOP_KEY以外的按键 */
@@ -233,6 +267,7 @@ void lift_switch_mode(uint8_t key, remote_key_event_t event) {
         case LIFT_SEQ_UP_KEY:
             log_message(LOG_INFO, "Trigger Lift UP sequence.");
             lift_seq_start(1);
+            // lift_publish_if_auto(1);
             nav_publish(1);
             break;
 
@@ -240,6 +275,7 @@ void lift_switch_mode(uint8_t key, remote_key_event_t event) {
             log_message(LOG_INFO, "Trigger Lift DOWN sequence.");
             lift_seq_start(2);
             nav_publish(1);
+            //lift_publish_if_auto(2);
             break;
 
         case LIFT_UP_KEY:
@@ -311,6 +347,13 @@ bool lift_is_sequence_running(void) {
     return (g_lift_handle.lift_fsm.action != 0);
 }
 
+void chassis_proximity_switch(void) {
+    g_chassis_proximity_check_active = true;
+    if (chassis_proximity_switch_task_handle != NULL) {
+        xTaskNotifyGive(chassis_proximity_switch_task_handle); // 唤醒接近开关任务
+    }
+}
+
 // 初始化抬升模块：电机、任务、按键回调
 void lift_init(void) {
     lift_bottom_init();
@@ -371,6 +414,11 @@ static void lift_tasks_init(void) {
     if (xTaskCreate(lift_sequence_task, "lift_sequence_task", 256, NULL, 4,
                     &lift_sequence_task_handle) != pdPASS) {
         log_message(LOG_ERROR, "Failed to create lift_sequence_task.");
+    }
+
+    if (xTaskCreate(chassis_proximity_switch_task, "chassis_proximity_switch_task", 256, NULL, 4,
+                    &chassis_proximity_switch_task_handle) != pdPASS) {
+        log_message(LOG_ERROR, "Failed to create chassis_proximity_switch_task.");
     }
 }
 
@@ -440,71 +488,31 @@ static void lift_seq_down_update(void) {
     }
 }
 
-// 获取后光电状态（带防抖）
+// 获取后光电状态（带防抖，只有全高/全低才更新稳定态）
 static bool get_rear_photoelectric(void) {
-    bool raw_state = HAL_GPIO_ReadPin(SENSOR_GPIO_PORT, REAR_SENSOR_PIN);
-
-    if (raw_state != g_rear_photoelectric_debounce.current_state) {
-        g_rear_photoelectric_debounce.current_state = raw_state;
-        g_rear_photoelectric_debounce.change_tick = xTaskGetTickCount();
-    }
-
-    uint32_t elapsed_ms =
-        (xTaskGetTickCount() - g_rear_photoelectric_debounce.change_tick) *
-        portTICK_PERIOD_MS;
-    if (elapsed_ms >= g_rear_photoelectric_debounce.debounce_ms) {
-        // 保存上一次的稳定状态，然后更新当前稳定状态
-        g_rear_photoelectric_debounce.prev_stable_state =
-            g_rear_photoelectric_debounce.last_stable_state;
-        g_rear_photoelectric_debounce.last_stable_state = raw_state;
-    }
-
-    return g_rear_photoelectric_debounce.last_stable_state;
+    return photoelectric_get_stable_state(&g_rear_photoelectric_debounce,
+                                          SENSOR_GPIO_PORT_0,
+                                          REAR_SENSOR_PIN_0,
+                                          SENSOR_GPIO_PORT_1,
+                                          REAR_SENSOR_PIN_1);
 }
 
-// 获取前光电状态（带防抖）
+// 获取前光电状态（带防抖，只有全高/全低才更新稳定态）
 static bool get_front_photoelectric(void) {
-    bool raw_state = HAL_GPIO_ReadPin(SENSOR_GPIO_PORT, FRONT_SENSOR_PIN);
-
-    if (raw_state != g_front_photoelectric_debounce.current_state) {
-        g_front_photoelectric_debounce.current_state = raw_state;
-        g_front_photoelectric_debounce.change_tick = xTaskGetTickCount();
-    }
-
-    uint32_t elapsed_ms =
-        (xTaskGetTickCount() - g_front_photoelectric_debounce.change_tick) *
-        portTICK_PERIOD_MS;
-    if (elapsed_ms >= g_front_photoelectric_debounce.debounce_ms) {
-        // 保存上一次的稳定状态，然后更新当前稳定状态
-        g_front_photoelectric_debounce.prev_stable_state =
-            g_front_photoelectric_debounce.last_stable_state;
-        g_front_photoelectric_debounce.last_stable_state = raw_state;
-    }
-
-    return g_front_photoelectric_debounce.last_stable_state;
+    return photoelectric_get_stable_state(&g_front_photoelectric_debounce,
+                                          SENSOR_GPIO_PORT_0,
+                                          FRONT_SENSOR_PIN_0,
+                                          SENSOR_GPIO_PORT_1,
+                                          FRONT_SENSOR_PIN_1);
 }
 
-// 获取中光电状态（OR逻辑，带防抖）
+// 获取中光电状态（带防抖，只有全高/全低才更新稳定态）
 static bool get_middle_photoelectric(void) {
-    bool raw_state = (HAL_GPIO_ReadPin(SENSOR_GPIO_PORT, MIDDLE_SENSOR_PIN_0) ||
-                      HAL_GPIO_ReadPin(SENSOR_GPIO_PORT, MIDDLE_SENSOR_PIN_1));
-    log_message(LOG_INFO, "Middle sensor raw state: %d", raw_state);
-    if (raw_state != g_middle_photoelectric_debounce.current_state) {
-        g_middle_photoelectric_debounce.current_state = raw_state;
-        g_middle_photoelectric_debounce.change_tick = xTaskGetTickCount();
-    }
-
-    uint32_t elapsed_ms =
-        (xTaskGetTickCount() - g_middle_photoelectric_debounce.change_tick) *
-        portTICK_PERIOD_MS;
-    if (elapsed_ms >= g_middle_photoelectric_debounce.debounce_ms) {
-        // 保存上一次的稳定状态，然后更新当前稳定状态
-        g_middle_photoelectric_debounce.prev_stable_state =
-            g_middle_photoelectric_debounce.last_stable_state;
-        g_middle_photoelectric_debounce.last_stable_state = raw_state;
-    }
-
-    return g_middle_photoelectric_debounce.last_stable_state;
+    return photoelectric_get_stable_state(&g_middle_photoelectric_debounce, 
+                                          SENSOR_GPIO_PORT_0,
+                                          MIDDLE_SENSOR_PIN_0, 
+                                          SENSOR_GPIO_PORT_1, 
+                                          MIDDLE_SENSOR_PIN_1);
 }
 
 // 检测前光电上升沿（false -> true）
@@ -579,7 +587,39 @@ static bool get_middle_photoelectric_falling_edge(void) {
     return falling;
 }
 
-// 同步光电状态到防抖结构体
+// 读取光电状态并更新防抖结构体
+static bool photoelectric_get_stable_state(photoelectric_debounce_t *debounce,
+                                           GPIO_TypeDef *port_0,
+                                           uint16_t pin_0,
+                                           GPIO_TypeDef *port_1,
+                                           uint16_t pin_1) {
+    bool pin_0_high = HAL_GPIO_ReadPin(port_0, pin_0);
+    bool pin_1_high = HAL_GPIO_ReadPin(port_1, pin_1);
+    bool both_high = pin_0_high && pin_1_high;
+    bool both_low = !pin_0_high && !pin_1_high;
+
+    if (!both_high && !both_low) {
+        return debounce->last_stable_state;
+    }
+
+    bool raw_state = both_high;
+
+    if (raw_state != debounce->current_state) {
+        debounce->current_state = raw_state;
+        debounce->change_tick = xTaskGetTickCount();
+    }
+
+    uint32_t elapsed_ms =
+        (xTaskGetTickCount() - debounce->change_tick) * portTICK_PERIOD_MS;
+    if (elapsed_ms >= debounce->debounce_ms) {
+        // 保存上一次的稳定状态，然后更新当前稳定状态
+        debounce->prev_stable_state = debounce->last_stable_state;
+        debounce->last_stable_state = raw_state;
+    }
+
+    return debounce->last_stable_state;
+}
+
 static void photoelectric_sync_state(photoelectric_debounce_t *debounce,
                                      bool raw_state) {
     debounce->current_state = raw_state;
@@ -590,11 +630,16 @@ static void photoelectric_sync_state(photoelectric_debounce_t *debounce,
 
 // 同步所有光电状态（序列启动时使用）
 static void lift_sync_photoelectric_state(void) {
-    bool front_raw = HAL_GPIO_ReadPin(SENSOR_GPIO_PORT, FRONT_SENSOR_PIN);
-    bool rear_raw = HAL_GPIO_ReadPin(SENSOR_GPIO_PORT, REAR_SENSOR_PIN);
+    bool front_raw = 
+        (HAL_GPIO_ReadPin(SENSOR_GPIO_PORT_0, FRONT_SENSOR_PIN_0) && 
+         HAL_GPIO_ReadPin(SENSOR_GPIO_PORT_1, FRONT_SENSOR_PIN_1));
     bool middle_raw =
-        (HAL_GPIO_ReadPin(SENSOR_GPIO_PORT, MIDDLE_SENSOR_PIN_0) ||
-         HAL_GPIO_ReadPin(SENSOR_GPIO_PORT, MIDDLE_SENSOR_PIN_1));
+        (HAL_GPIO_ReadPin(SENSOR_GPIO_PORT_0, MIDDLE_SENSOR_PIN_0) &&
+         HAL_GPIO_ReadPin(SENSOR_GPIO_PORT_1, MIDDLE_SENSOR_PIN_1));
+    bool rear_raw =         
+        (HAL_GPIO_ReadPin(SENSOR_GPIO_PORT_0, REAR_SENSOR_PIN_0) && 
+         HAL_GPIO_ReadPin(SENSOR_GPIO_PORT_1, REAR_SENSOR_PIN_1));
+
 
     photoelectric_sync_state(&g_front_photoelectric_debounce, front_raw);
     photoelectric_sync_state(&g_rear_photoelectric_debounce, rear_raw);
@@ -627,12 +672,12 @@ static bool dm_position_check(lift_state_t state) {
 
 // 限制目标角度在最大范围内
 static float lift_limit_target(float target_degree) {
-    /* 正向限位为 +6.0f，负向限位为 -LIFT_TARGET_DEG_MAX（-16.0f） */
-    if (target_degree > 5.82f) {
-        return 5.82f;
+    /* 正向限位为 +6.0f，负向限位为 -LIFT_TARGET_DEG_DOWN_MAX（-16.0f） */
+    if (target_degree > LIFT_TARGET_DEG_UP_MAX) {
+        return LIFT_TARGET_DEG_UP_MAX;
     }
-    if (target_degree < -LIFT_TARGET_DEG_MAX) {
-        return -LIFT_TARGET_DEG_MAX;
+    if (target_degree < -LIFT_TARGET_DEG_DOWN_MAX) {
+        return -LIFT_TARGET_DEG_DOWN_MAX;
     }
     return target_degree;
 }
@@ -697,7 +742,7 @@ static void lift_up_step_wait_down_arrived(void) {
 // 上升步骤4：2006电机正转，等待后光电上升沿
 static void lift_up_step_drive_2006_forward(void) {
     g_lift_handle.target_2006_rpm = 1000.0f;
-    vTaskDelay(400);
+    vTaskDelay(300);
     // 检查后光电的上升沿（false -> true）
     if (get_rear_photoelectric_rising_edge()) {
         g_lift_handle.target_2006_rpm = 0.0f;
@@ -745,7 +790,7 @@ static void lift_down_step_drive_2006_backward(void) {
     g_lift_handle.target_2006_rpm = -1000.0f;
     // 检查中光电的下降沿（true -> false）
     if (get_middle_photoelectric_falling_edge()) {
-        vTaskDelay(400);
+        vTaskDelay(350);
         log_message(LOG_INFO, "lift up");
         g_lift_handle.target_2006_rpm = 0.0f;
         g_lift_handle.lift_state = LIFT_STATE_UP;

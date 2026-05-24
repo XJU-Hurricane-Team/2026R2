@@ -18,6 +18,10 @@
             "serverpath": "/home/whyyy/openocd-xpack/bin/openocd",
             "gdbPath": "/usr/bin/gdb-multiarch",
             "svdFile": ".pack/Keil/STM32G4xx_DFP.1.6.0/CMSIS/SVD/STM32G474.svd"
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 4
+            },
         },
         
         {

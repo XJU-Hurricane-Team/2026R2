@@ -75,7 +75,7 @@ void microros_log_data_cb(const log_data_packet_t *packet);
 
 /* ======================== 【任务执行模块】 ============================ */
 #pragma region MicroROS_Task
-/** @defgroup MicroROS_Task 任务执行模块 */
+/** @defgroup MicroROS_Task 任务执行模块，负责MicroROS节点的执行 */
 /** @{ */
 
 /**
@@ -88,7 +88,7 @@ int microros_init(void) {
     rcl_ret_t ret;
 
     rmw_uros_set_custom_transport(
-        true, (void *)&huart4, cubemx_transport_open, cubemx_transport_close,
+        true, (void *)&huart1, cubemx_transport_open, cubemx_transport_close,
         cubemx_transport_write, cubemx_transport_read);
 
     rcl_allocator_t freeRTOS_allocator =
@@ -202,7 +202,7 @@ void microros_task(void *pvParameters) {
 
 /* ======================== 【导航控制模块】 ============================ */
 #pragma region Nav
-/** @defgroup Nav 导航控制模块 */
+/** @defgroup Nav 导航控制模块, 负责与导航交互 */
 /** @{ */
 
 /**
@@ -279,7 +279,7 @@ void nav_sub_callback(const void *msgin) {
 
 /* ======================== 【底层控制调度模块】 ============================ */
 #pragma region Dispatch
-/** @defgroup Dispatch 底层控制调度模块 */
+/** @defgroup Dispatch 底层控制调度模块。负责底层夹爪，机械臂等与上位机的交互 */
 /** @{ */
 
 /**
@@ -355,7 +355,6 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
         (custom_msg__srv__ControlDispatch_Request *)request_msg;
     log_message(LOG_INFO, "Dispatch,event = %d,mode = %d", req_in->event,
                 req_in->command_mode);
-    bool skip = false;
     static int8_t last_command_mode = -1;
     if (req_in->event == 0) {
         switch (req_in->command_mode) {
@@ -367,7 +366,6 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 break;
             case 2:
                 catch_set_state(CATCH_STATE_RECOGNIZE);
-                skip = true;
                 break;
             case 3:
                 catch_set_state(CATCH_STATE_CHECK);
@@ -379,9 +377,6 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 break;
         }
 
-        if (catch_feedback_handle != NULL && !skip) {
-            xTaskNotifyGive(catch_feedback_handle);
-        }
     } else if (req_in->event == 1) {
         switch (req_in->command_mode) {
             case 0:
@@ -433,6 +428,8 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
             case 1:
                 lift_set_stair_mode(2); // 下台阶
                 break;
+            case 2:
+                chassis_proximity_switch();
             default:
                 break;
         }

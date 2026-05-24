@@ -18,8 +18,8 @@ void start_task(void *pvParameters);
 
 static TaskHandle_t task1_handle;
 void task1(void *pvParameters);
-
-static TaskHandle_t nav_task_handle;
+                                  
+static TaskHandle_t microros_task_handle;
 void microros_task(void *pvParameters);
 
 /*****************************************************************************/
@@ -55,7 +55,7 @@ void start_task(void *pvParameters) {
     logger_module_init();
 
     if (xTaskCreate(microros_task, "microros_task", 128 * 10, NULL, 3,
-                    &nav_task_handle) != pdPASS) {
+                    &microros_task_handle) != pdPASS) {
         log_message(LOG_ERROR, "start_task: microros_task create failed");
         Error_Handler();
     }
