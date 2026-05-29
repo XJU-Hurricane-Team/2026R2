@@ -30,3 +30,8 @@ __MACOSX__
 # others
 /.codex
 /.pack/
+
+# 忽略 CubeMX 生成的备份文件和目录
+*.bak
+CubeMX/Core/Inc/Backup/
+CubeMX/Core/Src/Backup/

@@ -18,9 +18,9 @@ void start_task(void *pvParameters);
 
 static TaskHandle_t task1_handle;
 void task1(void *pvParameters);
-
-static TaskHandle_t nav_task_handle;
-void nav_task(void *pvParameters);
+                                  
+static TaskHandle_t microros_task_handle;
+void microros_task(void *pvParameters);
 
 /*****************************************************************************/
 
@@ -54,9 +54,9 @@ void start_task(void *pvParameters) {
 
     logger_module_init();
 
-    if (xTaskCreate(nav_task, "nav_task", 128 * 10, NULL, 3,
-                    &nav_task_handle) != pdPASS) {
-        log_message(LOG_ERROR, "start_task: nav_task create failed");
+    if (xTaskCreate(microros_task, "microros_task", 128 * 8, NULL, 3,
+                    &microros_task_handle) != pdPASS) {
+        log_message(LOG_ERROR, "start_task: microros_task create failed");
         Error_Handler();
     }
 
@@ -91,8 +91,8 @@ void task1(void *pvParameters) {
         /* Print stack usage every 5 seconds to avoid flooding the log output. */
         // if (++count >= 5) {
         //     count = 0;
-        //     // log_task_stack_usage(task1_handle, "task1", 256);
-        //     log_task_stack_usage(nav_task_handle, "nav_task", 128*10);
+        //     log_task_stack_usage(task1_handle, "task1", 256);
+        //     log_task_stack_usage(microros_task_handle, "microros_task", 128*8);
         //     log_system_heap_summary();
         // }
 
