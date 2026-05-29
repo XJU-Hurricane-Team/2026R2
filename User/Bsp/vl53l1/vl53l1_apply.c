@@ -8,7 +8,7 @@
 #define VL53L1_APPLY_TIMING_BUDGET_US     20000U
 #define VL53L1_APPLY_INTER_MEASUREMENT_MS 30U
 
-// XSHUT 引脚定义（低电平有效，拉低=复位，拉高=使能）
+// XSHUT 引脚定义（拉低=复位，拉高=使能）
 #define VL53L1_1_XSHUT_GPIO_PORT          GPIOA
 #define VL53L1_1_XSHUT_GPIO_PIN           GPIO_PIN_6 // 根据实际情况填写
 
@@ -58,10 +58,10 @@ static bool vl53l1_apply_configure(VL53L1_DEV handle) {
     }
 
     // 启动连续测量
-    status = VL53L1_StartMeasurement(handle);
-    if (status != VL53L1_ERROR_NONE) {
-        return false;
-    }
+    // status = VL53L1_StartMeasurement(handle);
+    // if (status != VL53L1_ERROR_NONE) {
+    //     return false;
+    // }
 
     return true;
 }
@@ -136,6 +136,7 @@ bool vl53l1_apply_get_distance_mm(uint16_t *distance_mm, VL53L1_DEV handle) {
     // 读取测距数据
     if (VL53L1_GetRangingMeasurementData(handle, &ranging_data) !=
         VL53L1_ERROR_NONE) {
+             VL53L1_StopMeasurement(handle);
         return false;
     }
 

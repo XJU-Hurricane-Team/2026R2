@@ -50,7 +50,7 @@ static void catch_apply_state(catch_state_t state);
 static const catch_motor_target_t g_catch_motor_targets[CATCH_STATE_COUNT] = {
     [CATCH_STATE_INIT] =
         {
-            .servo_target = CATCH_HEAD_SERVO_TARGET_CLOSE,
+            .servo_target = CATCH_HEAD_SERVO_TARGET_OPEN,
             .dm_target = CATCH_HEAD_DM_TARGET_RETRACT,
         },
     [CATCH_STATE_READY] =
@@ -87,10 +87,6 @@ static const catch_motor_target_t g_catch_motor_targets[CATCH_STATE_COUNT] = {
  */
 void catch_set_state(catch_state_t state) {
     if (state >= CATCH_STATE_COUNT) {
-        return;
-    }
-
-    if (state == catch_state) {
         return;
     }
 
@@ -182,7 +178,6 @@ static void catch_remote_state_switch(uint8_t key, remote_key_event_t event) {
 
         case CATCH_STATE_RECOGNIZE_KEY: {
             catch_set_state(CATCH_STATE_RECOGNIZE);
-            nav_publish(3); 
         } break;
 
         case CATCH_STATE_DONE_KEY: {
@@ -243,22 +238,25 @@ static void catch_feedback_task(void *pvParameters) {
                 break;
 
             case CATCH_STATE_RECOGNIZE:
-
+                VL53L1_StartMeasurement(g_vl53l1_handle2);
                 while (catch_state == CATCH_STATE_RECOGNIZE) {
                     uint16_t dist = 0;
                     if (vl53l1_apply_get_distance_mm(&dist, g_vl53l1_handle2)) {
-                        if (dist < VL53L1_APPLY_DISTANCE_THRESHOLD_MM && dist > 0) {
-                            log_message(LOG_INFO, "Recognized! dist = %d",
-                                        dist);
+                        if (dist < VL53L1_APPLY_DISTANCE_THRESHOLD_MM &&
+                            dist > 0) {
                             nav_publish(0);
 
                             // 发现物体，触发下一步抓取
                             catch_set_state(CATCH_STATE_GRAB);
+                            log_message(LOG_INFO, "Recognized! dist = %d",
+                                        dist);
+
                             break;
                         }
                     }
                     vTaskDelay(pdMS_TO_TICKS(30)); // 给 I2C 留出刷新时间
                 }
+                VL53L1_StopMeasurement(g_vl53l1_handle2);
                 break;
 
             case CATCH_STATE_CHECK:
@@ -277,7 +275,8 @@ static void catch_feedback_task(void *pvParameters) {
                         vTaskDelay(pdMS_TO_TICKS(30));
                     }
 
-                    if (total_dist > 0 && valid_count > 0 && (total_dist / valid_count) <= 100) {
+                    if (total_dist > 0 && valid_count > 0 &&
+                        (total_dist / valid_count) <= 100) {
                         control_dispatch_publish(1); // 成功抓取
                     } else {
                         control_dispatch_publish(2); // 抓取失败

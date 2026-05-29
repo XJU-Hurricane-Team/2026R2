@@ -12,21 +12,26 @@
 #include "adc.h"
 
 static void robot_arm_task(void *pvParameters);
+static void arm_feedback_task(void *pvParameters);
 static float arm_ctrl_wrap_pi(float angle);
 static void robot_arm_mark_reach_target(float y, float z, float pitch);
-static void robot_arm_check_target_reached(void);
-static void pump_check_ready(void);
+static void arm_pump_place_check(void);
+static void arm_pump_catch_check(void);
+static bool arm_is_motor_reached(void);
+
 static void pump_set_state(uint8_t on);
 static uint8_t pump_read_adc(uint16_t *out_value);
+static uint8_t pump_read_adc_filtered(uint16_t *out_value);
 
 #if ARM_USE_REMOTE_KEY
 static void arm_remote_state_switch(uint8_t key, remote_key_event_t event);
 #endif
 
-static RobotArm g_robot_arm;                 /* 机械臂控制对象 */
-static uint8_t g_arm_target_index;           /* 当前目标状态索引 (0~8) */
-static TaskHandle_t g_robot_arm_task_handle; /* 机械臂任务句柄 */
-static uint8_t g_last_target_index;          /* 上一次下发的目标状态索引 */
+static RobotArm g_robot_arm;                  /* 机械臂控制对象 */
+static uint8_t g_arm_target_index;            /* 当前目标状态索引 (0~8) */
+static TaskHandle_t g_robot_arm_task_handle;  /* 机械臂任务句柄 */
+static TaskHandle_t arm_feedback_task_handle; /* 机械臂反馈任务句柄 */
+static uint8_t g_last_target_index;           /* 上一次下发的目标状态索引 */
 
 static uint8_t g_place_target_index = 0;          /* 放置层级索引 (0~2) */
 static uint8_t g_wait_takeout_target_index = 2;   /* 待取出层级索引 (0~2) */
@@ -35,12 +40,10 @@ static uint8_t g_has_dynamic_target = 0;          /* 是否存在动态抓取目
 
 static float g_arm_reach_target_joint[3] = {0.0f, 0.0f,
                                             0.0f}; /* 到位判定的关节角目标 */
-// static uint8_t g_arm_reach_pending = 0;            /* 是否等待到位判定 (暂时不用，标志位总是不对) */
 static pump_wait_state_t g_pump_wait_state = PUMP_WAIT_NONE; /* 气泵等待状态 */
-static uint8_t g_last_switch_key = 0xFF;    /* 上一次遥控器切换键值 */
-static uint32_t g_pump_wait_start_tick = 0; /* 气泵等待开始时间戳 */
-static uint8_t g_adc_check_retry_count = 0; /* ADC检查重试次数 */
-static float g_pump_retry_offset_y = 0.0f;  /* 气泵重试Y轴累积偏移量 (mm) */
+static uint8_t g_last_switch_key = 0xFF; /* 上一次遥控器切换键值 */
+
+static float g_pump_retry_offset_y = 0.0f; /* 气泵重试Y轴累积偏移量 (mm) */
 
 /* ---------------- 预设目标点位 ---------------- */
 
@@ -70,7 +73,10 @@ static const arm_target_point_t g_arm_wait_takeout_points[3] = {
      -PI}, /* 2: 高层 */
 }; /* 待取出层级点位 */
 
-/* ---------------- 应用层实现 ---------------- */
+/* ======================== 【配置与外部接口模块】 ============================ */
+#pragma region API_Config
+/** @defgroup API_Config 系统初始化、动态目标配置及层级设置接口 */
+/** @{ */
 
 /**
  * @brief 状态索引转换为应用层枚举
@@ -110,8 +116,7 @@ static arm_status_t arm_status_from_index(uint8_t index) {
  */
 void robot_arm_set_dynamic_catch_target_up(float y, float x, float z) {
     /* 将米单位转换为毫米，并校准摄像头与吸盘中心的偏移补偿 */
-    // g_dynamic_target.y = y * 1000.0f + 200.0f - 55.0f + 20.0f;
-    // g_dynamic_target.z = z * 1000.0f + 10.0f + 90.0f;
+
     g_dynamic_target.y = y * 1000.0f + 200.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
     g_dynamic_target.z = z * 1000.0f + 10.0f + CAM_TO_CAT_Z_OFFSET + 30.0f;
 
@@ -127,25 +132,16 @@ void robot_arm_set_dynamic_catch_target_up(float y, float x, float z) {
  */
 void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
     /* 将米单位转换为毫米，并校准摄像头与吸盘中心的偏移补偿 */
-    // g_dynamic_target.y = (y * 1000.0f + 200.0f - 55.0f + 20.0f) * cosf(- CATCH_READY_2_ANGEL);
-    // g_dynamic_target.z = - (y * 1000.0f + 10.0f + 90.0f) * sinf(- CATCH_READY_2_ANGEL);
-    // g_has_dynamic_target = 1;
-
-    /* 摄像头坐标 (带偏移补偿) */
-    // float y_cam = y * 1000.0f + 200.0f - 55.0f + 20.0f;
-    // float z_cam = z * 1000.0f + 10.0f + 90.0f;
     float theta = CATCH_READY_2_ANGEL;
 
     float y_cam = y * cosf(theta) - z * sinf(theta);
     float z_cam = y * sinf(theta) + z * cosf(theta);
 
     /* 旋转到机械臂水平坐标系 */
-    // g_dynamic_target.y = y_cam * 1000.0f + 420.0f - 55.0f * sin(theta) + 20.0f;
-    // g_dynamic_target.z = z_cam * 1000.0f - 50.0f + 75.0f * cosf(theta);
     g_dynamic_target.y = y_cam * 1000.0f + 420.0f -
                          (CAM_TO_CAT_Y_OFFSET * cosf(theta) +
                           CAM_TO_CAT_Z_OFFSET * sinf(theta)) +
-                         20.0f;
+                         20.0f - 2.0f;
     g_dynamic_target.z = z_cam * 1000.0f - 50.0f +
                          (CAM_TO_CAT_Y_OFFSET * sinf(theta) +
                           CAM_TO_CAT_Z_OFFSET * cosf(theta)) +
@@ -209,7 +205,20 @@ void robot_arm_init(void) {
     /* 启动机械臂控制任务 */
     xTaskCreate(robot_arm_task, "arm_ctrl_task", 512, NULL, 3,
                 &g_robot_arm_task_handle);
+    xTaskCreate(arm_feedback_task, "arm_feedback_task", 256, NULL, 3,
+                &arm_feedback_task_handle);
+    if (arm_feedback_task_handle == NULL) {
+        log_message(LOG_ERROR, "arm_feedback_task creation failed!");
+    }
 }
+
+/** @} */
+#pragma endregion
+
+/* ======================== 【RTOS 任务执行模块】 ============================ */
+#pragma region RTOS_Task
+/** @defgroup RTOS_Task 机械臂核心轮询任务与事件驱动反馈任务 */
+/** @{ */
 
 /**
  * @brief 机械臂控制任务主循环
@@ -220,11 +229,58 @@ static void robot_arm_task(void *pvParameters) {
     while (1) {
         /* 周期更新控制、到位检测与气泵状态 */
         robot_arm_update(&g_robot_arm);
-        robot_arm_check_target_reached();
-        pump_check_ready();
         vTaskDelay(pdMS_TO_TICKS(ARM_TASK_PERIOD_MS));
     }
 }
+
+/**
+ * @brief 机械臂反馈检测任务,负责上报任务完成情况。
+ */
+static void arm_feedback_task(void *pvParameters) {
+    UNUSED(pvParameters);
+    while (1) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        arm_status_t current_status = g_robot_arm.status;
+
+        /* 阻塞等待电机物理到位 */
+        while (!arm_is_motor_reached()) {
+            if (g_robot_arm.status != current_status) {
+                break; // 运动中途收到新命令，状态被打断，立刻跳出
+            }
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+
+        if (g_robot_arm.status != current_status) {
+            continue; // 状态被打断，回到最顶层重新睡眠等待新通知
+        }
+
+        g_robot_arm.arm_motion_active = 0;
+
+        /* 电机到位后，根据不同业务状态执行特定检测 */
+        switch (current_status) {
+            case ARM_STATE_CATCH:
+                arm_pump_catch_check();
+                break;
+
+            case ARM_STATE_PLACE:
+                arm_pump_place_check();
+                break;
+
+            default:
+                control_dispatch_publish(1);
+                break;
+        }
+    }
+}
+
+/** @} */
+#pragma endregion
+
+/* ======================== 【目标状态下发模块】 ============================ */
+#pragma region Target_Dispatch
+/** @defgroup Target_Dispatch 目标点位解析、合并与序列下发 */
+/** @{ */
 
 /**
  * @brief 设置机械臂当前目标状态索引
@@ -308,13 +364,24 @@ void robot_arm_apply_target(uint8_t index) {
                                          wait_takeout_suction_angle);
         robot_arm_mark_reach_target(target_y, target_z, target_pitch);
         g_last_target_index = index;
+        xTaskNotifyGive(arm_feedback_task_handle);
         return;
     }
 
     robot_arm_mark_reach_target(target_y, target_z, target_pitch);
     robot_arm_set_target(&g_robot_arm, target_y, target_z, target_pitch);
     g_last_target_index = index;
+
+    xTaskNotifyGive(arm_feedback_task_handle);
 }
+
+/** @} */
+#pragma endregion
+
+/* ======================== 【底层运算与状态判定模块】 ============================ */
+#pragma region Math_And_State
+/** @defgroup Math_And_State 角度归一化、运动学计算记录与电机物理到位判定 */
+/** @{ */
 
 /**
  * @brief 将角度限制到 [-PI, PI]
@@ -364,139 +431,118 @@ static void robot_arm_mark_reach_target(float y, float z, float pitch) {
 }
 
 /**
- * @brief 检查机械臂是否到达目标点，并触发后续动作
+ * @brief 判定电机是否已到达目标角度
+ * @return true: 已到位 / false: 运动中
  */
-static void robot_arm_check_target_reached(void) {
-    /* 如果没有等待到位判定，则直接返回（暂时不使用这个标志位，因为存在标志位覆盖） */
-    // if (!g_arm_reach_pending) {
-    //     return;
-    // }
+static bool arm_is_motor_reached(void) {
+    if (robot_arm_is_takeout_sequence_active(&g_robot_arm)) {
+        return false;
+    }
 
-    /* 关节角误差判定到位 */
     float err_j1 = arm_ctrl_wrap_pi(g_robot_arm.damiao_1.position -
                                     g_arm_reach_target_joint[0]);
     float err_j3 = arm_ctrl_wrap_2pi(g_robot_arm.damiao_3.position -
                                      g_arm_reach_target_joint[1]);
 
-    uint8_t big_small_reached = (fabsf(err_j1) <= ARM_REACH_JOINT_TOL_RAD) &&
-                                (fabsf(err_j3) <= ARM_REACH_JOINT_TOL_RAD);
-
-    if (!big_small_reached) {
-        return;
-    }
-
-    if (robot_arm_is_takeout_sequence_active(&g_robot_arm)) {
-        return;
-    }
-
-    // g_arm_reach_pending = 0;
-    g_robot_arm.arm_motion_active = 0;
-
-    if (g_robot_arm.status == ARM_STATE_CATCH) {
-        /* 抓取到位：打开气泵并根据配置等待压力建立 */
-        pump_set_state(1);
-        g_pump_wait_start_tick = HAL_GetTick();
-        g_adc_check_retry_count = 0;  /* 重置ADC检查重试计数器 */
-        g_pump_retry_offset_y = 0.0f; /* 重置重试偏移 */
-#if ARM_USE_PUMP_ADC_CHECK
-        g_pump_wait_state = PUMP_WAIT_CATCH;
-        return;
-#else
-        /* 不开启ADC检查时，3秒超时后发送完成信号 */
-        g_pump_wait_state = PUMP_WAIT_CATCH;
-        return;
-#endif
-    }
-
-    if (g_robot_arm.status == ARM_STATE_PLACE) {
-        /* 放置到位：关闭气泵并根据配置等待压力释放 */
-        pump_set_state(0);
-        g_pump_wait_start_tick = HAL_GetTick();
-#if ARM_USE_PUMP_ADC_CHECK
-        g_pump_wait_state = PUMP_WAIT_PLACE;
-        return;
-#else
-        /* 不开启ADC检查时，3秒超时后发送完成信号 */
-        g_pump_wait_state = PUMP_WAIT_PLACE;
-        return;
-#endif
-    }
-
-    control_dispatch_publish(1);
+    return (fabsf(err_j1) <= ARM_REACH_JOINT_TOL_RAD) &&
+           (fabsf(err_j3) <= ARM_REACH_JOINT_TOL_RAD);
 }
 
+/** @} */
+#pragma endregion
+
+/* ======================== 【末端执行器与气压模块】 ============================ */
+#pragma region End_Effector
+/** @defgroup End_Effector 气泵硬件驱动、ADC气压读取与业务反馈校验 */
+/** @{ */
+
 /**
- * @brief 检查气泵压力是否达到就绪条件
+ * @brief 执行抓取状态下的气压检测与重试逻辑
  */
-static void pump_check_ready(void) {
-    if (g_pump_wait_state == PUMP_WAIT_NONE) {
-        return;
-    }
+static void arm_pump_catch_check(void) {
+    pump_set_state(1); // 打开气泵
+    uint32_t wait_start_tick = HAL_GetTick();
+    uint8_t retry_count = 0;
+    float retry_offset_y = 0.0f;
 
-    /* 检查是否超过2秒超时时间 */
-    uint32_t elapsed = HAL_GetTick() - g_pump_wait_start_tick;
-    if (elapsed >= 2000U) {
+    /* 只要状态没被外部打断，就一直循环检测 */
+    while (g_robot_arm.status == ARM_STATE_CATCH) {
+        uint16_t adc_val = 0;
+
 #if ARM_USE_PUMP_ADC_CHECK
-        /* ADC检查开启时，抓取状态2秒超时后沿Y方向推进10mm重试 */
-        if (g_pump_wait_state == PUMP_WAIT_CATCH &&
-            g_adc_check_retry_count < 5) {
-            g_pump_retry_offset_y += 10.0f;
-            float new_y = g_robot_arm.final_target_y + g_pump_retry_offset_y;
-            float new_z = g_robot_arm.final_target_z;
-            float new_pitch = g_robot_arm.final_target_pitch;
-
-            /* 重新计算关节角目标值用于到位判定 */
-            robot_arm_mark_reach_target(new_y, new_z, new_pitch);
-
-            /* 直接更新 arm_target，不调用 robot_arm_set_target，
-               避免污染 final_target_y 和触发不必要的 SINGLE_TRANS */
-            g_robot_arm.arm_target_y = new_y;
-            g_robot_arm.arm_target_z = new_z;
-            g_robot_arm.arm_target_pitch = new_pitch;
-            g_robot_arm.motion_state = ARM_MOTION_STATE_DIRECT_MOVE;
-            g_robot_arm.target_mode = ARM_TARGET_CARTESIAN;
-
-            /* 重置计时器和增加重试计数 */
-            g_pump_wait_start_tick = HAL_GetTick();
-            g_adc_check_retry_count++;
-
-            log_message(LOG_INFO,
-                        "ADC check timeout, retry %d/5, target y += 10mm\n",
-                        g_adc_check_retry_count);
+        if (pump_read_adc_filtered(&adc_val)) {
+            if (adc_val < PUMP_ADC_READY_LOW) {
+                log_message(LOG_INFO, "ARM_CATCH Success, adc=%d", adc_val);
+                control_dispatch_publish(1); // 成功抓取
+                return;
+            }
+        }
+#else
+        // 未开启 ADC 检测，延时默认成功
+        if (HAL_GetTick() - wait_start_tick >= 2000U) {
+            control_dispatch_publish(1);
             return;
         }
 #endif
-        /* 不开启ADC检查或放置状态超时或重试次数用尽，直接发送完成信号 */
-        control_dispatch_publish(1);
-        g_pump_wait_state = PUMP_WAIT_NONE;
-        g_adc_check_retry_count = 0;
-        g_pump_retry_offset_y = 0.0f;
-        return;
-    }
 
-#if !ARM_USE_PUMP_ADC_CHECK
-    return;
+        /* 超时与推进重试逻辑 */
+        if (HAL_GetTick() - wait_start_tick >= 2000U) {
+#if ARM_USE_PUMP_ADC_CHECK
+            if (retry_count < 5) {
+                retry_offset_y += 10.0f;
+                float new_y = g_robot_arm.final_target_y + retry_offset_y;
+
+                // 重新设定推进目标
+                robot_arm_mark_reach_target(new_y, g_robot_arm.final_target_z,
+                                            g_robot_arm.final_target_pitch);
+                g_robot_arm.arm_target_y = new_y;
+                g_robot_arm.motion_state = ARM_MOTION_STATE_DIRECT_MOVE;
+
+                // 等待这次微调推进到位
+                while (!arm_is_motor_reached() &&
+                       g_robot_arm.status == ARM_STATE_CATCH) {
+                    vTaskDelay(pdMS_TO_TICKS(10));
+                }
+
+                wait_start_tick = HAL_GetTick(); // 重置 2 秒计时器
+                retry_count++;
+                continue;
+            }
 #endif
+            // 重试耗尽，抓取失败
+            control_dispatch_publish(2);
+            return;
+        }
 
-    uint16_t adc_value = 0;
-    /* 读取气泵压力 ADC */
-    if (!pump_read_adc(&adc_value)) {
-        return;
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
+}
 
-    /* 根据等待状态判断抓取/释放完成 */
-    if (g_pump_wait_state == PUMP_WAIT_CATCH &&
-        adc_value < PUMP_ADC_READY_LOW) {
-        control_dispatch_publish(1);
-        g_pump_wait_state = PUMP_WAIT_NONE;
-        g_adc_check_retry_count = 0;
-        g_pump_retry_offset_y = 0.0f;
-    } else if (g_pump_wait_state == PUMP_WAIT_PLACE &&
-               adc_value > PUMP_ADC_READY_HIGH) {
-        control_dispatch_publish(1);
-        g_pump_wait_state = PUMP_WAIT_NONE;
-        g_adc_check_retry_count = 0;
-        g_pump_retry_offset_y = 0.0f;
+/**
+ * @brief 执行放置状态下的压力释放检测
+ */
+static void arm_pump_place_check(void) {
+    pump_set_state(0); // 关闭气泵
+    uint32_t wait_start_tick = HAL_GetTick();
+
+    while (g_robot_arm.status == ARM_STATE_PLACE) {
+        uint16_t adc_val = 0;
+
+#if ARM_USE_PUMP_ADC_CHECK
+        if (pump_read_adc_filtered(&adc_val)) {
+            if (adc_val > PUMP_ADC_READY_HIGH) {
+                log_message(LOG_INFO, "ARM_PLACE Success, adc=%d", adc_val);
+                control_dispatch_publish(1);
+                return;
+            }
+        }
+#endif
+        if (HAL_GetTick() - wait_start_tick >= 2000U) {
+            control_dispatch_publish(1); // 超时也认为放置完成
+            return;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
@@ -522,8 +568,8 @@ static uint8_t pump_read_adc(uint16_t *out_value) {
     if (HAL_ADC_Start(&hadc1) != HAL_OK) {
         return 0;
     }
-    
-    if (HAL_ADC_PollForConversion(&hadc1, 2) != HAL_OK) {
+
+    if (HAL_ADC_PollForConversion(&hadc1, 10) != HAL_OK) {
         HAL_ADC_Stop(&hadc1);
         return 0;
     }
@@ -534,7 +580,31 @@ static uint8_t pump_read_adc(uint16_t *out_value) {
     return 1;
 }
 
+#define ADC_SAMPLE_COUNT 50
+
+static uint8_t pump_read_adc_filtered(uint16_t *out_value) {
+    uint32_t sum = 0;
+    uint16_t samples[ADC_SAMPLE_COUNT];
+
+    for (int i = 0; i < ADC_SAMPLE_COUNT; i++) {
+        if (!pump_read_adc(&samples[i])) {
+            return 0;
+        }
+        sum += samples[i];
+    }
+    *out_value = (uint16_t)(sum / ADC_SAMPLE_COUNT);
+    return 1;
+}
+
+/** @} */
+#pragma endregion
+
 #if ARM_USE_REMOTE_KEY
+/* ======================== 【遥控器交互模块】 ============================ */
+#pragma region Remote_Control
+/** @defgroup Remote_Control 物理遥控器按键状态机调度 */
+/** @{ */
+
 /**
  * @brief 遥控器按键切换状态回调
  * @param key 按键值
@@ -551,4 +621,7 @@ static void arm_remote_state_switch(uint8_t key, remote_key_event_t event) {
         robot_arm_set_state_index((uint8_t)(key - ARM_SWITCH_KEY));
     }
 }
+
+/** @} */
+#pragma endregion
 #endif
