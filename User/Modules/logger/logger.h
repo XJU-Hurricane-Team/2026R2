@@ -34,7 +34,7 @@ extern "C" {
 #define LOG_ENABLE           1
 #define LOG_USE_RTOS         1
 #define LOG_USE_MUTEX        1
-#define LOG_SHOW_RUNNING_TIME 1
+#define LOG_SHOW_RUNNING_TIME 0
 
 /* 引入 FreeRTOS 队列相关的头文件 */
 #include "FreeRTOS.h"

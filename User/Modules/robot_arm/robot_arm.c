@@ -39,7 +39,7 @@ static uint8_t arm_is_place_like(arm_status_t status) {
 
 uint8_t arm_is_ready_state(RobotArm *arm) {
     return (arm->status == ARM_STATE_READY_1) ||
-           (arm->status == ARM_STATE_READY_2);
+           (arm->status == ARM_STATE_READY_2) || (arm->status == ARM_STATE_READY_3);
 }
 
 uint8_t arm_is_takeout_state(RobotArm *arm) {

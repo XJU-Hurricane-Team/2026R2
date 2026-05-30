@@ -47,16 +47,17 @@ static float g_pump_retry_offset_y = 0.0f; /* 气泵重试Y轴累积偏移量 (m
 
 /* ---------------- 预设目标点位 ---------------- */
 
-static const arm_target_point_t g_arm_target_points[9] = {
+static const arm_target_point_t g_arm_target_points[10] = {
     {139.95f + 20.0f + 50.0f, 102.70f + 30.0f, 0.6955f}, /* 0: INIT */
     {200.000f, 10.0f, 0.0f},                             /* 1: READY_1 */
     {420.000f, -50.0f, CATCH_READY_2_ANGEL},             /* 2: READY_2 */
-    {513.142f, 200.0f, 0.0f},                            /* 3: CATCH */
-    {-275.12f, 493.991f, -PI / 2.0},                     /* 4: PLACE */
-    {533.142f, 300.0f, 0.0f},                            /* 5: WAIT_TAKEOUT */
-    {430.000f, 1050.0f, PI / 12.0},                      /* 6: TAKEOUT_1 */
-    {203.142f, 850.0f, 0.0f},                            /* 7: TAKEOUT_2  */
-    {-60.120f, 805.0f, -PI},                             /* 8: OVERLOOK */
+    {570.000f, 180.0f, 0.08f},                           /* 3: READY_3 */
+    {513.142f, 200.0f, 0.0f},                            /* 4: CATCH */
+    {-275.12f, 493.991f, -PI / 2.0},                     /* 5: PLACE */
+    {533.142f, 300.0f, 0.0f},                            /* 6: WAIT_TAKEOUT */
+    {430.000f, 1050.0f, PI / 12.0},                      /* 7: TAKEOUT_1 */
+    {203.142f, 850.0f, 0.0f},                            /* 8: TAKEOUT_2  */
+    {170.0f, 900.0f, PI * 0.75 + 0.1},                   /* 9: OVERLOOK */
 };
 
 static const arm_target_point_t g_arm_place_points[3] = {
@@ -92,16 +93,18 @@ static arm_status_t arm_status_from_index(uint8_t index) {
         case 2:
             return ARM_STATE_READY_2;
         case 3:
-            return ARM_STATE_CATCH;
+            return ARM_STATE_READY_3;
         case 4:
-            return ARM_STATE_PLACE;
+            return ARM_STATE_CATCH;
         case 5:
-            return ARM_STATE_WAIT_TAKEOUT;
+            return ARM_STATE_PLACE;
         case 6:
-            return ARM_STATE_TAKEOUT_1;
+            return ARM_STATE_WAIT_TAKEOUT;
         case 7:
-            return ARM_STATE_TAKEOUT_2;
+            return ARM_STATE_TAKEOUT_1;
         case 8:
+            return ARM_STATE_TAKEOUT_2;
+        case 9:
             return ARM_STATE_OVERLOOK;
         default:
             return ARM_STATE_INIT;
@@ -119,6 +122,21 @@ void robot_arm_set_dynamic_catch_target_up(float y, float x, float z) {
 
     g_dynamic_target.y = y * 1000.0f + 200.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
     g_dynamic_target.z = z * 1000.0f + 10.0f + CAM_TO_CAT_Z_OFFSET + 30.0f;
+
+    g_has_dynamic_target = 1;
+    (void)x; //x不使用，仅用于底盘校准，与机械臂校准无关
+}
+
+/**
+ * @brief 设置动态抓取上层目标 
+ * @param y 动态 Y 坐标 (m)
+ * @param x 动态 X 坐标 (m，当前未参与目标计算)
+ * @param z 动态 Z 坐标 (m)
+ */
+void robot_arm_set_dynamic_catch_target_up2(float y, float x, float z) {
+
+    g_dynamic_target.y = y * 1000.0f + 570.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
+    g_dynamic_target.z = z * 1000.0f + 180.0f + CAM_TO_CAT_Z_OFFSET;
 
     g_has_dynamic_target = 1;
     (void)x; //x不使用，仅用于底盘校准，与机械臂校准无关
@@ -147,9 +165,7 @@ void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
                           CAM_TO_CAT_Z_OFFSET * cosf(theta)) +
                          30.0f;
     g_has_dynamic_target = 1;
-    log_message(LOG_INFO, "Set target: y=%.1fmm, z=%.1fmm\n",
-                g_dynamic_target.y, g_dynamic_target.z);
-    log_data(LOG_CHASSIS, g_dynamic_target.y, g_dynamic_target.z);
+
     (void)x; //x不使用，仅用于底盘校准，与机械臂校准无关
 }
 
@@ -284,10 +300,10 @@ static void arm_feedback_task(void *pvParameters) {
 
 /**
  * @brief 设置机械臂当前目标状态索引
- * @param index 状态索引 (0~7)
+ * @param index 状态索引 (0~9)
  */
 void robot_arm_set_state_index(uint8_t index) {
-    if (index > 8) {
+    if (index > 10) {
         return;
     }
     g_arm_target_index = index;
