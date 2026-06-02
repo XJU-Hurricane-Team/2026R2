@@ -44,7 +44,6 @@ void nav_module_init(void);
 void nav_sub_callback(const void *msgin);
 void nav_publish(int8_t status);
 
-
 // 控制调度模块
 static rcl_service_t control_dispatch_service = {0};
 static rcl_publisher_t control_dispatch_publisher = {0};
@@ -57,21 +56,20 @@ void control_dispatch_init(void);
 void control_dispatch_callback(const void *request_msg, void *response_msg);
 void control_dispatch_publish(int8_t status);
 
-
 // 日志模块句柄
 static rcl_publisher_t log_msg_publisher = {0};
 static rcl_publisher_t log_data_publisher = {0};
 std_msgs__msg__String ros_log_msg = {0};
 std_msgs__msg__Float32MultiArray ros_log_data = {0};
 static char ros_string_buffer[LOG_MSG_BUFFER_SIZE] = {0};
-static float ros_data_buffer[LOG_DATA_COUNT + 1] = {0}; // 预留第一个元素存放数据个数 
+static float ros_data_buffer[LOG_DATA_COUNT + 1] = {
+    0}; // 预留第一个元素存放数据个数
 log_msg_packet_t log_msg_packet = {0};
 log_data_packet_t log_data_packet = {0};
 
 void logger_module_init(void);
 void microros_log_msg_cb(const char *data, uint16_t len);
 void microros_log_data_cb(const log_data_packet_t *packet);
-
 
 /* ======================== 【任务执行模块】 ============================ */
 #pragma region MicroROS_Task
@@ -186,7 +184,6 @@ void microros_task(void *pvParameters) {
     control_dispatch_init();
     vTaskDelay(1000); // 初始化缓冲
 
-
     while (1) {
         if (microros_rcl_mutex != NULL &&
             xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
@@ -211,7 +208,7 @@ void microros_task(void *pvParameters) {
  */
 void nav_module_init(void) {
     rcl_ret_t ret = 0;
-     ret |= rclc_subscription_init_best_effort(
+    ret |= rclc_subscription_init_best_effort(
         &nav_subscriber, &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(custom_msg, msg, SpeedHeading),
         "/nav_speed_heading_data");
@@ -220,29 +217,27 @@ void nav_module_init(void) {
                     "nav_module_init: subscription init failed, ret=%d\n",
                     (int)ret);
         return;
-    } 
+    }
 
-    ret |= rclc_executor_add_subscription(&executor, &nav_subscriber, &nav_sub_pram,
-                                         &nav_sub_callback, ON_NEW_DATA);
+    ret |= rclc_executor_add_subscription(&executor, &nav_subscriber,
+                                          &nav_sub_pram, &nav_sub_callback,
+                                          ON_NEW_DATA);
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR, "nav_module_init: add subscription failed");
     }
 
     ret |= rclc_publisher_init_default(
-        &nav_publisher, &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8), "/nav_topic");
+        &nav_publisher, &node, ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
+        "/nav_topic");
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR,
                     "nav_module_init: publisher init failed, ret=%d\n",
                     (int)ret);
-    } 
+    }
 
-    if (ret == RCL_RET_OK)
-    {
+    if (ret == RCL_RET_OK) {
         log_message(LOG_INFO, "nav_module init successed");
     }
-    
-   
 }
 
 /**
@@ -252,13 +247,11 @@ void nav_publish(int8_t status) {
     nav_pub_pram.data = status;
     if (microros_rcl_mutex != NULL &&
         xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
-        rcl_ret_t pub_ret =
-            rcl_publish(&nav_publisher, &nav_pub_pram, NULL);
+        rcl_ret_t pub_ret = rcl_publish(&nav_publisher, &nav_pub_pram, NULL);
         if (pub_ret != RCL_RET_OK) {
             log_message(LOG_ERROR, "nav_publish: publish failed\n");
         } else {
-            log_message(LOG_INFO,
-                        "nav_publish: pub successed, status=%d\n",
+            log_message(LOG_INFO, "nav_publish: pub successed, status=%d\n",
                         status);
         }
         xSemaphoreGive(microros_rcl_mutex);
@@ -287,7 +280,8 @@ void nav_sub_callback(const void *msgin) {
  * 
  */
 void control_dispatch_init(void) {
-    rcl_ret_t ret = rclc_service_init_default(
+    rcl_ret_t ret = 0;
+    ret |= rclc_service_init_default(
         &control_dispatch_service, &node,
         ROSIDL_GET_SRV_TYPE_SUPPORT(custom_msg, srv, ControlDispatch),
         "/control_dispatch_srv");
@@ -295,11 +289,9 @@ void control_dispatch_init(void) {
         log_message(LOG_ERROR,
                     "control_dispatch_init: service init failed, ret=%d\n",
                     (int)ret);
-    } else {
-        log_message(LOG_INFO, "control_dispatch_init: service init successed");
     }
 
-    ret = rclc_publisher_init_default(
+    ret |= rclc_publisher_init_default(
         &control_dispatch_publisher, &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Int8),
         "/control_dispatch_topic");
@@ -307,21 +299,19 @@ void control_dispatch_init(void) {
         log_message(LOG_ERROR,
                     "control_dispatch_init: publisher init failed, ret=%d\n",
                     (int)ret);
-    } else {
-        log_message(LOG_INFO,
-                    "control_dispatch_init: publisher init successed");
     }
 
-    ret = rclc_executor_add_service(
+    ret |= rclc_executor_add_service(
         &executor, &control_dispatch_service, &control_dispatch_request,
         &control_dispatch_response, &control_dispatch_callback);
     if (ret != RCL_RET_OK) {
         log_message(LOG_ERROR, "control_dispatch_init: add service failed");
-    } else {
-        log_message(LOG_INFO, "control_dispatch_init: add service successed");
+    }
+
+    if(ret == RCL_RET_OK) {
+        log_message(LOG_INFO, "control_dispatch_module init successed");
     }
 }
-
 
 /**
  * @brief 底层控制状态发布函数
@@ -391,30 +381,37 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 last_command_mode = 2;
                 break;
             case 3:
+                robot_arm_set_state_index(3); // 准备（40cm的向上抓取）
+                last_command_mode = 3;
+                break;
+            case 4:
                 if (last_command_mode == 1) {
                     robot_arm_set_dynamic_catch_target_up(
                         req_in->point.x, req_in->point.y, req_in->point.z);
                 } else if (last_command_mode == 2) {
                     robot_arm_set_dynamic_catch_target_down(
                         req_in->point.x, req_in->point.y, req_in->point.z);
+                } else if (last_command_mode == 3) {
+                    robot_arm_set_dynamic_catch_target_up2(
+                        req_in->point.x, req_in->point.y, req_in->point.z);
                 }
                 last_command_mode = 0;
-                robot_arm_set_state_index(3); // 抓取（动态目标覆盖）
-                break;
-            case 4:
-                robot_arm_set_state_index(4); // 放置
+                robot_arm_set_state_index(4); // 抓取（动态目标覆盖）
                 break;
             case 5:
-                robot_arm_set_state_index(5); // 准备取出
+                robot_arm_set_state_index(5); // 放置
                 break;
             case 6:
-                robot_arm_set_state_index(6); // 放置2层
+                robot_arm_set_state_index(6); // 准备取出
                 break;
             case 7:
-                robot_arm_set_state_index(7); // 放置3层
+                robot_arm_set_state_index(7); // 放置2层
                 break;
             case 8:
-                robot_arm_set_state_index(8); // 摄象头识别位
+                robot_arm_set_state_index(8); // 放置3层
+                break;
+            case 9:
+                robot_arm_set_state_index(9); // 摄象头识别位
                 break;
             default:
                 break;

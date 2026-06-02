@@ -37,13 +37,13 @@
 #define PROXIMITY_SENSOR_PIN_0   GPIO_PIN_2
 #define PROXIMITY_SENSOR_PIN_1   GPIO_PIN_3
 
-#define LIFT_TARGET_CATCH_DEG    1.6245f
+#define LIFT_TARGET_CATCH_DEG    1.9743f
 #define LIFT_TARGET_DEG_UP_MAX   5.42f
 #define LIFT_TARGET_DEG_DOWN_MAX 12.275f
 #define LIFT_TARGET_DEG_UP_SEQ   0.0f
 #define LIFT_TARGET_DEG_DOWN_SEQ 12.275f
 #define LIFT_TARGET_DEG_STEP     0.025f
-#define LIFT_TARGET_SPEED        5.0f
+#define LIFT_TARGET_SPEED        7.0f
 
 typedef enum {
     LIFT_STATE_NORMAL = 0,
@@ -741,8 +741,8 @@ static void lift_up_step_wait_down_arrived(void) {
 
 // 上升步骤4：2006电机正转，等待后光电上升沿
 static void lift_up_step_drive_2006_forward(void) {
-    g_lift_handle.target_2006_rpm = 1000.0f;
-    vTaskDelay(300);
+    g_lift_handle.target_2006_rpm = 2000.0f;
+    // vTaskDelay(100);
     // 检查后光电的上升沿（false -> true）
     if (get_rear_photoelectric_rising_edge()) {
         g_lift_handle.target_2006_rpm = 0.0f;
@@ -787,10 +787,10 @@ static void lift_down_step_wait_down_arrived(void) {
 
 // 下降步骤4：2006电机反转，等待中光电下降沿
 static void lift_down_step_drive_2006_backward(void) {
-    g_lift_handle.target_2006_rpm = -1000.0f;
+    g_lift_handle.target_2006_rpm = -2000.0f;
     // 检查中光电的下降沿（true -> false）
     if (get_middle_photoelectric_falling_edge()) {
-        vTaskDelay(350);
+        // vTaskDelay(350);
         log_message(LOG_INFO, "lift up");
         g_lift_handle.target_2006_rpm = 0.0f;
         g_lift_handle.lift_state = LIFT_STATE_UP;

@@ -24,7 +24,7 @@ QueueHandle_t log_data_queue;         // 实体定义
 #include <stdarg.h>
 #include <stdio.h>
 
-#define MAX_MSG_PROCESS_PER_SLICE  3  /* 每次最多处理 3 条字符串日志 */
+#define MAX_MSG_PROCESS_PER_SLICE  4 /* 每次最多处理 3 条字符串日志 */
 #define MAX_DATA_PROCESS_PER_SLICE 5 /* 每次最多处理 5 条数据日志 */
 #define EXECUTE_EVERY_MS(ms, last_time_var, code_block)                        \
     do {                                                                       \
@@ -43,13 +43,16 @@ static log_data_packet_t log_data_packet = {0};
 static log_msg_output_function_t log_msg_output_function = NULL;
 static log_data_output_function_t log_data_output_function = NULL;
 
-
 static const char log_level_str[6][11] = {
     "[DEBUG]   ", "[INFO]    ", "[WARNING] ",
     "[ERROR]   ", "[FATAL]   ", "[UNKNOW]  ",
 };
 
 static TaskHandle_t log_task_handle;
+
+static uint32_t stat_dropped_msg_count = 0; // 记录丢掉的日志总数
+static size_t stat_max_buffer_usage = 0; // 记录缓冲区的历史最高占用量（字节）
+
 void log_task(void *pvParameters);
 
 /**
@@ -78,12 +81,10 @@ void log_init(log_level_t init_level) {
     log_data_queue =
         xQueueCreate(LOG_DATA_QUEUE_LENGTH, sizeof(log_data_packet_t));
 
-
     xTaskCreate(log_task, "log_task", 512, NULL, 4, &log_task_handle);
 
 #endif
 }
-
 
 void log_message(log_level_t level, char *format, ...) {
 #if LOG_ENABLE
@@ -128,7 +129,14 @@ void log_message(log_level_t level, char *format, ...) {
 
 #if LOG_USE_RTOS
 
-    xMessageBufferSend(log_msg_buffer, packet.data, packet.len, 0);
+    // xMessageBufferSend(log_msg_buffer, packet.data, packet.len, 0);
+
+    size_t sent_bytes =
+        xMessageBufferSend(log_msg_buffer, packet.data, packet.len, 0);
+    if (sent_bytes == 0) {
+        // 如果返回 0，说明缓冲区满了，一点都没写进去.
+        stat_dropped_msg_count++;
+    }
     memset(&packet, 0, sizeof(log_msg_packet_t));
 
     xSemaphoreGive(buf_semp);
@@ -167,23 +175,27 @@ void log_task(void *pvParameters) {
 
     char msg_rx_buffer[LOG_MSG_BUFFER_SIZE];
     log_data_packet_t data_rx_buffer;
+    size_t total_buffer_size = LOG_MSG_BUFFER_SIZE * 8; // 与创建时的大小一致
+
+    size_t threshold_80 = total_buffer_size * 8 / 10; // 80% 危险水位
+    size_t threshold_50 = total_buffer_size * 5 / 10; // 50% 安全水位
+    bool warned_80_percent = false;                   // 报警状态锁
+    uint32_t last_dropped_count = 0;                  // 上次记录的丢包总数
 
     TickType_t t_msg = xTaskGetTickCount();
     TickType_t t_data = xTaskGetTickCount();
 
     while (1) {
         /* ---------------- 字符串日志处理块 ---------------- */
-        EXECUTE_EVERY_MS(500, t_msg, {
+        EXECUTE_EVERY_MS(200, t_msg, {
             if (log_msg_buffer != NULL && log_msg_output_function != NULL) {
                 size_t rx_len;
                 uint8_t process_count = 0;
 
                 while ((process_count < MAX_MSG_PROCESS_PER_SLICE) &&
                        ((rx_len = xMessageBufferReceive(
-                             log_msg_buffer,
-                             msg_rx_buffer,
-                             sizeof(msg_rx_buffer) - 1,
-                             0)) > 0)) {
+                             log_msg_buffer, msg_rx_buffer,
+                             sizeof(msg_rx_buffer) - 1, 0)) > 0)) {
                     msg_rx_buffer[rx_len] = '\0';
                     log_msg_output_function(msg_rx_buffer, rx_len);
                     process_count++;
@@ -197,12 +209,64 @@ void log_task(void *pvParameters) {
                 uint8_t process_count = 0;
 
                 while ((process_count < MAX_DATA_PROCESS_PER_SLICE) &&
-                       (xQueueReceive(log_data_queue, &data_rx_buffer, 0) == pdTRUE)) {
+                       (xQueueReceive(log_data_queue, &data_rx_buffer, 0) ==
+                        pdTRUE)) {
                     log_data_output_function(&data_rx_buffer);
                     process_count++;
                 }
             }
         });
+
+        /* ---------------- 系统状态检测处理块 ---------------- */
+        size_t free_space = xMessageBufferSpaceAvailable(log_msg_buffer);
+        size_t current_usage = total_buffer_size - free_space;
+
+        /* 缓存使用超过80% */
+        if (current_usage > threshold_80) {
+            // 打印一次警告
+            if (!warned_80_percent) {
+                char warn_str[128];
+                int len =
+                    snprintf(warn_str, sizeof(warn_str),
+                             "[LOG WARN] Buffer > 80%%! (%d/%d bytes)\r\n",
+                             (int)current_usage, (int)total_buffer_size);
+                if (len > 0) {
+                    log_msg_output_function(warn_str, len);
+                }
+
+                warned_80_percent = true;
+            }
+        }
+        // 降到 50% 以下，解除警报状态
+        else if (current_usage < threshold_50 && warned_80_percent) {
+            warned_80_percent = false;
+            char warn_str[128];
+            int len = snprintf(
+                warn_str, sizeof(warn_str),
+                "[LOG WARN] Buffer < 50%%, back to normal. (%d/%d bytes)\r\n",
+                (int)current_usage, (int)total_buffer_size);
+            if (len > 0) {
+                log_msg_output_function(warn_str, len);
+            }
+        }
+
+        if (log_msg_output_function != NULL) {
+            uint16_t current_dropped = stat_dropped_msg_count;
+
+            // 如果现在的丢包总数 > 上次的丢包总数，打印一次丢包信息
+            if (current_dropped > last_dropped_count) {
+                char drop_str[64];
+                int len = snprintf(drop_str, sizeof(drop_str),
+                                   "[LOG ERROR] Total drops: %u)\r\n",
+                                   (unsigned int)current_dropped);
+                if (len > 0) {
+                    log_msg_output_function(drop_str, len);
+                }
+
+                // 更新记录，等待下一次增量
+                last_dropped_count = current_dropped;
+            }
+        }
 
         vTaskDelay(2);
     }

@@ -61,6 +61,7 @@ void robot_arm_set_state_index(uint8_t index);
 void robot_arm_apply_target(uint8_t index);
 void robot_arm_set_dynamic_catch_target_up(float y, float x, float z);
 void robot_arm_set_dynamic_catch_target_down(float y, float x, float z);
+void robot_arm_set_dynamic_catch_target_up2(float y, float x, float z);
 void robot_arm_set_place_index(uint8_t place_idx);
 void robot_arm_set_wait_takeout_index(uint8_t takeout_idx);
 
