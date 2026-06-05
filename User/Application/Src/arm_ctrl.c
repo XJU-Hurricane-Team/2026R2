@@ -55,8 +55,8 @@ static const arm_target_point_t g_arm_target_points[10] = {
     {513.142f, 200.0f, 0.0f},                            /* 4: CATCH */
     {-275.12f, 493.991f, -PI / 2.0},                     /* 5: PLACE */
     {533.142f, 300.0f, 0.0f},                            /* 6: WAIT_TAKEOUT */
-    {430.000f, 1050.0f, PI / 12.0},                      /* 7: TAKEOUT_1 */
-    {203.142f, 850.0f, 0.0f},                            /* 8: TAKEOUT_2  */
+    {430.000f, 800.0f, PI / 12.0},                      /* 7: TAKEOUT_1 */
+    {203.142f, 845.0f, 0.0f},                            /* 8: TAKEOUT_2  */
     {170.0f, 900.0f, PI * 0.75 + 0.1},                   /* 9: OVERLOOK */
 };
 
@@ -81,7 +81,7 @@ static const arm_target_point_t g_arm_wait_takeout_points[3] = {
 
 /**
  * @brief 状态索引转换为应用层枚举
- * @param index 状态索引 (0~8)
+ * @param index 状态索引 (0~10)
  * @return 对应的机械臂状态枚举值
  */
 static arm_status_t arm_status_from_index(uint8_t index) {
@@ -106,6 +106,8 @@ static arm_status_t arm_status_from_index(uint8_t index) {
             return ARM_STATE_TAKEOUT_2;
         case 9:
             return ARM_STATE_OVERLOOK;
+        case 10:
+            return ARM_STATE_CLOSE_PUMP;
         default:
             return ARM_STATE_INIT;
     }
@@ -259,6 +261,12 @@ static void arm_feedback_task(void *pvParameters) {
 
         arm_status_t current_status = g_robot_arm.status;
 
+        // 直接单纯关闭气泵，不进行后续的到位检测和状态检查
+        if(current_status == ARM_STATE_CLOSE_PUMP){
+             arm_pump_place_check(); 
+            continue;
+        }
+
         /* 阻塞等待电机物理到位 */
         while (!arm_is_motor_reached()) {
             if (g_robot_arm.status != current_status) {
@@ -276,13 +284,13 @@ static void arm_feedback_task(void *pvParameters) {
         /* 电机到位后，根据不同业务状态执行特定检测 */
         switch (current_status) {
             case ARM_STATE_CATCH:
+            case ARM_STATE_WAIT_TAKEOUT:
                 arm_pump_catch_check();
                 break;
 
             case ARM_STATE_PLACE:
                 arm_pump_place_check();
                 break;
-
             default:
                 control_dispatch_publish(1);
                 break;
@@ -303,7 +311,7 @@ static void arm_feedback_task(void *pvParameters) {
  * @param index 状态索引 (0~9)
  */
 void robot_arm_set_state_index(uint8_t index) {
-    if (index > 10) {
+    if (index > 11) {
         return;
     }
     g_arm_target_index = index;
@@ -340,6 +348,11 @@ void robot_arm_apply_target(uint8_t index) {
         g_pump_retry_offset_y = 0.0f;
     }
 
+    if(g_robot_arm.status == ARM_STATE_CLOSE_PUMP){
+         xTaskNotifyGive(arm_feedback_task_handle);
+        return;
+    }
+    
     float target_y = g_arm_target_points[index].y;
     float target_z = g_arm_target_points[index].z;
     float target_pitch = g_arm_target_points[index].pitch;
@@ -459,9 +472,12 @@ static bool arm_is_motor_reached(void) {
                                     g_arm_reach_target_joint[0]);
     float err_j3 = arm_ctrl_wrap_2pi(g_robot_arm.damiao_3.position -
                                      g_arm_reach_target_joint[1]);
+    float err_j4 = arm_ctrl_wrap_pi(g_robot_arm.damiao_4.position -
+                                    g_arm_reach_target_joint[2]);
 
     return (fabsf(err_j1) <= ARM_REACH_JOINT_TOL_RAD) &&
-           (fabsf(err_j3) <= ARM_REACH_JOINT_TOL_RAD);
+           (fabsf(err_j3) <= ARM_REACH_JOINT_TOL_RAD) &&
+           (fabsf(err_j4) <= ARM_REACH_JOINT_TOL_RAD);
 }
 
 /** @} */
@@ -480,9 +496,10 @@ static void arm_pump_catch_check(void) {
     uint32_t wait_start_tick = HAL_GetTick();
     uint8_t retry_count = 0;
     float retry_offset_y = 0.0f;
+    float retry_offset_z = 0.0f;
 
     /* 只要状态没被外部打断，就一直循环检测 */
-    while (g_robot_arm.status == ARM_STATE_CATCH) {
+    while (g_robot_arm.status == ARM_STATE_CATCH || g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
         uint16_t adc_val = 0;
 
 #if ARM_USE_PUMP_ADC_CHECK
@@ -502,16 +519,35 @@ static void arm_pump_catch_check(void) {
 #endif
 
         /* 超时与推进重试逻辑 */
-        if (HAL_GetTick() - wait_start_tick >= 2000U) {
+        if (HAL_GetTick() - wait_start_tick >= 1000U) {
 #if ARM_USE_PUMP_ADC_CHECK
-            if (retry_count < 5) {
-                retry_offset_y += 10.0f;
-                float new_y = g_robot_arm.final_target_y + retry_offset_y;
 
-                // 重新设定推进目标
-                robot_arm_mark_reach_target(new_y, g_robot_arm.final_target_z,
-                                            g_robot_arm.final_target_pitch);
-                g_robot_arm.arm_target_y = new_y;
+            if (retry_count < 10) {
+                if (g_wait_takeout_target_index != 0) {
+                    if(g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT){
+                        retry_offset_y -= 10.0f;
+                    }
+                    else if(g_robot_arm.status == ARM_STATE_CATCH){
+                        retry_offset_y += 10.0f;
+                    }
+                    float new_y = g_robot_arm.final_target_y + retry_offset_y;
+
+                    // 重新设定推进目标
+                    robot_arm_mark_reach_target(new_y,
+                                                g_robot_arm.final_target_z,
+                                                g_robot_arm.final_target_pitch);
+                    g_robot_arm.arm_target_y = new_y;
+                } else if (g_wait_takeout_target_index == 0) {
+                    retry_offset_z -= 10.0f;
+                    float new_z = g_robot_arm.final_target_z + retry_offset_z;
+
+                    // 重新设定推进目标
+                    robot_arm_mark_reach_target(g_robot_arm.final_target_y,
+                                                new_z,
+                                                g_robot_arm.final_target_pitch);
+                    g_robot_arm.arm_target_z = new_z;
+                }
+
                 g_robot_arm.motion_state = ARM_MOTION_STATE_DIRECT_MOVE;
 
                 // 等待这次微调推进到位
@@ -541,7 +577,7 @@ static void arm_pump_place_check(void) {
     pump_set_state(0); // 关闭气泵
     uint32_t wait_start_tick = HAL_GetTick();
 
-    while (g_robot_arm.status == ARM_STATE_PLACE) {
+    while (1) {
         uint16_t adc_val = 0;
 
 #if ARM_USE_PUMP_ADC_CHECK

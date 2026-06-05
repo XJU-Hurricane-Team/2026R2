@@ -113,7 +113,8 @@ typedef enum {
     ARM_STATE_WAIT_TAKEOUT = 6, /**< 待取出动作执行状态 */
     ARM_STATE_TAKEOUT_1 = 7,    /**< 取出动作执行状态 (放置二层) */
     ARM_STATE_TAKEOUT_2 = 8,    /**< 取出动作执行状态 (放置三层)*/
-    ARM_STATE_OVERLOOK = 9      /**< 俯瞰态 */
+    ARM_STATE_OVERLOOK = 9,     /**< 俯瞰态 */
+    ARM_STATE_CLOSE_PUMP = 10   /**< 关闭气泵状态 (特殊状态，用于反馈任务) */
 } arm_status_t;
 
 /**

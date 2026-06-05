@@ -23,7 +23,7 @@
 
 #define CATCH_HEAD_DM_POS_TOL_RAD    0.05f
 
-#define DM_SPEED 2.0f
+#define DM_SPEED 4.0f
 
 
 typedef enum {

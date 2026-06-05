@@ -413,6 +413,9 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
             case 9:
                 robot_arm_set_state_index(9); // 摄象头识别位
                 break;
+            case 10:
+                robot_arm_set_state_index(10); // 关闭气泵
+                break;
             default:
                 break;
         }
