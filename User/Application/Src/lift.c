@@ -653,17 +653,17 @@ static bool dm_position_check(lift_state_t state) {
 
     if (state == LIFT_STATE_DOWN) {
         motor0_ready = (fabs(fabs(dm_motor_handle[0].position) -
-                             LIFT_TARGET_DEG_DOWN_SEQ) < 0.015f);
+                             LIFT_TARGET_DEG_DOWN_SEQ) < 0.1f);
         motor1_ready = (fabs(fabs(dm_motor_handle[1].position) -
-                             LIFT_TARGET_DEG_DOWN_SEQ) < 0.015f);
+                             LIFT_TARGET_DEG_DOWN_SEQ) < 0.1f);
         return motor0_ready && motor1_ready;
     }
 
     if (state == LIFT_STATE_UP) {
         motor0_ready = (fabs(fabs(dm_motor_handle[0].position) -
-                             LIFT_TARGET_DEG_UP_SEQ) < 0.015f);
+                             LIFT_TARGET_DEG_UP_SEQ) < 0.1f);
         motor1_ready = (fabs(fabs(dm_motor_handle[1].position) -
-                             LIFT_TARGET_DEG_UP_SEQ) < 0.015f);
+                             LIFT_TARGET_DEG_UP_SEQ) < 0.1f);
         return motor0_ready && motor1_ready;
     }
 
