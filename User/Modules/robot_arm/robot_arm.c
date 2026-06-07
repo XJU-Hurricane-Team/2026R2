@@ -39,7 +39,7 @@ static uint8_t arm_is_place_like(arm_status_t status) {
 
 uint8_t arm_is_ready_state(RobotArm *arm) {
     return (arm->status == ARM_STATE_READY_1) ||
-           (arm->status == ARM_STATE_READY_2) || (arm->status == ARM_STATE_READY_3);
+           (arm->status == ARM_STATE_READY_2) || (arm->status == ARM_STATE_READY_3) || (arm->status == ARM_STATE_READY_4);
 }
 
 uint8_t arm_is_takeout_state(RobotArm *arm) {
@@ -89,20 +89,20 @@ static void arm_get_unwrapped_target(RobotArm *arm, float y, float z,
     float target2 = out_joints[2];
     float diff2 = target2 - arm->damiao_4.position;
     while (diff2 > 2.0f * PI) {
-        if (target2 - 2.0f * PI < -0.1f) {
+        if (target2 - 2.0f * PI < -0.4f) {
             break;
         }
         diff2 -= 2.0f * PI;
         target2 -= 2.0f * PI;
     }
     while (diff2 < -2.0f * PI) {
-        if (target2 + 2.0f * PI > 3.8f) {
+        if (target2 + 2.0f * PI > 4.5f) {
             break;
         }
         diff2 += 2.0f * PI;
         target2 += 2.0f * PI;
     }
-    out_joints[2] = arm_clampf(target2, -0.1f, 3.8f);
+    out_joints[2] = arm_clampf(target2, -0.4f, 4.5f);
 }
 
 /* ---------------- 状态机转换检测 ---------------- */
@@ -328,7 +328,7 @@ static void arm_update_overshoot(RobotArm *arm, float joint_target[3]) {
         if (arm_is_place_like(arm->status)) {
             actual_suction -= ARM_PLACE_SUCTION_OFFSET_RAD;
         }
-        actual_suction = arm_clampf(actual_suction, -0.1f, 3.8f);
+        actual_suction = arm_clampf(actual_suction, -0.4f, 4.5f);
 
         float err_small = fabsf(arm->damiao_3.position - joint_target[1]);
         uint8_t small_ready = (err_small < 0.40f);
@@ -835,7 +835,7 @@ void robot_arm_update(RobotArm *arm) {
     if (arm->target_mode == ARM_TARGET_JOINT) {
         joint_target[0] = arm->arm_joint_target[0];
         joint_target[1] = arm->arm_joint_target[1];
-        joint_target[2] = arm_clampf(arm->arm_joint_target[2], -0.1f, 3.8f);
+        joint_target[2] = arm_clampf(arm->arm_joint_target[2], -0.4f, 4.5f);
     } else {
         arm_get_unwrapped_target(arm, arm->arm_target_y, arm->arm_target_z,
                                  arm->arm_target_pitch, joint_target);
@@ -1035,7 +1035,7 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
         }
     }
 
-    joint2_final_cmd = arm_clampf(joint2_final_cmd, -0.1f, 3.8f);
+    joint2_final_cmd = arm_clampf(joint2_final_cmd, -0.4f, 4.5f);
 
     dm_pvt_ctrl(&arm->damiao_1, arm->big_arm_cmd_filtered, cmd_speed, 0.65f);
     dm_pvt_ctrl(&arm->damiao_2, -arm->big_arm_cmd_filtered, cmd_speed, 0.65f);
@@ -1101,7 +1101,7 @@ void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3]) {
     angle[2] = -pitch_angle - angle[0] + angle[1] + DEFAULT_ANGLE_3;
 
     // 防止吸盘反转
-    if (angle[2] < -0.1f) {
+    if (angle[2] < -0.4f) {
         angle[2] += 2 * PI;
     }
     if (angle[2] > 2 * PI) {

@@ -33,8 +33,8 @@ static TaskHandle_t g_robot_arm_task_handle;  /* 机械臂任务句柄 */
 static TaskHandle_t arm_feedback_task_handle; /* 机械臂反馈任务句柄 */
 static uint8_t g_last_target_index;           /* 上一次下发的目标状态索引 */
 
-static uint8_t g_place_target_index = 0;          /* 放置层级索引 (0~2) */
-static uint8_t g_wait_takeout_target_index = 2;   /* 待取出层级索引 (0~2) */
+static uint8_t g_place_target_index = 2;          /* 放置层级索引 (0~2) */
+static uint8_t g_wait_takeout_target_index = 1;   /* 待取出层级索引 (0~2) */
 static arm_target_point_t g_dynamic_target = {0}; /* 动态抓取目标点 (mm/rad) */
 static uint8_t g_has_dynamic_target = 0;          /* 是否存在动态抓取目标 */
 
@@ -47,24 +47,26 @@ static float g_pump_retry_offset_y = 0.0f; /* 气泵重试Y轴累积偏移量 (m
 
 /* ---------------- 预设目标点位 ---------------- */
 
-static const arm_target_point_t g_arm_target_points[10] = {
+static const arm_target_point_t g_arm_target_points[11] = {
     {139.95f + 20.0f + 50.0f, 102.70f + 30.0f, 0.6955f}, /* 0: INIT */
     {200.000f, 10.0f, 0.0f},                             /* 1: READY_1 */
     {420.000f, -50.0f, CATCH_READY_2_ANGEL},             /* 2: READY_2 */
     {570.000f, 180.0f, 0.08f},                           /* 3: READY_3 */
-    {513.142f, 200.0f, 0.0f},                            /* 4: CATCH */
-    {-275.12f, 493.991f, -PI / 2.0},                     /* 5: PLACE */
-    {533.142f, 300.0f, 0.0f},                            /* 6: WAIT_TAKEOUT */
-    {430.000f, 800.0f, PI / 12.0},                      /* 7: TAKEOUT_1 */
-    {203.142f, 845.0f, 0.0f},                            /* 8: TAKEOUT_2  */
-    {170.0f, 900.0f, PI * 0.75 + 0.1},                   /* 9: OVERLOOK */
+    {250.0f, -230.f, 0.0f},                              /* 4: READY_4 */
+    {513.142f, 200.0f, 0.0f},                            /* 5: CATCH */
+    {-275.12f, 493.991f, -PI / 2.0},                     /* 6: PLACE */
+    {533.142f, 300.0f, 0.0f},                            /* 7: WAIT_TAKEOUT */
+    {430.000f, 800.0f, PI / 12.0},                       /* 8: TAKEOUT_1 */
+    {740.0f, 670.0f, 0.0f},                              /* 9: TAKEOUT_2  */
+    {170.0f, 900.0f, PI * 0.75 + 0.1},                   /* 10: OVERLOOK */
 };
 
 static const arm_target_point_t g_arm_place_points[3] = {
     {-330.0f, 380.0f, -PI / 2},                           /* 0: 低层 */
     {-265.12f + 175.0f, FIRST_POINT_Z_LOW + 175.0f, -PI}, /* 1: 中层 */
-    {-265.12f + 175.0f + 30.0f, FIRST_POINT_Z_LOW + 175.0f + 350.0f,
-     -PI}, /* 2: 高层 */
+    // {-265.12f + 175.0f + 30.0f, FIRST_POINT_Z_LOW + 175.0f + 350.0f,
+    //  -PI}, /* 2: 高层 */
+    {400.0f, 500.0f, -PI/2 }, /* 2: 高层 */
 }; /* 放置层级点位 */
 
 static const arm_target_point_t g_arm_wait_takeout_points[3] = {
@@ -95,18 +97,20 @@ static arm_status_t arm_status_from_index(uint8_t index) {
         case 3:
             return ARM_STATE_READY_3;
         case 4:
-            return ARM_STATE_CATCH;
+            return ARM_STATE_READY_4;
         case 5:
-            return ARM_STATE_PLACE;
+            return ARM_STATE_CATCH;
         case 6:
-            return ARM_STATE_WAIT_TAKEOUT;
+            return ARM_STATE_PLACE;
         case 7:
-            return ARM_STATE_TAKEOUT_1;
+            return ARM_STATE_WAIT_TAKEOUT;
         case 8:
-            return ARM_STATE_TAKEOUT_2;
+            return ARM_STATE_TAKEOUT_1;
         case 9:
-            return ARM_STATE_OVERLOOK;
+            return ARM_STATE_TAKEOUT_2;
         case 10:
+            return ARM_STATE_OVERLOOK;
+        case 11:
             return ARM_STATE_CLOSE_PUMP;
         default:
             return ARM_STATE_INIT;
@@ -145,11 +149,11 @@ void robot_arm_set_dynamic_catch_target_up2(float y, float x, float z) {
 }
 
 /**
- * @brief 注册动态抓取下层目标 (由 MicroROS 调用)
- * @param x 动态 X 坐标 (m，当前未参与目标计算)
- * @param y 动态 Y 坐标 (m)
- * @param z 动态 Z 坐标 (m)
+ * @brief 
+ * @param x 动态 X 坐标(m，当前未参与目标计算) * @param y 动态 Y 坐标(m) *
+ * @param z 动态 Z 坐标(m) * /
  */
+
 void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
     /* 将米单位转换为毫米，并校准摄像头与吸盘中心的偏移补偿 */
     float theta = CATCH_READY_2_ANGEL;
@@ -168,6 +172,21 @@ void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
                          30.0f;
     g_has_dynamic_target = 1;
 
+    (void)x; //x不使用，仅用于底盘校准，与机械臂校准无关
+}
+
+/**
+ * @brief 注册动态抓取下层目标 (由 MicroROS 调用)
+ * @param x 动态 X 坐标 (m，当前未参与目标计算)
+ * @param y 动态 Y 坐标 (m)
+ * @param z 动态 Z 坐标 (m)
+ */
+void robot_arm_set_dynamic_catch_target_down2(float y, float x, float z) {
+    /* 将米单位转换为毫米，并校准摄像头与吸盘中心的偏移补偿 */
+    g_dynamic_target.y = y * 1000.0f + 250.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
+    g_dynamic_target.z = z * 1000.0f - 230.0f + CAM_TO_CAT_Z_OFFSET;
+
+    g_has_dynamic_target = 1;
     (void)x; //x不使用，仅用于底盘校准，与机械臂校准无关
 }
 
@@ -262,8 +281,8 @@ static void arm_feedback_task(void *pvParameters) {
         arm_status_t current_status = g_robot_arm.status;
 
         // 直接单纯关闭气泵，不进行后续的到位检测和状态检查
-        if(current_status == ARM_STATE_CLOSE_PUMP){
-             arm_pump_place_check(); 
+        if (current_status == ARM_STATE_CLOSE_PUMP) {
+            arm_pump_place_check();
             continue;
         }
 
@@ -308,10 +327,10 @@ static void arm_feedback_task(void *pvParameters) {
 
 /**
  * @brief 设置机械臂当前目标状态索引
- * @param index 状态索引 (0~9)
+ * @param index 状态索引 (0~12)
  */
 void robot_arm_set_state_index(uint8_t index) {
-    if (index > 11) {
+    if (index > 12) {
         return;
     }
     g_arm_target_index = index;
@@ -348,11 +367,11 @@ void robot_arm_apply_target(uint8_t index) {
         g_pump_retry_offset_y = 0.0f;
     }
 
-    if(g_robot_arm.status == ARM_STATE_CLOSE_PUMP){
-         xTaskNotifyGive(arm_feedback_task_handle);
+    if (g_robot_arm.status == ARM_STATE_CLOSE_PUMP) {
+        xTaskNotifyGive(arm_feedback_task_handle);
         return;
     }
-    
+
     float target_y = g_arm_target_points[index].y;
     float target_z = g_arm_target_points[index].z;
     float target_pitch = g_arm_target_points[index].pitch;
@@ -499,7 +518,8 @@ static void arm_pump_catch_check(void) {
     float retry_offset_z = 0.0f;
 
     /* 只要状态没被外部打断，就一直循环检测 */
-    while (g_robot_arm.status == ARM_STATE_CATCH || g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
+    while (g_robot_arm.status == ARM_STATE_CATCH ||
+           g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
         uint16_t adc_val = 0;
 
 #if ARM_USE_PUMP_ADC_CHECK
@@ -524,10 +544,9 @@ static void arm_pump_catch_check(void) {
 
             if (retry_count < 10) {
                 if (g_wait_takeout_target_index != 0) {
-                    if(g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT){
+                    if (g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
                         retry_offset_y -= 10.0f;
-                    }
-                    else if(g_robot_arm.status == ARM_STATE_CATCH){
+                    } else if (g_robot_arm.status == ARM_STATE_CATCH) {
                         retry_offset_y += 10.0f;
                     }
                     float new_y = g_robot_arm.final_target_y + retry_offset_y;
@@ -574,6 +593,10 @@ static void arm_pump_catch_check(void) {
  * @brief 执行放置状态下的压力释放检测
  */
 static void arm_pump_place_check(void) {
+    if (g_place_target_index == 2 && g_robot_arm.status == ARM_STATE_PLACE) {
+        control_dispatch_publish(1); // 第三层不关气泵
+        return;
+    }
     pump_set_state(0); // 关闭气泵
     uint32_t wait_start_tick = HAL_GetTick();
 

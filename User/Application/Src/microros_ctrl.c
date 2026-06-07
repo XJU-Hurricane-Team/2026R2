@@ -385,6 +385,10 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 last_command_mode = 3;
                 break;
             case 4:
+                robot_arm_set_state_index(4); // 准备（平地抓取）
+                last_command_mode = 4;
+                break;
+            case 5:
                 if (last_command_mode == 1) {
                     robot_arm_set_dynamic_catch_target_up(
                         req_in->point.x, req_in->point.y, req_in->point.z);
@@ -394,27 +398,30 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 } else if (last_command_mode == 3) {
                     robot_arm_set_dynamic_catch_target_up2(
                         req_in->point.x, req_in->point.y, req_in->point.z);
+                }else if (last_command_mode == 4) {
+                    robot_arm_set_dynamic_catch_target_down2(
+                        req_in->point.x, req_in->point.y, req_in->point.z);
                 }
                 last_command_mode = 0;
-                robot_arm_set_state_index(4); // 抓取（动态目标覆盖）
-                break;
-            case 5:
-                robot_arm_set_state_index(5); // 放置
+                robot_arm_set_state_index(5); // 抓取（动态目标覆盖）
                 break;
             case 6:
-                robot_arm_set_state_index(6); // 准备取出
+                robot_arm_set_state_index(6); // 放置
                 break;
             case 7:
-                robot_arm_set_state_index(7); // 放置2层
+                robot_arm_set_state_index(7); // 准备取出
                 break;
             case 8:
-                robot_arm_set_state_index(8); // 放置3层
+                robot_arm_set_state_index(8); // 放置2层
                 break;
             case 9:
-                robot_arm_set_state_index(9); // 摄象头识别位
+                robot_arm_set_state_index(9); // 放置3层
                 break;
             case 10:
-                robot_arm_set_state_index(10); // 关闭气泵
+                robot_arm_set_state_index(10); // 摄象头识别位
+                break;
+            case 11:
+                robot_arm_set_state_index(11); // 关闭气泵
                 break;
             default:
                 break;

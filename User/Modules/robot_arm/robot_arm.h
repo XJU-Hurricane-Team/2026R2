@@ -33,8 +33,10 @@
 #define ARM_TRANS_Y_OFFSET       80.0f  /**< 过渡阶段 Y 轴缩回避障距离 (mm) */
 
 /* ================== 大臂电机 (J8006) 控制参数 ================== */
-#define ARM_J8006_CMD_SPEED_BASE 0.24f /**< 基础运动速度 (rad/s) */
-#define ARM_J8006_CMD_SPEED_MAX  0.55f /**< 绝对最大允许速度 (rad/s) */
+// #define ARM_J8006_CMD_SPEED_BASE 0.24f /**< 基础运动速度 (rad/s) */
+// #define ARM_J8006_CMD_SPEED_MAX  0.55f /**< 绝对最大允许速度 (rad/s) */
+#define ARM_J8006_CMD_SPEED_BASE 0.30f /**< 基础运动速度 (rad/s) */
+#define ARM_J8006_CMD_SPEED_MAX  1.0f /**< 绝对最大允许速度 (rad/s) */
 #define ARM_J8006_FILTER_ALPHA                                                 \
     0.20f /**< 低通滤波平滑系数 (越小越平滑但延迟大) */
 #define ARM_J8006_CMD_RATE_LIMIT                                               \
@@ -88,7 +90,7 @@
 #define ARM_SMALL_WAIT_HOLD_SPEED         0.30f /**< 小臂锁死保持速度 */
 
 /* ================== 俯瞰态速度参数 ================== */
-#define ARM_OVERLOOK_BIG_SPEED            0.65f /**< 俯瞰态大臂速度 (rad/s) */
+#define ARM_OVERLOOK_BIG_SPEED            1.00f /**< 俯瞰态大臂速度 (rad/s) */
 #define ARM_OVERLOOK_SMALL_SPEED          3.00f /**< 俯瞰态小臂速度 (rad/s) */
 #define ARM_OVERLOOK_SUCTION_SPEED        2.20f /**< 俯瞰态吸盘速度 (rad/s) */
 
@@ -107,14 +109,15 @@ typedef enum {
     ARM_STATE_INIT = 0,    /**< 初始状态 */
     ARM_STATE_READY_1 = 1, /**< 就绪态1 (从下往上看) */
     ARM_STATE_READY_2 = 2, /**< 就绪态2 (从上往下看) */
-    ARM_STATE_READY_3 = 3,
-    ARM_STATE_CATCH = 4,        /**< 抓取动作执行状态 */
-    ARM_STATE_PLACE = 5,        /**< 放置动作执行状态 */
-    ARM_STATE_WAIT_TAKEOUT = 6, /**< 待取出动作执行状态 */
-    ARM_STATE_TAKEOUT_1 = 7,    /**< 取出动作执行状态 (放置二层) */
-    ARM_STATE_TAKEOUT_2 = 8,    /**< 取出动作执行状态 (放置三层)*/
-    ARM_STATE_OVERLOOK = 9,     /**< 俯瞰态 */
-    ARM_STATE_CLOSE_PUMP = 10   /**< 关闭气泵状态 (特殊状态，用于反馈任务) */
+    ARM_STATE_READY_3 = 3, /* 就绪态3 (向上40cm处，准备抓取) */
+    ARM_STATE_READY_4 = 4, /**< 就绪态4 (从平面看，准备放置) */
+    ARM_STATE_CATCH = 5,        /**< 抓取动作执行状态 */
+    ARM_STATE_PLACE = 6,        /**< 放置动作执行状态 */
+    ARM_STATE_WAIT_TAKEOUT = 7, /**< 待取出动作执行状态 */
+    ARM_STATE_TAKEOUT_1 = 8,    /**< 取出动作执行状态 (放置二层) */
+    ARM_STATE_TAKEOUT_2 = 9,    /**< 取出动作执行状态 (放置三层)*/
+    ARM_STATE_OVERLOOK = 10,     /**< 俯瞰态 */
+    ARM_STATE_CLOSE_PUMP = 11   /**< 关闭气泵状态 (特殊状态，用于反馈任务) */
 } arm_status_t;
 
 /**
