@@ -21,7 +21,7 @@
 #define CATCH_HEAD_RAD_TO_DEG 57.29578f
 #define CATCH_HEAD_RAD_S_TO_RPM 9.549296f
 
-#define CATCH_HEAD_DM_POS_TOL_RAD    0.05f
+#define CATCH_HEAD_DM_POS_TOL_RAD    0.1f
 
 #define DM_SPEED 4.0f
 

@@ -25,7 +25,7 @@
 
 // 速度限制参数
 #define MAX_SPEED_XY             1.0f
-#define MAX_SPEED_W              4.0f
+#define MAX_SPEED_W              8.0f
 #define MAX_ACCEL_XY             1.5f
 #define MAX_ACCEL_W              2.0f
 

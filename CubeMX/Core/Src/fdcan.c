@@ -166,9 +166,9 @@ void MX_FDCAN2_Init(void) {
     fdcan_filter_config.IdType = FDCAN_STANDARD_ID;
     fdcan_filter_config.FilterIndex = 0;
     fdcan_filter_config.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
-    fdcan_filter_config.FilterID1 = 0x000;
-    fdcan_filter_config.FilterID2 = 0x000;
-    fdcan_filter_config.FilterType = FDCAN_FILTER_MASK;
+    fdcan_filter_config.FilterID1 = 0x11;
+    fdcan_filter_config.FilterID2 = 0x12;
+    fdcan_filter_config.FilterType = FDCAN_FILTER_RANGE;
 
     if (HAL_FDCAN_ConfigFilter(&hfdcan2, &fdcan_filter_config) != HAL_OK) {
         Error_Handler();
@@ -177,8 +177,8 @@ void MX_FDCAN2_Init(void) {
     fdcan_filter_config.IdType = FDCAN_STANDARD_ID;
     fdcan_filter_config.FilterIndex = 1;
     fdcan_filter_config.FilterConfig = FDCAN_FILTER_TO_RXFIFO1;
-    fdcan_filter_config.FilterID1 = 0x00000000;
-    fdcan_filter_config.FilterID2 = 0x00000000;
+    fdcan_filter_config.FilterID1 = 0x15;
+    fdcan_filter_config.FilterID2 = 0x7FF;
     fdcan_filter_config.FilterType = FDCAN_FILTER_MASK;
 
     if (HAL_FDCAN_ConfigFilter(&hfdcan2, &fdcan_filter_config) != HAL_OK) {

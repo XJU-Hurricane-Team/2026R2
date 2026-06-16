@@ -54,10 +54,13 @@ typedef enum {
     PUMP_WAIT_PLACE,    /**< 等待释放成功 */
 } pump_wait_state_t;
 
+extern bool arm_return_enabel; /* 放置完成后回位功能使能标志 */
+
 /* ================== API 声明 ================== */
 
 void robot_arm_init(void);
 void robot_arm_set_state_index(uint8_t index);
+void robot_arm_start_place_return_sequence(uint8_t return_index);
 void robot_arm_apply_target(uint8_t index);
 void robot_arm_set_dynamic_catch_target_up(float y, float x, float z);
 void robot_arm_set_dynamic_catch_target_down(float y, float x, float z);

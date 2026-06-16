@@ -43,7 +43,7 @@
 #define LIFT_TARGET_DEG_UP_SEQ   0.0f
 #define LIFT_TARGET_DEG_DOWN_SEQ 12.275f
 #define LIFT_TARGET_DEG_STEP     0.025f
-#define LIFT_TARGET_SPEED        7.0f
+#define LIFT_TARGET_SPEED        10.0f
 
 typedef enum {
     LIFT_STATE_NORMAL = 0,
@@ -212,7 +212,7 @@ static void lift_state_task(void *pvParameters) {
         dm_pos_speed_ctrl(&dm_motor_handle[1],
                           -g_lift_handle.lift_target_degree, LIFT_TARGET_SPEED);
 
-        vTaskDelay(5);
+        vTaskDelay(10);
     }
 }
 
@@ -741,7 +741,7 @@ static void lift_up_step_wait_down_arrived(void) {
 
 // 上升步骤4：2006电机正转，等待后光电上升沿
 static void lift_up_step_drive_2006_forward(void) {
-    g_lift_handle.target_2006_rpm = 2000.0f;
+    g_lift_handle.target_2006_rpm = 4000.0f;
     // vTaskDelay(100);
     // 检查后光电的上升沿（false -> true）
     if (get_rear_photoelectric_rising_edge()) {
@@ -787,7 +787,7 @@ static void lift_down_step_wait_down_arrived(void) {
 
 // 下降步骤4：2006电机反转，等待中光电下降沿
 static void lift_down_step_drive_2006_backward(void) {
-    g_lift_handle.target_2006_rpm = -2000.0f;
+    g_lift_handle.target_2006_rpm = -4000.0f;
     // 检查中光电的下降沿（true -> false）
     if (get_middle_photoelectric_falling_edge()) {
         // vTaskDelay(350);

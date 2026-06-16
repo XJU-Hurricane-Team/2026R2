@@ -15,7 +15,7 @@ static void robot_arm_task(void *pvParameters);
 static void arm_feedback_task(void *pvParameters);
 static float arm_ctrl_wrap_pi(float angle);
 static void robot_arm_mark_reach_target(float y, float z, float pitch);
-static void arm_pump_place_check(void);
+static void arm_pump_place_check(bool publish_result);
 static void arm_pump_catch_check(void);
 static bool arm_is_motor_reached(void);
 
@@ -32,6 +32,8 @@ static uint8_t g_arm_target_index;            /* 当前目标状态索引 (0~8) 
 static TaskHandle_t g_robot_arm_task_handle;  /* 机械臂任务句柄 */
 static TaskHandle_t arm_feedback_task_handle; /* 机械臂反馈任务句柄 */
 static uint8_t g_last_target_index;           /* 上一次下发的目标状态索引 */
+static uint8_t g_place_return_sequence_active = 0; /* 放置后回位组合动作标志 */
+static uint8_t g_place_return_target_index = 0; /* 放置完成后跳转的目标状态 */
 
 static uint8_t g_place_target_index = 2;          /* 放置层级索引 (0~2) */
 static uint8_t g_wait_takeout_target_index = 1;   /* 待取出层级索引 (0~2) */
@@ -44,6 +46,8 @@ static pump_wait_state_t g_pump_wait_state = PUMP_WAIT_NONE; /* 气泵等待状�
 static uint8_t g_last_switch_key = 0xFF; /* 上一次遥控器切换键值 */
 
 static float g_pump_retry_offset_y = 0.0f; /* 气泵重试Y轴累积偏移量 (mm) */
+
+bool arm_return_enabel = false; /* 放置完成后回位功能使能标志 */
 
 /* ---------------- 预设目标点位 ---------------- */
 
@@ -66,7 +70,7 @@ static const arm_target_point_t g_arm_place_points[3] = {
     {-265.12f + 175.0f, FIRST_POINT_Z_LOW + 175.0f, -PI}, /* 1: 中层 */
     // {-265.12f + 175.0f + 30.0f, FIRST_POINT_Z_LOW + 175.0f + 350.0f,
     //  -PI}, /* 2: 高层 */
-    {400.0f, 500.0f, -PI/2 }, /* 2: 高层 */
+    {400.0f, 500.0f, -PI / 2}, /* 2: 高层 */
 }; /* 放置层级点位 */
 
 static const arm_target_point_t g_arm_wait_takeout_points[3] = {
@@ -221,6 +225,8 @@ void robot_arm_init(void) {
     /* 复位应用层状态 */
     g_arm_target_index = 0;
     g_last_target_index = 0;
+    g_place_return_sequence_active = 0;
+    g_place_return_target_index = 0;
     g_place_target_index = 0;
     g_wait_takeout_target_index = 2;
     g_has_dynamic_target = 0;
@@ -282,7 +288,7 @@ static void arm_feedback_task(void *pvParameters) {
 
         // 直接单纯关闭气泵，不进行后续的到位检测和状态检查
         if (current_status == ARM_STATE_CLOSE_PUMP) {
-            arm_pump_place_check();
+            arm_pump_place_check(1);
             continue;
         }
 
@@ -308,10 +314,26 @@ static void arm_feedback_task(void *pvParameters) {
                 break;
 
             case ARM_STATE_PLACE:
-                arm_pump_place_check();
+                arm_pump_place_check(arm_return_enabel);
+                if (g_robot_arm.status == current_status &&
+                    g_place_return_sequence_active) {
+                    uint8_t return_index = g_place_return_target_index;
+                    robot_arm_set_state_index(return_index);
+                }
                 break;
             default:
-                control_dispatch_publish(1);
+                if (g_place_return_sequence_active == 1) {
+                    g_place_return_sequence_active = 0;
+                    g_place_return_target_index = 0;
+                    if (arm_return_enabel) {
+                        control_dispatch_publish(1); // 成功抓取
+                    }
+
+                } else {
+                    if (arm_return_enabel) {
+                        control_dispatch_publish(1); // 成功抓取
+                    }
+                }
                 break;
         }
     }
@@ -327,14 +349,28 @@ static void arm_feedback_task(void *pvParameters) {
 
 /**
  * @brief 设置机械臂当前目标状态索引
- * @param index 状态索引 (0~12)
+ * @param index 状态索引 (0~11)
  */
 void robot_arm_set_state_index(uint8_t index) {
-    if (index > 12) {
+    if (index > 11) {
         return;
     }
     g_arm_target_index = index;
     robot_arm_apply_target(index);
+}
+
+/**
+ * @brief 启动放置后自动回位/识别的组合动作
+ * @param return_index 放置完成后跳转的状态索引
+ */
+void robot_arm_start_place_return_sequence(uint8_t return_index) {
+    if (return_index > 11) {
+        return;
+    }
+    g_place_return_sequence_active = 1;
+    g_place_return_target_index = return_index;
+    g_arm_target_index = 6;
+    robot_arm_apply_target(6);
 }
 
 /**
@@ -526,14 +562,18 @@ static void arm_pump_catch_check(void) {
         if (pump_read_adc_filtered(&adc_val)) {
             if (adc_val < PUMP_ADC_READY_LOW) {
                 log_message(LOG_INFO, "ARM_CATCH Success, adc=%d", adc_val);
-                control_dispatch_publish(1); // 成功抓取
+                if (arm_return_enabel) {
+                    control_dispatch_publish(1); // 成功抓取
+                }
                 return;
             }
         }
 #else
         // 未开启 ADC 检测，延时默认成功
         if (HAL_GetTick() - wait_start_tick >= 2000U) {
-            control_dispatch_publish(1);
+            if (arm_return_enabel) {
+                control_dispatch_publish(1); // 成功抓取
+            }
             return;
         }
 #endif
@@ -581,7 +621,9 @@ static void arm_pump_catch_check(void) {
             }
 #endif
             // 重试耗尽，抓取失败
-            control_dispatch_publish(2);
+            if (arm_return_enabel) {
+                control_dispatch_publish(1); // 成功抓取
+            }
             return;
         }
 
@@ -592,9 +634,11 @@ static void arm_pump_catch_check(void) {
 /**
  * @brief 执行放置状态下的压力释放检测
  */
-static void arm_pump_place_check(void) {
+static void arm_pump_place_check(bool publish_result) {
     if (g_place_target_index == 2 && g_robot_arm.status == ARM_STATE_PLACE) {
-        control_dispatch_publish(1); // 第三层不关气泵
+        if (publish_result) {
+            control_dispatch_publish(1); // 第三层不关气泵
+        }
         return;
     }
     pump_set_state(0); // 关闭气泵
@@ -607,13 +651,17 @@ static void arm_pump_place_check(void) {
         if (pump_read_adc_filtered(&adc_val)) {
             if (adc_val > PUMP_ADC_READY_HIGH) {
                 log_message(LOG_INFO, "ARM_PLACE Success, adc=%d", adc_val);
-                control_dispatch_publish(1);
+                if (publish_result) {
+                    control_dispatch_publish(1);
+                }
                 return;
             }
         }
 #endif
         if (HAL_GetTick() - wait_start_tick >= 2000U) {
-            control_dispatch_publish(1); // 超时也认为放置完成
+            if (publish_result) {
+                control_dispatch_publish(1); // 超时也认为放置完成
+            }
             return;
         }
 
