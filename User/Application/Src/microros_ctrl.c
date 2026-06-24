@@ -427,7 +427,7 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 robot_arm_set_state_index(11); // 关闭气泵
                 break;
             case 12:
-                robot_arm_start_place_return_sequence(0); // 放置完成后回到摄像头识别位
+                robot_arm_start_place_return_sequence(1); // 放置完成后回到初始化位
                 break;
             default:
                 break;
@@ -443,6 +443,10 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 break;
             case 2:
                 chassis_proximity_switch();
+                break;
+            case 3:
+                lift_set_target(0.0f); // 抬升复位
+                break;
             default:
                 break;
         }

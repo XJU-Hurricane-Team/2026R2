@@ -145,7 +145,7 @@ static void lift_sync_photoelectric_state(void);
 
 static bool dm_position_check(lift_state_t state);
 static float lift_limit_target(float target_degree);
-static void lift_set_target(float target_degree);
+void lift_set_target(float target_degree);
 static void lift_publish_if_auto(uint8_t code);
 static void lift_finish_sequence(void);
 static void lift_seq_emergency_stop(void);
@@ -683,7 +683,7 @@ static float lift_limit_target(float target_degree) {
 }
 
 // 设置DM电机目标角度
-static void lift_set_target(float target_degree) {
+void lift_set_target(float target_degree) {
     g_lift_handle.lift_target_degree = lift_limit_target(target_degree);
 }
 

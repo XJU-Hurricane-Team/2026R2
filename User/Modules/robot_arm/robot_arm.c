@@ -777,7 +777,7 @@ uint8_t robot_arm_start_takeout_sequence(RobotArm *arm, float y, float z,
     arm->final_target_pitch = pitch;
 
     arm->takeout_seq_big_arm_target =
-        arm->damiao_1.position + dir0 * ARM_TAKEOUT_SEQ_BIG_ARM_STEP_RAD;
+        arm->damiao_1.position + dir0 * ARM_TAKEOUT_SEQ_BIG_ARM_STEP_RAD * 2 ;
     if (arm->takeout_seq_big_arm_target < ARM_BIG_ARM_MIN_ANGLE_RAD) {
         arm->takeout_seq_big_arm_target = ARM_BIG_ARM_MIN_ANGLE_RAD;
     }

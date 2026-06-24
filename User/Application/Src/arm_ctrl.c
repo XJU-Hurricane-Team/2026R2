@@ -35,7 +35,7 @@ static uint8_t g_last_target_index;           /* 上一次下发的目标状态�
 static uint8_t g_place_return_sequence_active = 0; /* 放置后回位组合动作标志 */
 static uint8_t g_place_return_target_index = 0; /* 放置完成后跳转的目标状态 */
 
-static uint8_t g_place_target_index = 2;          /* 放置层级索引 (0~2) */
+static uint8_t g_place_target_index = 0;          /* 放置层级索引 (0~2) */
 static uint8_t g_wait_takeout_target_index = 1;   /* 待取出层级索引 (0~2) */
 static arm_target_point_t g_dynamic_target = {0}; /* 动态抓取目标点 (mm/rad) */
 static uint8_t g_has_dynamic_target = 0;          /* 是否存在动态抓取目标 */
@@ -228,7 +228,7 @@ void robot_arm_init(void) {
     g_place_return_sequence_active = 0;
     g_place_return_target_index = 0;
     g_place_target_index = 0;
-    g_wait_takeout_target_index = 2;
+    g_wait_takeout_target_index = 1;
     g_has_dynamic_target = 0;
     g_pump_wait_state = PUMP_WAIT_NONE;
     g_last_switch_key = 0xFF;
