@@ -35,16 +35,16 @@
 /* ================== 大臂电机 (J8006) 控制参数 ================== */
 // #define ARM_J8006_CMD_SPEED_BASE 0.24f /**< 基础运动速度 (rad/s) */
 // #define ARM_J8006_CMD_SPEED_MAX  0.55f /**< 绝对最大允许速度 (rad/s) */
-#define ARM_J8006_CMD_SPEED_BASE 0.30f /**< 基础运动速度 (rad/s) */
-#define ARM_J8006_CMD_SPEED_MAX  1.0f /**< 绝对最大允许速度 (rad/s) */
+#define ARM_J8006_CMD_SPEED_BASE 0.40f /**< 基础运动速度 (rad/s) */
+#define ARM_J8006_CMD_SPEED_MAX  1.3f /**< 绝对最大允许速度 (rad/s) */
 #define ARM_J8006_FILTER_ALPHA                                                 \
-    0.20f /**< 低通滤波平滑系数 (越小越平滑但延迟大) */
+    0.30f /**< 低通滤波平滑系数 (越小越平滑但延迟大) */
 #define ARM_J8006_CMD_RATE_LIMIT                                               \
-    1.20f /**< 指令变化率限制 (rad/s)，防止阶跃信号 */
-#define ARM_J8006_NEAR_ERR_RAD   0.15f /**< 接近目标时的减速触发阈值 (rad) */
-#define ARM_J8006_FINE_ERR_RAD   0.08f /**< 微调阶段的误差阈值 (rad) */
-#define ARM_J8006_NEAR_SPEED_MAX 0.30f /**< 接近阶段的最大速度限制 (rad/s) */
-#define ARM_J8006_FINE_SPEED_MAX 0.20f /**< 微调阶段的最大速度限制 (rad/s) */
+    1.80f /**< 指令变化率限制 (rad/s)，防止阶跃信号 */
+#define ARM_J8006_NEAR_ERR_RAD   0.08f /**< 接近目标时的减速触发阈值 (rad) */
+#define ARM_J8006_FINE_ERR_RAD   0.03f /**< 微调阶段的误差阈值 (rad) */
+#define ARM_J8006_NEAR_SPEED_MAX 0.60f /**< 接近阶段的最大速度限制 (rad/s) */
+#define ARM_J8006_FINE_SPEED_MAX 0.40f /**< 微调阶段的最大速度限制 (rad/s) */
 #define ARM_J8006_PHASE2_Q2TOQ1_SPEED_MAX                                      \
     0.15f /**< 象限翻转阶段的限速 (rad/s) */
 
@@ -58,9 +58,9 @@
     0.12f /**< 大臂物理下限，禁止反向小于0.12 rad */
 
 /* ================== 小臂与吸盘速度参数 ================== */
-#define ARM_SMALL_SPEED_BASE            0.60f /**< 小臂基础速度 (rad/s) */
-#define ARM_SMALL_SPEED_GAIN            0.50f /**< 小臂速度增益 */
-#define ARM_SMALL_SPEED_MAX             0.80f /**< 小臂最大速度 (rad/s) */
+#define ARM_SMALL_SPEED_BASE            0.80f /**< 小臂基础速度 (rad/s) */
+#define ARM_SMALL_SPEED_GAIN            0.80f /**< 小臂速度增益 */
+#define ARM_SMALL_SPEED_MAX             1.20f /**< 小臂最大速度 (rad/s) */
 #define ARM_SMALL_PLACE_EXIT_SPEED_BASE 1.20f /**< 退出放置态小臂基础速度 */
 #define ARM_SMALL_PLACE_EXIT_SPEED_GAIN 1.35f /**< 退出放置态小臂速度增益 */
 #define ARM_SMALL_PLACE_EXIT_SPEED_MAX  1.60f /**< 退出放置态小臂最大速度 */
