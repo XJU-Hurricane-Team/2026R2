@@ -147,8 +147,11 @@ void robot_arm_set_dynamic_catch_target_up(float y, float x, float z) {
  */
 void robot_arm_set_dynamic_catch_target_up2(float y, float x, float z) {
 
-    g_dynamic_target.y = y * 1000.0f + 570.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
-    g_dynamic_target.z = z * 1000.0f + 180.0f + CAM_TO_CAT_Z_OFFSET;
+    // g_dynamic_target.y = y * 1000.0f + 570.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
+    // g_dynamic_target.z = z * 1000.0f + 180.0f + CAM_TO_CAT_Z_OFFSET;
+
+    g_dynamic_target.y = y * 1000.0f + 270.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
+    g_dynamic_target.z = z * 1000.0f + 130.0f + CAM_TO_CAT_Z_OFFSET;
 
     g_has_dynamic_target = 1;
     (void)x; //x不使用，仅用于底盘校准，与机械臂校准无关
@@ -267,7 +270,7 @@ void robot_arm_init(void) {
 /** @defgroup RTOS_Task 机械臂核心轮询任务与事件驱动反馈任务 */
 /** @{ */
 
-uint16_t test_adc_value = 0; /* 气泵 ADC 测试值 */
+// uint16_t test_adc_value = 0; /* 气泵 ADC 测试值 */
 
 /**
  * @brief 机械臂控制任务主循环
