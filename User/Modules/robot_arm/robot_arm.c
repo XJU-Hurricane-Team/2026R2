@@ -70,7 +70,8 @@ static void arm_get_unwrapped_target(RobotArm *arm, float y, float z,
         diff0 += 2.0f * PI;
         out_joints[0] += 2.0f * PI;
     }
-    if (out_joints[0] < ARM_BIG_ARM_MIN_ANGLE_RAD) {
+    if (out_joints[0] < ARM_BIG_ARM_MIN_ANGLE_RAD &&
+        arm->status != ARM_STATE_READY_3) {
         out_joints[0] = ARM_BIG_ARM_MIN_ANGLE_RAD;
     }
 
@@ -902,7 +903,8 @@ void robot_arm_update(RobotArm *arm) {
 
     arm_update_overshoot(arm, joint_target);
 
-    if (joint_target[0] < ARM_BIG_ARM_MIN_ANGLE_RAD) {
+    if (joint_target[0] < ARM_BIG_ARM_MIN_ANGLE_RAD &&
+        arm->status != ARM_STATE_READY_3) {
         joint_target[0] = ARM_BIG_ARM_MIN_ANGLE_RAD;
     }
 
@@ -959,7 +961,8 @@ void robot_arm_update(RobotArm *arm) {
  * @param joint_des 期望的三关节角度
  */
 void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
-    float joint0_cmd = (joint_des[0] < ARM_BIG_ARM_MIN_ANGLE_RAD)
+    float joint0_cmd = (joint_des[0] < ARM_BIG_ARM_MIN_ANGLE_RAD &&
+                        arm->status != ARM_STATE_READY_3)
                            ? ARM_BIG_ARM_MIN_ANGLE_RAD
                            : joint_des[0];
     float joint0_err = joint0_cmd - arm->damiao_1.position;
@@ -1001,7 +1004,8 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
                            (joint0_cmd - arm->big_arm_cmd_filtered),
                        -max_step, max_step);
     arm->big_arm_cmd_filtered += delta;
-    if (arm->big_arm_cmd_filtered < ARM_BIG_ARM_MIN_ANGLE_RAD) {
+    if (arm->big_arm_cmd_filtered < ARM_BIG_ARM_MIN_ANGLE_RAD &&
+        arm->status != ARM_STATE_READY_3) {
         arm->big_arm_cmd_filtered = ARM_BIG_ARM_MIN_ANGLE_RAD;
     }
 
@@ -1146,11 +1150,6 @@ void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3]) {
         // 第二象限：切换到另一个解
         angle[0] = DEFAULT_ANGLE_1 + PI / 2 + angle1_1 - angle1_2;
         angle[1] = 2 * PI + (DEFAULT_ANGLE_2 - angle2_inner);
-    }
-
-    // 保证大臂不往后倒撞到已放置的箱子
-    if (angle[0] < 0.0f) {
-        angle[0] = 0;
     }
 
     // 5. 求吸盘角度

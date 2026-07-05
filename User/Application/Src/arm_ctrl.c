@@ -55,7 +55,8 @@ static const arm_target_point_t g_arm_target_points[11] = {
     {139.95f + 20.0f + 50.0f, 102.70f + 30.0f, 0.6955f}, /* 0: INIT */
     {200.000f, 10.0f, 0.0f},                             /* 1: READY_1 */
     {420.000f, -50.0f, CATCH_READY_2_ANGEL},             /* 2: READY_2 */
-    {570.000f, 180.0f, 0.08f},                           /* 3: READY_3 */
+    //{570.000f, 180.0f, 0.08f},                         /* 3: READY_3 */
+    {270.000f, 180.0f, 0.08f},                           /* 3: READY_3 */
     {250.0f, -230.f, 0.0f},                              /* 4: READY_4 */
     {513.142f, 200.0f, 0.0f},                            /* 5: CATCH */
     {-275.12f, 493.991f, -PI / 2.0},                     /* 6: PLACE */
@@ -739,7 +740,7 @@ static uint8_t pump_read_adc_filtered(uint16_t *out_value) {
 /* 按键 → 状态索引 映射表，按需增删改 */
 static const uint8_t g_arm_key_index_map[][2] = {
     {10, 0},  /* INIT        */
-    {11, 2},  /* READY_1     */
+    {11, 3},  /* READY_1     */
     {12, 5},  /* CATCH       */
     {13, 6},  /* PLACE       */
     {14, 7},  /* WAIT_TAKEOUT*/
