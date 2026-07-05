@@ -19,6 +19,7 @@
 #define LIFT_CAN_SELECT          can2_selected
 
 #define LIFT_CATCH_DEGREE_KEY    1 /* 夹爪高度：5.049rad*/
+#define LIFT_UP_R1_KEY           2 /* 抬升到R1位置：5.42rad */
 #define LIFT_SEQ_UP_KEY          5 /* 上台阶按键 */
 #define LIFT_SEQ_DOWN_KEY        6 /* 下台阶按键 */
 #define LIFT_UP_KEY              7 /* 抬升升起按键 */
@@ -36,13 +37,17 @@
 #define REAR_SENSOR_PIN_1        GPIO_PIN_10
 #define PROXIMITY_SENSOR_PIN_0   GPIO_PIN_2
 #define PROXIMITY_SENSOR_PIN_1   GPIO_PIN_3
-
-#define LIFT_TARGET_CATCH_DEG    1.9743f
-#define LIFT_TARGET_DEG_UP_MAX   5.42f
+#define LIFT_CATCH_ENABLE_PORT   GPIOB
+#define LIFT_CATCH_ENABLE_PIN    GPIO_PIN_2
+//2.7498
+#define LIFT_TARGET_CATCH_DEG    2.45f      //2.6049 - 2.50 = 0.
+#define LIFT_TARGET_DEG_UP_MAX   2.90f
 #define LIFT_TARGET_DEG_DOWN_MAX 12.275f
 #define LIFT_TARGET_DEG_UP_SEQ   0.0f
 #define LIFT_TARGET_DEG_DOWN_SEQ 12.275f
-#define LIFT_TARGET_DEG_STEP     0.025f
+#define LIFT_TARGET_DEG_STEP     0.005f
+#define LIFT_CATCH_DEG_STEP      0.410f
+#define LIFT_CATCH_SLOW_STEP     0.0010f
 #define LIFT_TARGET_SPEED        10.0f
 
 typedef enum {
@@ -70,6 +75,9 @@ typedef struct {
     lift_state_t lift_state;
     float lift_target_degree;
     lift_fsm_t lift_fsm;
+    uint32_t step3_start_tick;    /* tick when step 3 (drive 2006) started */
+    float step3_last_duration;    /* last measured duration from step3 start to step4 (seconds) */
+    bool catch_up_until_proximity_active;
 } lift_handle_t;
 
 static lift_handle_t g_lift_handle = {
@@ -78,6 +86,9 @@ static lift_handle_t g_lift_handle = {
     .lift_state = LIFT_STATE_NORMAL,
     .lift_target_degree = 0.0f,
     .lift_fsm = {0, 0},
+    .step3_start_tick = 0,
+    .step3_last_duration = 0.0f,
+    .catch_up_until_proximity_active = false,
 };
 
 static photoelectric_debounce_t g_rear_photoelectric_debounce = {
@@ -85,7 +96,7 @@ static photoelectric_debounce_t g_rear_photoelectric_debounce = {
     .last_stable_state = false,
     .prev_stable_state = false,
     .change_tick = 0,
-    .debounce_ms = 10,
+    .debounce_ms = 6,
 };
 
 static photoelectric_debounce_t g_front_photoelectric_debounce = {
@@ -93,7 +104,7 @@ static photoelectric_debounce_t g_front_photoelectric_debounce = {
     .last_stable_state = false,
     .prev_stable_state = false,
     .change_tick = 0,
-    .debounce_ms = 10,
+    .debounce_ms = 6,
 };
 
 static photoelectric_debounce_t g_middle_photoelectric_debounce = {
@@ -101,7 +112,7 @@ static photoelectric_debounce_t g_middle_photoelectric_debounce = {
     .last_stable_state = false,
     .prev_stable_state = false,
     .change_tick = 0,
-    .debounce_ms = 10,
+    .debounce_ms = 6,
 };
 
 typedef void (*lift_seq_handler_t)(void);
@@ -182,9 +193,21 @@ static void lift_state_task(void *pvParameters) {
 
             switch (g_lift_handle.lift_state) {
                 case LIFT_STATE_UP:
-                    lift_set_target(g_lift_handle.lift_target_degree +
-                                    LIFT_TARGET_DEG_STEP);
+                {
+                    float step = LIFT_TARGET_DEG_STEP;
+
+                    if (g_lift_handle.catch_up_until_proximity_active) {
+                        if (g_lift_handle.lift_target_degree <
+                            LIFT_TARGET_CATCH_DEG) {
+                            step = LIFT_CATCH_DEG_STEP;
+                        } else {
+                            step = LIFT_CATCH_SLOW_STEP;
+                        }
+                    }
+
+                    lift_set_target(g_lift_handle.lift_target_degree + step);
                     break;
+                }
                 case LIFT_STATE_DOWN:
                     lift_set_target(g_lift_handle.lift_target_degree -
                                     LIFT_TARGET_DEG_STEP);
@@ -225,7 +248,7 @@ static void lift_sequence_task(void *pvParameters) {
             continue;
         }
         lift_seq_update();
-        vTaskDelay(5);
+        vTaskDelay(3);
     }
 }
 
@@ -261,7 +284,11 @@ void lift_switch_mode(uint8_t key, remote_key_event_t event) {
             break;
 
         case LIFT_CATCH_DEGREE_KEY:
-            lift_set_target(LIFT_TARGET_CATCH_DEG);
+            lift_begin_catch_up_until_proximity();
+            break;
+        
+        case LIFT_UP_R1_KEY:
+            lift_set_target(LIFT_TARGET_UP_R1_DEG);
             break;
 
         case LIFT_SEQ_UP_KEY:
@@ -394,12 +421,12 @@ static void lift_bottom_init(void) {
     for (int i = 0; i < 2; i++) {
         dm_motor_init(&dm_motor_handle[i], 0x11 + i, 0x01 + i,
                       DM_MODE_POS_SPEED, DM_J4310, 12.5f, 30.0f, 10.0f,
-                      LIFT_CAN_SELECT);
+                      LIFT_CAN_SELECT);  
     }
 
     for (int i = 0; i < 2; i++) {
-        pid_init(&dji_2006_pid[i], 10000.0f, 500.0f, 0.0f, 15000.0f, DELTA_PID,
-                 1.80f, 0.01f, 0.00f);
+        pid_init(&dji_2006_pid[i], 16384.0f, 500.0f, 2.0f, 15000.0f, POSITION_PID,
+                 2.80f, 0.001f, 0.00f);
     }
 }
 
@@ -480,7 +507,7 @@ static void lift_seq_down_update(void) {
         lift_down_step_drive_2006_backward,
         lift_down_step_wait_up_arrived_and_finish,
     };
-
+    log_message(LOG_INFO, "2006_speed:%d", (int)dji_2006_handle[0].speed_rpm);
     if (g_lift_handle.lift_fsm.step <
             (sizeof(step_handlers) / sizeof(step_handlers[0])) &&
         step_handlers[g_lift_handle.lift_fsm.step] != NULL) {
@@ -652,19 +679,21 @@ static bool dm_position_check(lift_state_t state) {
     bool motor1_ready = false;
 
     if (state == LIFT_STATE_DOWN) {
-        motor0_ready = (fabs(fabs(dm_motor_handle[0].position) -
-                             LIFT_TARGET_DEG_DOWN_SEQ) < 0.1f);
+        // motor0_ready = (fabs(fabs(dm_motor_handle[0].position) -
+        //                      LIFT_TARGET_DEG_DOWN_SEQ) < 0.1f);
         motor1_ready = (fabs(fabs(dm_motor_handle[1].position) -
                              LIFT_TARGET_DEG_DOWN_SEQ) < 0.1f);
-        return motor0_ready && motor1_ready;
+        // return motor0_ready && motor1_ready;
+        return motor1_ready;
     }
 
     if (state == LIFT_STATE_UP) {
-        motor0_ready = (fabs(fabs(dm_motor_handle[0].position) -
-                             LIFT_TARGET_DEG_UP_SEQ) < 0.1f);
+        // motor0_ready = (fabs(fabs(dm_motor_handle[0].position) -
+        //                      LIFT_TARGET_DEG_UP_SEQ) < 0.1f);
         motor1_ready = (fabs(fabs(dm_motor_handle[1].position) -
                              LIFT_TARGET_DEG_UP_SEQ) < 0.1f);
-        return motor0_ready && motor1_ready;
+        //return motor0_ready && motor1_ready;
+        return motor1_ready;
     }
 
     return false;
@@ -702,6 +731,7 @@ static void lift_publish_if_auto(uint8_t code) {
 static void lift_finish_sequence(void) {
     g_lift_handle.lift_state = LIFT_STATE_NORMAL;
     g_lift_handle.lift_fsm.action = 0;
+    g_lift_handle.catch_up_until_proximity_active = false;
 }
 
 // 紧急停止：清除所有动作
@@ -711,9 +741,37 @@ static void lift_seq_emergency_stop(void) {
     g_lift_handle.target_2006_rpm = 0.0f;
     g_lift_handle.lift_fsm.action = 0;
     g_lift_handle.lift_fsm.step = 0;
+    g_lift_handle.catch_up_until_proximity_active = false;
 
     log_message(LOG_INFO,
                 "Lift sequence emergency stop: action=0, degree=0, 2006=0");
+}
+
+void lift_begin_catch_up_until_proximity(void) {
+    if (g_lift_handle.lift_fsm.action != 0) {
+        return;
+    }
+
+    if (HAL_GPIO_ReadPin(LIFT_CATCH_ENABLE_PORT, LIFT_CATCH_ENABLE_PIN) ==
+        GPIO_PIN_RESET) {
+        g_lift_handle.catch_up_until_proximity_active = false;
+        g_lift_handle.lift_state = LIFT_STATE_NORMAL;
+        g_lift_handle.target_2006_rpm = 0.0f;
+        return;
+    }
+
+    g_lift_handle.catch_up_until_proximity_active = true;
+    g_lift_handle.lift_state = LIFT_STATE_UP;
+}
+
+void lift_on_catch_proximity_falling_edge(void) {
+    if (!g_lift_handle.catch_up_until_proximity_active) {
+        return;
+    }
+
+    g_lift_handle.catch_up_until_proximity_active = false;
+    g_lift_handle.lift_state = LIFT_STATE_NORMAL;
+    g_lift_handle.target_2006_rpm = 0.0f;
 }
 
 // 上升步骤1：等待前光电上升沿
@@ -741,10 +799,28 @@ static void lift_up_step_wait_down_arrived(void) {
 
 // 上升步骤4：2006电机正转，等待后光电上升沿
 static void lift_up_step_drive_2006_forward(void) {
-    g_lift_handle.target_2006_rpm = 4000.0f;
-    // vTaskDelay(100);
+    static uint32_t step4_start_tick = 0;
+
+    /* 记录 step4 开始 tick（只在首次进入时记录） */
+    if (step4_start_tick == 0) {
+        step4_start_tick = xTaskGetTickCount();
+    }
+
+    /* 计算自 step4 开始经过的秒数 */
+    uint32_t now_tick = xTaskGetTickCount();
+    float elapsed_sec = (now_tick - step4_start_tick) *
+                        (portTICK_PERIOD_MS * 0.001f);
+
+    /* 分段速度：进入 step4 后小于 2.5s 使用 +7000rpm，否则使用 +4000rpm */
+    if (elapsed_sec < 1.5f) {
+        g_lift_handle.target_2006_rpm = 6000.0f;
+    } else {
+        g_lift_handle.target_2006_rpm = 4000.0f;
+    }
+
     // 检查后光电的上升沿（false -> true）
     if (get_rear_photoelectric_rising_edge()) {
+        step4_start_tick = 0;
         g_lift_handle.target_2006_rpm = 0.0f;
         g_lift_handle.lift_state = LIFT_STATE_UP;
         lift_set_target(LIFT_TARGET_DEG_UP_SEQ);
@@ -787,11 +863,31 @@ static void lift_down_step_wait_down_arrived(void) {
 
 // 下降步骤4：2006电机反转，等待中光电下降沿
 static void lift_down_step_drive_2006_backward(void) {
-    g_lift_handle.target_2006_rpm = -4000.0f;
-    // 检查中光电的下降沿（true -> false）
+    /* 记录 step3 开始 tick（只在首次进入时记录） */
+    if (g_lift_handle.step3_start_tick == 0) {
+        g_lift_handle.step3_start_tick = xTaskGetTickCount();
+    }
+
+    /* 计算自 step3 开始经过的秒数 */
+    uint32_t now_tick = xTaskGetTickCount();
+    float elapsed_sec = (now_tick - g_lift_handle.step3_start_tick) *
+                        (portTICK_PERIOD_MS * 0.001f);
+
+    /* 简化的分段速度：进入 step3 后小于 2.5s 使用 -5200rpm，否则使用 -4000rpm */
+    if (elapsed_sec < 1.5f) {
+        g_lift_handle.target_2006_rpm = -6000.0f;
+    } else {
+        g_lift_handle.target_2006_rpm = -4000.0f;
+    }
+
+    /* 检查中光电的下降沿（true -> false），完成时清除开始 tick 并前进步骤 */
     if (get_middle_photoelectric_falling_edge()) {
-        // vTaskDelay(350);
-        log_message(LOG_INFO, "lift up");
+        /* 记录本次耗时供调试（可选） */
+        float total_time = elapsed_sec;
+        g_lift_handle.step3_last_duration = total_time;
+        g_lift_handle.step3_start_tick = 0;
+
+        log_message(LOG_INFO, "lift up, step duration=%.3fs", total_time);
         g_lift_handle.target_2006_rpm = 0.0f;
         g_lift_handle.lift_state = LIFT_STATE_UP;
         lift_set_target(LIFT_TARGET_DEG_UP_SEQ);

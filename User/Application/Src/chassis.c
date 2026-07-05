@@ -15,7 +15,7 @@
 #include "microros_ctrl.h"
 #include "lift.h"
 
-#define SWITCH_WORLD_KEY   2 /* 切换世界/自身坐标系按键 */
+// #define SWITCH_WORLD_KEY   2 /* 切换世界/自身坐标系按键 */
 #define SWITCH_AUTO_KEY    3 /* 切换自动/手动按键 */
 #define SET_HALT_KEY       4 /* 切换自锁按键 */
 
@@ -181,12 +181,12 @@ static void chassis_switch_mode(uint8_t key, remote_key_event_t event) {
                                       : "Switch to manual mode. ");
             break;
 
-        case SWITCH_WORLD_KEY:
-            chassis_handle.world_cordinate = !chassis_handle.world_cordinate;
-            log_message(LOG_INFO, chassis_handle.world_cordinate
-                                      ? "Set chassis to world coordinate. "
-                                      : "Set chassis to self coordinate. ");
-            break;
+        // case SWITCH_WORLD_KEY:
+        //     chassis_handle.world_cordinate = !chassis_handle.world_cordinate;
+        //     log_message(LOG_INFO, chassis_handle.world_cordinate
+        //                               ? "Set chassis to world coordinate. "
+        //                               : "Set chassis to self coordinate. ");
+        //     break;
 
         default:
             break;
@@ -201,8 +201,8 @@ void chassis_init(void) {
     lift_init();
     chassis_tasks_init();
 
-    remote_register_key_callback(SWITCH_WORLD_KEY, REMOTE_KEY_PRESS_UP,
-                                 chassis_switch_mode);
+    // remote_register_key_callback(SWITCH_WORLD_KEY, REMOTE_KEY_PRESS_UP,
+    //                              chassis_switch_mode);
     remote_register_key_callback(SWITCH_AUTO_KEY, REMOTE_KEY_PRESS_UP,
                                  chassis_switch_mode);
     remote_register_key_callback(SET_HALT_KEY, REMOTE_KEY_PRESS_UP,
@@ -221,13 +221,13 @@ static void chassis_bottom_init(void) {
         }
     }
 
-    pid_init(&dji_3508_speed_pid[0], 10000.0f, 800.0f, 0.0f, 16384.0f,
+    pid_init(&dji_3508_speed_pid[0], 16384.0f, 800.0f, 0.0f, 16384.0f,
              DELTA_PID, 7.50f, 0.035f, 0.35f);
-    pid_init(&dji_3508_speed_pid[1], 10000.0f, 800.0f, 0.0f, 16384.0f,
+    pid_init(&dji_3508_speed_pid[1], 16384.0f, 800.0f, 0.0f, 16384.0f,
              DELTA_PID, 7.50f, 0.043f, 0.35f);
-    pid_init(&dji_3508_speed_pid[2], 10000.0f, 800.0f, 0.0f, 16384.0f,
+    pid_init(&dji_3508_speed_pid[2], 16384.0f, 800.0f, 0.0f, 16384.0f,
              DELTA_PID, 7.20f, 0.033f, 0.35f);
-    pid_init(&dji_3508_speed_pid[3], 10000.0f, 800.0f, 0.0f, 16384.0f,
+    pid_init(&dji_3508_speed_pid[3], 16384.0f, 800.0f, 0.0f, 16384.0f,
              DELTA_PID, 7.40f, 0.043f, 0.35f);
 
     pid_init(&dji_3508_pos_pid[0], 5000.0f, 0.0f, 5.5f, 360.0f, POSITION_PID,
@@ -277,11 +277,11 @@ static void chassis_set_halt(bool enable) {
     chassis_handle.halt = enable;
 
     /* 更新LED3：亮表示自锁，灭表示非自锁 */
-    if (enable) {
-        LED3_ON();
-    } else {
-        LED3_OFF();
-    }
+    // if (enable) {
+    //     LED3_ON();
+    // } else {
+    //     LED3_OFF();
+    // }
 
     for (int i = 0; i < 4; i++) {
         chassis_pid_clear_state(&dji_3508_speed_pid[i]);

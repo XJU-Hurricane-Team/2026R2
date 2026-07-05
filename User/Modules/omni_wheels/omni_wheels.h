@@ -24,7 +24,7 @@
 #define SQRT2_2 0.70710678f // sqrt(2)/2 的常数，用于45度麦克纳姆/全向轮运动学投影
 
 // 速度限制参数
-#define MAX_SPEED_XY             1.0f
+#define MAX_SPEED_XY             4.0f
 #define MAX_SPEED_W              8.0f
 #define MAX_ACCEL_XY             1.5f
 #define MAX_ACCEL_W              2.0f

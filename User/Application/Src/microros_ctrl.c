@@ -51,7 +51,6 @@ static custom_msg__srv__ControlDispatch_Request control_dispatch_request = {0};
 static custom_msg__srv__ControlDispatch_Response control_dispatch_response = {
     0};
 static std_msgs__msg__Int8 control_dispatch_pub_pram = {0};
-bool is_return = true;
 
 void control_dispatch_init(void);
 void control_dispatch_callback(const void *request_msg, void *response_msg);
@@ -319,7 +318,6 @@ void control_dispatch_init(void) {
  */
 void control_dispatch_publish(int8_t status) {
     control_dispatch_pub_pram.data = status;
-
     if (microros_rcl_mutex != NULL &&
         xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
         rcl_ret_t pub_ret = rcl_publish(&control_dispatch_publisher,
@@ -370,7 +368,6 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
         }
 
     } else if (req_in->event == 1) {
-         arm_return_enabel = req_in->is_return;
         switch (req_in->command_mode) {
             case 0:
                 robot_arm_set_state_index(0); // 初始化
@@ -426,9 +423,6 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
             case 11:
                 robot_arm_set_state_index(11); // 关闭气泵
                 break;
-            case 12:
-                robot_arm_start_place_return_sequence(1); // 放置完成后回到初始化位
-                break;
             default:
                 break;
         }
@@ -446,6 +440,12 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 break;
             case 3:
                 lift_set_target(0.0f); // 抬升复位
+                break;
+            case 4:
+                lift_begin_catch_up_until_proximity();
+                break;
+            case 5:
+                lift_set_target(LIFT_TARGET_UP_R1_DEG);
                 break;
             default:
                 break;
