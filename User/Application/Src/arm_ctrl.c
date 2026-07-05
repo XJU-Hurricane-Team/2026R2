@@ -19,7 +19,6 @@ static void arm_pump_place_check(bool publish_result);
 static void arm_pump_catch_check(void);
 static bool arm_is_motor_reached(void);
 
-static void pump_set_state(uint8_t on);
 static uint8_t pump_read_adc(uint16_t *out_value);
 static uint8_t pump_read_adc_filtered(uint16_t *out_value);
 
@@ -35,7 +34,7 @@ static uint8_t g_last_target_index;           /* 上一次下发的目标状态�
 static uint8_t g_place_return_sequence_active = 0; /* 放置后回位组合动作标志 */
 static uint8_t g_place_return_target_index = 0; /* 放置完成后跳转的目标状态 */
 
-static uint8_t g_place_target_index = 0;          /* 放置层级索引 (0~2) */
+static uint8_t g_place_target_index = 0;          /* 放置层级索引 (0~2), 初始中层 */
 static uint8_t g_wait_takeout_target_index = ARM_TAKEOUT_START_LAYER;   /* 待取出层级索引 (0~2) */
 static arm_target_point_t g_dynamic_target = {0}; /* 动态抓取目标点 (mm/rad) */
 static uint8_t g_has_dynamic_target = 0;          /* 是否存在动态抓取目标 */
@@ -232,7 +231,7 @@ void robot_arm_init(void) {
     g_last_target_index = 0;
     g_place_return_sequence_active = 0;
     g_place_return_target_index = 0;
-    g_place_target_index = 0;
+    g_place_target_index = 1;
     g_wait_takeout_target_index = 1;
     g_has_dynamic_target = 0;
     g_pump_wait_state = PUMP_WAIT_NONE;
@@ -440,13 +439,15 @@ void robot_arm_apply_target(uint8_t index) {
     }
 
     /**
-     * TAKEOUT_1/TAKEOUT_2 始终采用阶段式顺序步进：
+     * TAKEOUT_1/TAKEOUT_2 阶段式顺序步进（防碰撞）：
      *   1. 大臂先抬起（小臂、吸盘锁定）
      *   2. 小臂运动（大臂、吸盘锁定）
      *   3. 三关节协同到达最终目标
-     * 不再依赖 prev_status，避免从非 WAIT_TAKEOUT 状态进入时坠落 MULTI_TRANS
+     * 从 READY 态切换时不执行避障序列，直接运动到位。
      */
-    if (arm_is_takeout_state(&g_robot_arm)) {
+    if (arm_is_takeout_state(&g_robot_arm) &&
+        prev_status != ARM_STATE_READY_1 && prev_status != ARM_STATE_READY_2 &&
+        prev_status != ARM_STATE_READY_3 && prev_status != ARM_STATE_READY_4) {
 
         /* 设定取出层数（独立于 place_layer），并逐层递减 */
         g_robot_arm.takeout_layer = g_wait_takeout_target_index;
@@ -685,7 +686,7 @@ static void arm_pump_place_check(bool publish_result) {
  * @brief 设置气泵开关状态
  * @param on 1: 打开气泵, 0: 关闭气泵
  */
-static void pump_set_state(uint8_t on) {
+void pump_set_state(uint8_t on) {
     HAL_GPIO_WritePin(PUMP_GPIO_Port, PUMP_Pin,
                       on ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
