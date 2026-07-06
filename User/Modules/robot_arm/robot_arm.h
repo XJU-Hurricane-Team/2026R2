@@ -299,7 +299,7 @@ uint8_t robot_arm_is_takeout_sequence_active(RobotArm *arm);
 void robot_arm_fk(float joint1, float joint2, float joint3, float *y_out,
                   float *z_out, float *pitch_out);
 void arm_pos_angle(float x1, float z1, float pitch_angle, float angle[3]);
-uint8_t arm_is_ready_state(RobotArm *arm);
-uint8_t arm_is_takeout_state(RobotArm *arm);
+uint8_t arm_is_ready_state(arm_status_t status);
+uint8_t arm_is_takeout_state(arm_status_t status);
 
 #endif /* ROBOT_ARM_H */

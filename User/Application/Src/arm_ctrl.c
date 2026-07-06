@@ -445,9 +445,8 @@ void robot_arm_apply_target(uint8_t index) {
      *   3. 三关节协同到达最终目标
      * 从 READY 态切换时不执行避障序列，直接运动到位。
      */
-    if (arm_is_takeout_state(&g_robot_arm) &&
-        prev_status != ARM_STATE_READY_1 && prev_status != ARM_STATE_READY_2 &&
-        prev_status != ARM_STATE_READY_3 && prev_status != ARM_STATE_READY_4) {
+    if (arm_is_takeout_state(g_robot_arm.status) &&
+        !arm_is_ready_state(prev_status)) {
 
         /* 设定取出层数（独立于 place_layer），并逐层递减 */
         g_robot_arm.takeout_layer = g_wait_takeout_target_index;
@@ -744,7 +743,7 @@ static uint8_t pump_read_adc_filtered(uint16_t *out_value) {
 /* 按键 → 状态索引 映射表，按需增删改 */
 static const uint8_t g_arm_key_index_map[][2] = {
     {10, 0},  /* INIT        */
-    {11, 3},  /* READY_1     */
+    {11, 4},  /* READY_1     */
     {12, 5},  /* CATCH       */
     {13, 6},  /* PLACE       */
     {14, 7},  /* WAIT_TAKEOUT*/

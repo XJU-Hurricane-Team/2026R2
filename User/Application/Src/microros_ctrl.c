@@ -368,6 +368,7 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
         }
 
     } else if (req_in->event == 1) {
+        arm_return_enabel = req_in->is_return;
         switch (req_in->command_mode) {
             case 0:
                 robot_arm_set_state_index(0); // 初始化
@@ -423,6 +424,9 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 break;
             case 11:
                 robot_arm_set_state_index(11); // 关闭气泵
+                break;
+            case 12:
+                robot_arm_start_place_return_sequence(1); // 放置完成后回到初始化位
                 break;
             default:
                 break;

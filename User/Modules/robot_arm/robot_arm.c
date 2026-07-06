@@ -33,18 +33,17 @@ static float arm_wrap_pi(float angle) {
 }
 
 static uint8_t arm_is_place_like(arm_status_t status) {
-    return (status == ARM_STATE_PLACE) || (status == ARM_STATE_WAIT_TAKEOUT) ||
-           (status == ARM_STATE_TAKEOUT_1) || (status == ARM_STATE_TAKEOUT_2);
+    return (status == ARM_STATE_PLACE) || (status == ARM_STATE_WAIT_TAKEOUT);
 }
 
-uint8_t arm_is_ready_state(RobotArm *arm) {
-    return (arm->status == ARM_STATE_READY_1) ||
-           (arm->status == ARM_STATE_READY_2) || (arm->status == ARM_STATE_READY_3) || (arm->status == ARM_STATE_READY_4);
+uint8_t arm_is_ready_state(arm_status_t status) {
+    return (status == ARM_STATE_READY_1) ||
+           (status == ARM_STATE_READY_2) || (status == ARM_STATE_READY_3) || (status == ARM_STATE_READY_4);
 }
 
-uint8_t arm_is_takeout_state(RobotArm *arm) {
-    return (arm->status == ARM_STATE_TAKEOUT_1) ||
-           (arm->status == ARM_STATE_TAKEOUT_2);
+uint8_t arm_is_takeout_state(arm_status_t status) {
+    return (status == ARM_STATE_TAKEOUT_1) ||
+           (status == ARM_STATE_TAKEOUT_2);
 }
 
 static int8_t arm_get_ik_quadrant(float y, float z, float pitch) {
@@ -123,10 +122,10 @@ static void arm_detect_state_change(RobotArm *arm) {
     arm->flags.small_arm_wait_locked_inited = 0;
     arm->flags.big_arm_wait_locked_inited = 0;
 
-    if ((prev == ARM_STATE_CATCH) && arm_is_place_like(curr)) {
+    if ((prev == ARM_STATE_CATCH) && (arm_is_place_like(curr) || arm_is_takeout_state(curr))) {
         arm->latch_type = ARM_LATCH_SUCTION_WAIT;
         arm->suction_wait_start_tick = now;
-    } else if (arm_is_place_like(prev) && arm_is_takeout_state(arm)) {
+    } else if ((arm_is_place_like(prev) || arm_is_takeout_state(prev)) && arm_is_takeout_state(curr)) {
         /* 如果已经启动了三步序列，不要覆盖其锁存和过冲设置 */
         if (arm->motion_state == ARM_MOTION_STATE_TAKEOUT_SEQ_BIG) {
             // /* 三步序列已启动，恢复 SEQ_BIG_ARM_ONLY 锁存，不触发额外过冲 */
@@ -140,7 +139,7 @@ static void arm_detect_state_change(RobotArm *arm) {
             arm->big_arm_overshoot_armed = 1;
             /* takeout_target_suction_angle 已在 robot_arm_start_takeout_sequence 中设置 */
         }
-    } else if (arm_is_place_like(prev) && (curr == ARM_STATE_CATCH)) {
+    } else if ((arm_is_place_like(prev) || arm_is_takeout_state(prev)) && (curr == ARM_STATE_CATCH)) {
         arm->latch_type = ARM_LATCH_SMALL_ARM_WAIT;
         arm->suction_wait_start_tick = now;
     }
@@ -354,7 +353,7 @@ static void arm_update_overshoot(RobotArm *arm, float joint_target[3]) {
         }
 
         float actual_suction = joint_target[2];
-        if (arm_is_place_like(arm->status)) {
+        if (arm_is_place_like(arm->status) || arm_is_takeout_state(arm->status)) {
             actual_suction -= ARM_PLACE_SUCTION_OFFSET_RAD;
         }
         actual_suction = arm_clampf(actual_suction, -0.4f, 4.5f);
@@ -647,14 +646,14 @@ void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch) {
 
     uint8_t delay_overshoot = 0;
 
-    /* 进入 PLACE/WAIT_TAKEOUT/INIT 时重置象限跟踪，避免与多点过渡冲突 */
-    if (arm_is_place_like(arm->status) || arm->status == ARM_STATE_INIT) {
+    /* 进入 PLACE/WAIT_TAKEOUT/TAKEOUT/INIT 时重置象限跟踪 */
+    if (arm_is_place_like(arm->status) || arm_is_takeout_state(arm->status) || arm->status == ARM_STATE_INIT) {
         arm->last_target_quadrant = 0;
         arm->flip_transition_dir = 0;
     }
 
-    if (arm_is_place_like(arm->last_status) &&
-        !arm_is_place_like(arm->status) && !arm_is_takeout_state(arm) &&
+    if ((arm_is_place_like(arm->last_status) || arm_is_takeout_state(arm->last_status)) &&
+        !arm_is_place_like(arm->status) && !arm_is_takeout_state(arm->status) &&
         arm->status != ARM_STATE_INIT) {
         arm->motion_state = ARM_MOTION_STATE_SINGLE_TRANS;
         arm->flags.has_transition = 1;
@@ -681,7 +680,9 @@ void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch) {
         arm->arm_target_z = z + 20.0f;
         arm->arm_target_pitch = pitch;
     } else if (arm->last_status != arm->status &&
-               arm_is_place_like(arm->status)) {
+               (arm_is_place_like(arm->status) || arm_is_takeout_state(arm->status)) &&
+               !(arm_is_ready_state(arm->last_status) &&
+                 arm_is_takeout_state(arm->status))) {
         arm->motion_state = ARM_MOTION_STATE_MULTI_TRANS;
         arm->multi_trans_index = 0;
         arm->multi_trans_count = 3;
@@ -751,7 +752,7 @@ void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch) {
         if (arm_is_place_like(arm->status)) {
             arm->big_arm_overshoot_rad = ARM_BIG_ARM_FLIP_OVERSHOOT_FORCE_RAD;
             arm->big_arm_overshoot_armed = 1;
-        } else if (arm_is_takeout_state(arm) && arm->last_status != ARM_STATE_WAIT_TAKEOUT) {
+        } else if (arm_is_takeout_state(arm->status) && arm->last_status != ARM_STATE_WAIT_TAKEOUT) {
             arm->big_arm_overshoot_rad =
                 ARM_UPPER_TAKEOUT_BIG_ARM_OVERSHOOT_RAD;
             arm->big_arm_overshoot_armed = 1;
@@ -1043,7 +1044,7 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
     cmd_speed = arm_clampf(cmd_speed, 0.06f, ARM_J8006_CMD_SPEED_MAX);
 
     float joint2_cmd = joint_des[2];
-    if (arm_is_place_like(arm->status)) {
+    if (arm_is_place_like(arm->status) || arm_is_takeout_state(arm->status)) {
         joint2_cmd -= ARM_PLACE_SUCTION_OFFSET_RAD;
     }
 
@@ -1052,7 +1053,7 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
                     small_speed_kp, small_speed_max);
 
     uint8_t place_like_mode =
-        arm_is_place_like(arm->status) || arm_is_takeout_state(arm);
+        arm_is_place_like(arm->status) || arm_is_takeout_state(arm->status);
 
     if (arm->latch_type == ARM_LATCH_NONE) {
         if (place_like_mode) {
