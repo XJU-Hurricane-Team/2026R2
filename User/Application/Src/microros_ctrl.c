@@ -447,10 +447,13 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 lift_set_target(0.0f); // 抬升复位
                 break;
             case 4:
-                lift_begin_catch_up_until_proximity();
+                //lift_begin_catch_up_until_proximity();
+                auto_lift_set_target(LIFT_TARGET_UP_RAMP_DEG);
                 break;
             case 5:
+                // auto_lift_set_target(LIFT_TARGET_UP_R1_DEG);
                 lift_set_target(LIFT_TARGET_UP_R1_DEG);
+                up_R1_flag = true;
                 break;
             default:
                 break;

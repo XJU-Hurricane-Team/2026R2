@@ -14,6 +14,7 @@
 #include "includes.h"
 #include "microros_ctrl.h"
 #include "lift.h"
+#include "VL53L1/vl53l1_apply.h"
 
 #define CHASSIS_CAN_SELECT       can1_selected
 #define LIFT_CAN_SELECT          can2_selected
@@ -40,18 +41,19 @@
 #define LIFT_CATCH_ENABLE_PORT   GPIOB
 #define LIFT_CATCH_ENABLE_PIN    GPIO_PIN_2
 //2.7498
-#define LIFT_TARGET_CATCH_DEG     2.45f      //2.6049 - 2.50 = 0.
-#define LIFT_TARGET_DEG_UP_MAX    2.90f
-#define LIFT_TARGET_DEG_DOWN_MAX  12.275f
-#define LIFT_TARGET_DEG_UP_SEQ    0.0f
-#define LIFT_TARGET_DEG_DOWN_SEQ  12.275f
-#define LIFT_TARGET_SPEED_HIGH    18.0f      //距离较远时，抬升速度较快
-#define LIFT_TARGET_SPEED_LOW     10.0f      //距离较近时，抬升速度较慢
+#define LIFT_TARGET_CATCH_DEG    2.40f      //2.6049 - 2.50 = 0.
+#define LIFT_TARGET_DEG_UP_MAX   2.70f      //最初5.42
+#define LIFT_TARGET_DEG_DOWN_MAX 12.275f
+#define LIFT_TARGET_DEG_UP_SEQ   0.0f
+#define LIFT_TARGET_DEG_DOWN_SEQ 12.275f
+#define LIFT_TARGET_DEG_STEP     0.005f
+#define LIFT_TARGET_SPEED_HIGH   18.0f      //距离较远时，抬升速度较快
+#define LIFT_TARGET_SPEED_LOW    10.0f      //距离较近时，抬升速度较慢
 #define LIFT_TARGET_SPEED_SWITCH  1.5f       //差值，大于则快速度，小于则慢速度
-#define LIFT_SENSOR_FALLBACK_MS   800U       //单路下降沿后，等待双路下降沿的最大时间
-#define LIFT_TARGET_DEG_STEP      0.005f
-#define LIFT_CATCH_DEG_STEP       0.410f
-#define LIFT_CATCH_SLOW_STEP      0.0010f
+#define LIFT_CATCH_DEG_STEP      0.410f
+#define LIFT_CATCH_SLOW_STEP     0.0010f
+#define LIFT_TARGET_SPEED        10.0f
+
 
 typedef enum {
     LIFT_STATE_NORMAL = 0,
@@ -81,11 +83,11 @@ typedef struct {
     uint32_t step3_start_tick;    /* tick when step 3 (drive 2006) started */
     float step3_last_duration;    /* last measured duration from step3 start to step4 (seconds) */
     bool catch_up_until_proximity_active;
-    bool rear_partial_falling_waiting;
-    uint32_t rear_partial_falling_tick;
-    bool middle_partial_falling_waiting;
-    uint32_t middle_partial_falling_tick;
 } lift_handle_t;
+
+static bool g_auto_lift_target_pending = false;
+static float g_auto_lift_target_degree = 0.0f;
+bool up_R1_flag = false;
 
 static lift_handle_t g_lift_handle = {
     .is_auto_mode = false,
@@ -96,10 +98,6 @@ static lift_handle_t g_lift_handle = {
     .step3_start_tick = 0,
     .step3_last_duration = 0.0f,
     .catch_up_until_proximity_active = false,
-    .rear_partial_falling_waiting = false,
-    .rear_partial_falling_tick = 0,
-    .middle_partial_falling_waiting = false,
-    .middle_partial_falling_tick = 0,
 };
 
 static photoelectric_debounce_t g_rear_photoelectric_debounce = {
@@ -126,37 +124,11 @@ static photoelectric_debounce_t g_middle_photoelectric_debounce = {
     .debounce_ms = 6,
 };
 
-static photoelectric_debounce_t g_rear_photoelectric_pin0_debounce = {
-    .current_state = false,
-    .last_stable_state = false,
-    .prev_stable_state = false,
-    .change_tick = 0,
-    .debounce_ms = 20,
-};
-
-static photoelectric_debounce_t g_rear_photoelectric_pin1_debounce = {
-    .current_state = false,
-    .last_stable_state = false,
-    .prev_stable_state = false,
-    .change_tick = 0,
-    .debounce_ms = 20,
-};
-
-static photoelectric_debounce_t g_middle_photoelectric_pin0_debounce = {
-    .current_state = false,
-    .last_stable_state = false,
-    .prev_stable_state = false,
-    .change_tick = 0,
-    .debounce_ms = 20,
-};
-
-static photoelectric_debounce_t g_middle_photoelectric_pin1_debounce = {
-    .current_state = false,
-    .last_stable_state = false,
-    .prev_stable_state = false,
-    .change_tick = 0,
-    .debounce_ms = 20,
-};
+/* VL53L1 距离跳变检测——用于下降序列 step3 辅助触发 */
+static uint16_t s_last_vl53l1_dist_mm = 0;   /* 上一次有效测距值 */
+static bool     s_vl53l1_has_last = false;   /* 是否已有有效历史值 */
+#define VL53L1_DELTA_TRIGGER_MIN_MM  150      /* 距离跳变触发下限 */
+#define VL53L1_DELTA_TRIGGER_MAX_MM  350      /* 距离跳变触发上限 */
 
 typedef void (*lift_seq_handler_t)(void);
 typedef void (*lift_step_handler_t)(void);
@@ -188,30 +160,23 @@ static bool get_rear_photoelectric_rising_edge(void);
 static bool get_rear_photoelectric_falling_edge(void);
 static bool get_middle_photoelectric_rising_edge(void);
 static bool get_middle_photoelectric_falling_edge(void);
-static bool get_rear_photoelectric_pin0_falling_edge(void);
-static bool get_rear_photoelectric_pin1_falling_edge(void);
-static bool get_middle_photoelectric_pin0_falling_edge(void);
-static bool get_middle_photoelectric_pin1_falling_edge(void);
 static bool photoelectric_get_stable_state(photoelectric_debounce_t *debounce,
                                            GPIO_TypeDef *port_0,
                                            uint16_t pin_0,
                                            GPIO_TypeDef *port_1,
                                            uint16_t pin_1);
-static bool photoelectric_get_single_stable_state(photoelectric_debounce_t *debounce,
-                                                  GPIO_TypeDef *port,
-                                                  uint16_t pin);
 static void photoelectric_sync_state(photoelectric_debounce_t *debounce,
                                      bool raw_state);
 static void lift_sync_photoelectric_state(void);
 
 static bool dm_position_check(lift_state_t state);
 static float lift_limit_target(float target_degree);
+void auto_lift_set_target(float target_degree);
 static float lift_select_target_speed(float target_degree, float real_degree);
 void lift_set_target(float target_degree);
 static void lift_publish_if_auto(uint8_t code);
 static void lift_finish_sequence(void);
 static void lift_seq_emergency_stop(void);
-static void lift_reset_partial_falling_state(void);
 
 static void lift_up_step_wait_front_trigger(void);
 static void lift_up_step_set_down_target(void);
@@ -290,6 +255,14 @@ static void lift_state_task(void *pvParameters) {
                   lift_select_target_speed(-g_lift_handle.lift_target_degree,
                                dm_motor_handle[1].position));
 
+        if (g_auto_lift_target_pending &&
+            g_lift_handle.lift_fsm.action == 0 &&
+            (fabs(fabs(dm_motor_handle[1].position) -
+                  fabs(g_auto_lift_target_degree)) < 0.1f)) {
+            g_auto_lift_target_pending = false;
+            control_dispatch_publish(1);
+        }
+
         vTaskDelay(10);
     }
 }
@@ -339,7 +312,8 @@ void lift_switch_mode(uint8_t key, remote_key_event_t event) {
             break;
 
         case LIFT_CATCH_DEGREE_KEY:
-            lift_begin_catch_up_until_proximity();
+            // lift_begin_catch_up_until_proximity();
+            lift_set_target(LIFT_TARGET_UP_RAMP_DEG);
             break;
         
         case LIFT_UP_R1_KEY:
@@ -421,6 +395,8 @@ void lift_set_chassis_mode(bool is_auto_mode) {
     g_lift_handle.is_auto_mode = is_auto_mode;
     if (is_auto_mode && g_lift_handle.lift_fsm.action == 0) {
         g_lift_handle.target_2006_rpm = 0.0f;
+    } else if (!is_auto_mode) {
+        g_auto_lift_target_pending = false;
     }
 }
 
@@ -481,7 +457,7 @@ static void lift_bottom_init(void) {
 
     for (int i = 0; i < 2; i++) {
         pid_init(&dji_2006_pid[i], 16384.0f, 500.0f, 2.0f, 15000.0f, POSITION_PID,
-                 2.80f, 0.001f, 0.00f);
+                 2.30f, 0.001f, 0.00f);
     }
 }
 
@@ -530,6 +506,13 @@ static void lift_seq_start(uint8_t action) {
 
     g_lift_handle.lift_fsm.action = action;
     g_lift_handle.lift_fsm.step = 0;
+
+    /* 下降序列启动时，启动 VL53L1 测距并重置距离跟踪 */
+    if (action == 2) {
+        s_last_vl53l1_dist_mm = 0;
+        s_vl53l1_has_last = false;
+        vl53l1_apply_start_measurement(g_vl53l1_handle);
+    }
 
     if (lift_sequence_task_handle != NULL) {
         xTaskNotifyGive(lift_sequence_task_handle);
@@ -669,58 +652,6 @@ static bool get_middle_photoelectric_falling_edge(void) {
     return falling;
 }
 
-static bool get_rear_photoelectric_pin0_falling_edge(void) {
-    photoelectric_get_single_stable_state(&g_rear_photoelectric_pin0_debounce,
-                                          SENSOR_GPIO_PORT_0,
-                                          REAR_SENSOR_PIN_0);
-    bool falling = (g_rear_photoelectric_pin0_debounce.prev_stable_state &&
-                    !g_rear_photoelectric_pin0_debounce.last_stable_state);
-    if (falling) {
-        g_rear_photoelectric_pin0_debounce.prev_stable_state =
-            g_rear_photoelectric_pin0_debounce.last_stable_state;
-    }
-    return falling;
-}
-
-static bool get_rear_photoelectric_pin1_falling_edge(void) {
-    photoelectric_get_single_stable_state(&g_rear_photoelectric_pin1_debounce,
-                                          SENSOR_GPIO_PORT_1,
-                                          REAR_SENSOR_PIN_1);
-    bool falling = (g_rear_photoelectric_pin1_debounce.prev_stable_state &&
-                    !g_rear_photoelectric_pin1_debounce.last_stable_state);
-    if (falling) {
-        g_rear_photoelectric_pin1_debounce.prev_stable_state =
-            g_rear_photoelectric_pin1_debounce.last_stable_state;
-    }
-    return falling;
-}
-
-static bool get_middle_photoelectric_pin0_falling_edge(void) {
-    photoelectric_get_single_stable_state(&g_middle_photoelectric_pin0_debounce,
-                                          SENSOR_GPIO_PORT_0,
-                                          MIDDLE_SENSOR_PIN_0);
-    bool falling = (g_middle_photoelectric_pin0_debounce.prev_stable_state &&
-                    !g_middle_photoelectric_pin0_debounce.last_stable_state);
-    if (falling) {
-        g_middle_photoelectric_pin0_debounce.prev_stable_state =
-            g_middle_photoelectric_pin0_debounce.last_stable_state;
-    }
-    return falling;
-}
-
-static bool get_middle_photoelectric_pin1_falling_edge(void) {
-    photoelectric_get_single_stable_state(&g_middle_photoelectric_pin1_debounce,
-                                          SENSOR_GPIO_PORT_1,
-                                          MIDDLE_SENSOR_PIN_1);
-    bool falling = (g_middle_photoelectric_pin1_debounce.prev_stable_state &&
-                    !g_middle_photoelectric_pin1_debounce.last_stable_state);
-    if (falling) {
-        g_middle_photoelectric_pin1_debounce.prev_stable_state =
-            g_middle_photoelectric_pin1_debounce.last_stable_state;
-    }
-    return falling;
-}
-
 // 读取光电状态并更新防抖结构体
 static bool photoelectric_get_stable_state(photoelectric_debounce_t *debounce,
                                            GPIO_TypeDef *port_0,
@@ -754,26 +685,6 @@ static bool photoelectric_get_stable_state(photoelectric_debounce_t *debounce,
     return debounce->last_stable_state;
 }
 
-static bool photoelectric_get_single_stable_state(photoelectric_debounce_t *debounce,
-                                                  GPIO_TypeDef *port,
-                                                  uint16_t pin) {
-    bool raw_state = (HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_SET);
-
-    if (raw_state != debounce->current_state) {
-        debounce->current_state = raw_state;
-        debounce->change_tick = xTaskGetTickCount();
-    }
-
-    uint32_t elapsed_ms =
-        (xTaskGetTickCount() - debounce->change_tick) * portTICK_PERIOD_MS;
-    if (elapsed_ms >= debounce->debounce_ms) {
-        debounce->prev_stable_state = debounce->last_stable_state;
-        debounce->last_stable_state = raw_state;
-    }
-
-    return debounce->last_stable_state;
-}
-
 static void photoelectric_sync_state(photoelectric_debounce_t *debounce,
                                      bool raw_state) {
     debounce->current_state = raw_state;
@@ -798,15 +709,6 @@ static void lift_sync_photoelectric_state(void) {
     photoelectric_sync_state(&g_front_photoelectric_debounce, front_raw);
     photoelectric_sync_state(&g_rear_photoelectric_debounce, rear_raw);
     photoelectric_sync_state(&g_middle_photoelectric_debounce, middle_raw);
-
-    photoelectric_sync_state(&g_rear_photoelectric_pin0_debounce,
-                             HAL_GPIO_ReadPin(SENSOR_GPIO_PORT_0, REAR_SENSOR_PIN_0) == GPIO_PIN_SET);
-    photoelectric_sync_state(&g_rear_photoelectric_pin1_debounce,
-                             HAL_GPIO_ReadPin(SENSOR_GPIO_PORT_1, REAR_SENSOR_PIN_1) == GPIO_PIN_SET);
-    photoelectric_sync_state(&g_middle_photoelectric_pin0_debounce,
-                             HAL_GPIO_ReadPin(SENSOR_GPIO_PORT_0, MIDDLE_SENSOR_PIN_0) == GPIO_PIN_SET);
-    photoelectric_sync_state(&g_middle_photoelectric_pin1_debounce,
-                             HAL_GPIO_ReadPin(SENSOR_GPIO_PORT_1, MIDDLE_SENSOR_PIN_1) == GPIO_PIN_SET);
 }
 
 // 检查DM电机是否到达目标位置
@@ -847,17 +749,16 @@ static float lift_limit_target(float target_degree) {
     return target_degree;
 }
 
-static float lift_select_target_speed(float target_degree, float real_degree) {
-    float target_error = fabsf(fabsf(target_degree) - fabsf(real_degree));
-    if (target_error <= LIFT_TARGET_SPEED_SWITCH) {
-        return LIFT_TARGET_SPEED_LOW;
-    }
-    return LIFT_TARGET_SPEED_HIGH;
-}
-
 // 设置DM电机目标角度
 void lift_set_target(float target_degree) {
     g_lift_handle.lift_target_degree = lift_limit_target(target_degree);
+}
+
+// 自动模式设置DM电机目标角度(完成后反馈)
+void auto_lift_set_target(float target_degree){
+    g_auto_lift_target_degree = lift_limit_target(target_degree);
+    g_lift_handle.lift_target_degree = g_auto_lift_target_degree;
+    g_auto_lift_target_pending = true;
 }
 
 // 自动模式下发布微ROS消息
@@ -876,7 +777,11 @@ static void lift_finish_sequence(void) {
     g_lift_handle.lift_state = LIFT_STATE_NORMAL;
     g_lift_handle.lift_fsm.action = 0;
     g_lift_handle.catch_up_until_proximity_active = false;
-    lift_reset_partial_falling_state();
+    up_R1_flag = false;
+
+    /* 序列结束，停止 VL53L1 测距 */
+    vl53l1_apply_stop_measurement(g_vl53l1_handle);
+    s_vl53l1_has_last = false;
 }
 
 // 紧急停止：清除所有动作
@@ -887,17 +792,15 @@ static void lift_seq_emergency_stop(void) {
     g_lift_handle.lift_fsm.action = 0;
     g_lift_handle.lift_fsm.step = 0;
     g_lift_handle.catch_up_until_proximity_active = false;
-    lift_reset_partial_falling_state();
+    g_auto_lift_target_pending = false;
+    up_R1_flag = false;
+
+    /* 紧急停止也关 VL53L1 */
+    vl53l1_apply_stop_measurement(g_vl53l1_handle);
+    s_vl53l1_has_last = false;
 
     log_message(LOG_INFO,
                 "Lift sequence emergency stop: action=0, degree=0, 2006=0");
-}
-
-static void lift_reset_partial_falling_state(void) {
-    g_lift_handle.rear_partial_falling_waiting = false;
-    g_lift_handle.rear_partial_falling_tick = 0;
-    g_lift_handle.middle_partial_falling_waiting = false;
-    g_lift_handle.middle_partial_falling_tick = 0;
 }
 
 void lift_begin_catch_up_until_proximity(void) {
@@ -925,6 +828,15 @@ void lift_on_catch_proximity_falling_edge(void) {
     g_lift_handle.catch_up_until_proximity_active = false;
     g_lift_handle.lift_state = LIFT_STATE_NORMAL;
     g_lift_handle.target_2006_rpm = 0.0f;
+    control_dispatch_publish(1);
+}
+
+static float lift_select_target_speed(float target_degree, float real_degree) {
+    float target_error = fabsf(fabsf(target_degree) - fabsf(real_degree));
+    if (target_error <= LIFT_TARGET_SPEED_SWITCH) {
+        return LIFT_TARGET_SPEED_LOW;
+    }
+    return LIFT_TARGET_SPEED_HIGH;
 }
 
 // 上升步骤1：等待前光电上升沿
@@ -964,11 +876,13 @@ static void lift_up_step_drive_2006_forward(void) {
     float elapsed_sec = (now_tick - step4_start_tick) *
                         (portTICK_PERIOD_MS * 0.001f);
 
-    /* 分段速度：进入 step4 后小于 2.5s 使用 +7000rpm，否则使用 +4000rpm */
-    if (elapsed_sec < 1.65f) {
-        g_lift_handle.target_2006_rpm = 4000.0f;
+    /* 2006 转速：up_R1_flag 为 true 时恒定 1500rpm，否则分段变速 */
+    if (up_R1_flag) {
+        g_lift_handle.target_2006_rpm = 1500.0f;
+    } else if (elapsed_sec < 1.5f) {
+        g_lift_handle.target_2006_rpm = 6000.0f;
     } else {
-        g_lift_handle.target_2006_rpm = 3800.0f;
+        g_lift_handle.target_2006_rpm = 4000.0f;
     }
 
     // 检查后光电的上升沿（false -> true）
@@ -992,44 +906,16 @@ static void lift_up_step_wait_up_arrived_and_finish(void) {
 
 // 下降步骤1：等待后光电下降沿
 static void lift_down_step_wait_rear_release(void) {
-    bool rear_pair_falling = get_rear_photoelectric_falling_edge();
-    bool rear_single_falling =
-        get_rear_photoelectric_pin0_falling_edge() ||
-        get_rear_photoelectric_pin1_falling_edge();
-
-    // 优先双路下降沿触发
-    if (rear_pair_falling) {
-        g_lift_handle.rear_partial_falling_waiting = false;
+    // 检查后光电的下降沿（true -> false）
+    if (get_rear_photoelectric_falling_edge()) {
         log_message(LOG_INFO, "chassis down");
         lift_publish_if_auto(0);
         g_lift_handle.lift_fsm.step = 1;
-        return;
-    }
-
-    // 任一路下降沿后，启动750ms兜底计时
-    if (rear_single_falling && !g_lift_handle.rear_partial_falling_waiting) {
-        g_lift_handle.rear_partial_falling_waiting = true;
-        g_lift_handle.rear_partial_falling_tick = xTaskGetTickCount();
-    }
-
-    if (g_lift_handle.rear_partial_falling_waiting) {
-        uint32_t elapsed_ms =
-            (xTaskGetTickCount() - g_lift_handle.rear_partial_falling_tick) *
-            portTICK_PERIOD_MS;
-        if (elapsed_ms >= LIFT_SENSOR_FALLBACK_MS) {
-            g_lift_handle.rear_partial_falling_waiting = false;
-            log_message(LOG_INFO,
-                        "rear sensor fallback timeout, force step to 1");
-            log_message(LOG_INFO, "chassis down");
-            lift_publish_if_auto(0);
-            g_lift_handle.lift_fsm.step = 1;
-        }
     }
 }
 
 // 下降步骤2：设置DM电机下降到初始位置
 static void lift_down_step_set_down_target(void) {
-    g_lift_handle.rear_partial_falling_waiting = false;
     g_lift_handle.lift_state = LIFT_STATE_DOWN;
     lift_set_target(-LIFT_TARGET_DEG_DOWN_SEQ);
     g_lift_handle.lift_fsm.step = 2;
@@ -1042,7 +928,7 @@ static void lift_down_step_wait_down_arrived(void) {
     }
 }
 
-// 下降步骤4：2006电机反转，等待中光电下降沿
+// 下降步骤4：2006电机反转，等待中光电下降沿 或 VL53L1 距离跳变
 static void lift_down_step_drive_2006_backward(void) {
     /* 记录 step3 开始 tick（只在首次进入时记录） */
     if (g_lift_handle.step3_start_tick == 0) {
@@ -1054,44 +940,33 @@ static void lift_down_step_drive_2006_backward(void) {
     float elapsed_sec = (now_tick - g_lift_handle.step3_start_tick) *
                         (portTICK_PERIOD_MS * 0.001f);
 
-    /* 简化的分段速度：进入 step3 后小于 2.5s 使用 -5200rpm，否则使用 -4000rpm */
-    if (elapsed_sec < 1.65f) {
-        g_lift_handle.target_2006_rpm = -4000.0f;
+    /* 2006 转速：up_R1_flag 为 true 时恒定 1500rpm，否则分段变速 */
+    if (up_R1_flag) {
+        g_lift_handle.target_2006_rpm = -1500.0f;
+    } else if (elapsed_sec < 1.5f) {
+        g_lift_handle.target_2006_rpm = -6000.0f;
     } else {
-        g_lift_handle.target_2006_rpm = -3800.0f;
+        g_lift_handle.target_2006_rpm = -4000.0f;
     }
 
-    bool middle_pair_falling = get_middle_photoelectric_falling_edge();
-    bool middle_single_falling =
-        get_middle_photoelectric_pin0_falling_edge() ||
-        get_middle_photoelectric_pin1_falling_edge();
-
-    if (middle_single_falling && !g_lift_handle.middle_partial_falling_waiting) {
-        g_lift_handle.middle_partial_falling_waiting = true;
-        g_lift_handle.middle_partial_falling_tick = xTaskGetTickCount();
+    /* ---- VL53L1 距离检测：距离 >= 150mm 时触发 ---- */
+    bool vl53l1_triggered = false;
+    uint16_t cur_dist_mm = 0;
+    if (vl53l1_apply_get_distance_mm(&cur_dist_mm, g_vl53l1_handle)) {
+        if (cur_dist_mm >= 150) {
+            vl53l1_triggered = true;
+        }
     }
 
-    bool middle_fallback_timeout = false;
-    if (g_lift_handle.middle_partial_falling_waiting) {
-        uint32_t elapsed_wait_ms =
-            (xTaskGetTickCount() - g_lift_handle.middle_partial_falling_tick) *
-            portTICK_PERIOD_MS;
-        middle_fallback_timeout = (elapsed_wait_ms >= LIFT_SENSOR_FALLBACK_MS);
-    }
-
-    /* 双路下降沿或超时兜底触发，完成时清除开始 tick 并前进步骤 */
-    if (middle_pair_falling || middle_fallback_timeout) {
+    /* 检查中光电的下降沿 或 VL53L1 距离 >= 150mm，完成时清除开始 tick 并前进步骤 */
+    if (get_middle_photoelectric_falling_edge() || vl53l1_triggered) {
         /* 记录本次耗时供调试（可选） */
         float total_time = elapsed_sec;
         g_lift_handle.step3_last_duration = total_time;
         g_lift_handle.step3_start_tick = 0;
-        g_lift_handle.middle_partial_falling_waiting = false;
 
-        if (middle_fallback_timeout) {
-            log_message(LOG_INFO,
-                        "middle sensor fallback timeout, force step to 4");
-        }
-        log_message(LOG_INFO, "lift up, step duration=%.3fs", total_time);
+        log_message(LOG_INFO, "lift up, step duration=%.3fs, vl53l1_trig=%d",
+                    total_time, vl53l1_triggered);
         g_lift_handle.target_2006_rpm = 0.0f;
         g_lift_handle.lift_state = LIFT_STATE_UP;
         lift_set_target(LIFT_TARGET_DEG_UP_SEQ);

@@ -13,7 +13,10 @@
 #include <stdint.h>
 #include "remote_ctrl/remote_ctrl.h"
 
-#define LIFT_TARGET_UP_R1_DEG    5.42f
+#define LIFT_TARGET_UP_R1_DEG    1.42f
+#define LIFT_TARGET_UP_RAMP_DEG  2.37f
+
+extern bool up_R1_flag;
 
 void lift_init(void);
 void lift_switch_mode(uint8_t key, remote_key_event_t event);
@@ -22,6 +25,7 @@ void lift_on_catch_proximity_falling_edge(void);
 void lift_set_chassis_mode(bool is_auto_mode);
 void lift_set_stair_mode(uint8_t mode);
 void lift_set_target(float target_degree);
+void auto_lift_set_target(float target_degree);
 bool lift_is_sequence_running(void);
 void chassis_proximity_switch(void);
 
