@@ -51,16 +51,17 @@ bool arm_return_enabel = false; /* 放置完成后回位功能使能标志 */
 /* ---------------- 预设目标点位 ---------------- */
 
 static const arm_target_point_t g_arm_target_points[11] = {
-    {139.95f + 20.0f + 50.0f, 102.70f + 30.0f, 0.6955f}, /* 0: INIT */
+    //{139.95f + 20.0f + 50.0f, 102.70f + 30.0f, 0.6955f}, /* 0: INIT (旧) */
+    {245.7f, 62.7f, 0.3655f},                            /* 0: INIT */
     {200.000f, 10.0f, 0.0f},                             /* 1: READY_1 */
     {420.000f, -50.0f, CATCH_READY_2_ANGEL},             /* 2: READY_2 */
     //{570.000f, 180.0f, 0.08f},                         /* 3: READY_3 */
-    {270.000f, 180.0f, 0.08f},                           /* 3: READY_3 */
+    {270.000f, 200.0f, 0.08f},                           /* 3: READY_3 */
     {250.0f, -230.f, 0.0f},                              /* 4: READY_4 */
     {513.142f, 200.0f, 0.0f},                            /* 5: CATCH */
     {-275.12f, 493.991f, -PI / 2.0},                     /* 6: PLACE */
     {533.142f, 300.0f, 0.0f},                            /* 7: WAIT_TAKEOUT */
-    {410.000f, 830.0f, PI / 12.0},                       /* 8: TAKEOUT_1 */
+    {430.000f, 860.0f, PI / 9.0},                       /* 8: TAKEOUT_1 */
     {740.0f, 670.0f, 0.0f},                              /* 9: TAKEOUT_2  */
     {170.0f, 900.0f, PI * 0.75 + 0.1},                   /* 10: OVERLOOK */
 };
@@ -170,7 +171,7 @@ void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
     float z_cam = y * sinf(theta) + z * cosf(theta);
 
     /* 旋转到机械臂水平坐标系 */
-    g_dynamic_target.y = y_cam * 1000.0f + 420.0f -
+    g_dynamic_target.y = y_cam * 1000.0f + 380.0f -
                          (CAM_TO_CAT_Y_OFFSET * cosf(theta) +
                           CAM_TO_CAT_Z_OFFSET * sinf(theta)) +
                          20.0f - 2.0f;
@@ -191,7 +192,7 @@ void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
  */
 void robot_arm_set_dynamic_catch_target_down2(float y, float x, float z) {
     /* 将米单位转换为毫米，并校准摄像头与吸盘中心的偏移补偿 */
-    g_dynamic_target.y = y * 1000.0f + 250.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
+    g_dynamic_target.y = y * 1000.0f + 250.0f - CAM_TO_CAT_Y_OFFSET + 60.0f;
     g_dynamic_target.z = z * 1000.0f - 230.0f + CAM_TO_CAT_Z_OFFSET;
 
     g_has_dynamic_target = 1;
@@ -231,7 +232,7 @@ void robot_arm_init(void) {
     g_last_target_index = 0;
     g_place_return_sequence_active = 0;
     g_place_return_target_index = 0;
-    g_place_target_index = 1;
+    g_place_target_index = 0;
     g_wait_takeout_target_index = 1;
     g_has_dynamic_target = 0;
     g_pump_wait_state = PUMP_WAIT_NONE;
@@ -591,15 +592,15 @@ static void arm_pump_catch_check(void) {
 #endif
 
         /* 超时与推进重试逻辑 */
-        if (HAL_GetTick() - wait_start_tick >= 1000U) {
+        if (HAL_GetTick() - wait_start_tick >= 500U) {
 #if ARM_USE_PUMP_ADC_CHECK
 
             if (retry_count < 10) {
                 if (g_wait_takeout_target_index != 0) {
                     if (g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
-                        retry_offset_y -= 10.0f;
+                        retry_offset_y -= 20.0f;
                     } else if (g_robot_arm.status == ARM_STATE_CATCH) {
-                        retry_offset_y += 10.0f;
+                        retry_offset_y += 20.0f;
                     }
                     float new_y = g_robot_arm.final_target_y + retry_offset_y;
 
