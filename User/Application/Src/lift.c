@@ -46,14 +46,19 @@
 #define LIFT_TARGET_DEG_DOWN_MAX 12.275f
 #define LIFT_TARGET_DEG_UP_SEQ   0.0f
 #define LIFT_TARGET_DEG_DOWN_SEQ 12.275f
-#define LIFT_TARGET_DEG_STEP     0.005f
-#define LIFT_TARGET_SPEED_HIGH   18.0f      //距离较远时，抬升速度较快
+#define LIFT_TARGET_DEG_STEP     0.025f
+#define LIFT_TARGET_SPEED_UP_R1  5.0f  
+#define LIFT_TARGET_SPEED_HIGH   21.0f      //距离较远时，抬升速度较快
 #define LIFT_TARGET_SPEED_LOW    10.0f      //距离较近时，抬升速度较慢
-#define LIFT_TARGET_SPEED_SWITCH  1.5f       //差值，大于则快速度，小于则慢速度
+#define LIFT_TARGET_SPEED_SWITCH  1.75f       //差值，大于则快速度，小于则慢速度
 #define LIFT_CATCH_DEG_STEP      0.410f
 #define LIFT_CATCH_SLOW_STEP     0.0010f
 #define LIFT_TARGET_SPEED        10.0f
 
+#define LIFT_2006_HIGH_SPEED     4850.0f
+#define LIFT_2006_LOW_SPEED      3550.0f
+#define TIME_DURATION_FRONT      0.4f
+#define TIME_DURATION_REAR       1.70f   
 
 typedef enum {
     LIFT_STATE_NORMAL = 0,
@@ -832,6 +837,9 @@ void lift_on_catch_proximity_falling_edge(void) {
 }
 
 static float lift_select_target_speed(float target_degree, float real_degree) {
+    if (up_R1_flag) {
+        return LIFT_TARGET_SPEED_UP_R1;
+    }
     float target_error = fabsf(fabsf(target_degree) - fabsf(real_degree));
     if (target_error <= LIFT_TARGET_SPEED_SWITCH) {
         return LIFT_TARGET_SPEED_LOW;
@@ -876,13 +884,16 @@ static void lift_up_step_drive_2006_forward(void) {
     float elapsed_sec = (now_tick - step4_start_tick) *
                         (portTICK_PERIOD_MS * 0.001f);
 
-    /* 2006 转速：up_R1_flag 为 true 时恒定 1500rpm，否则分段变速 */
+    /* 2006 转速：up_R1_flag 为 true 时恒定 1500rpm，否则三段变速：
+       0 ~ TIME_DURATION_FRONT: 低速, TIME_DURATION_FRONT ~ TIME_DURATION_REAR: 高速, > TIME_DURATION_REAR: 低速 */
     if (up_R1_flag) {
         g_lift_handle.target_2006_rpm = 1500.0f;
-    } else if (elapsed_sec < 1.70f) {
-        g_lift_handle.target_2006_rpm = 4650.0f;
+    } else if (elapsed_sec < TIME_DURATION_FRONT) {
+        g_lift_handle.target_2006_rpm = LIFT_2006_LOW_SPEED;
+    } else if (elapsed_sec < TIME_DURATION_REAR) {
+        g_lift_handle.target_2006_rpm = LIFT_2006_HIGH_SPEED;
     } else {
-        g_lift_handle.target_2006_rpm = 3550.0f;
+        g_lift_handle.target_2006_rpm = LIFT_2006_LOW_SPEED;
     }
 
     // 检查后光电的上升沿（false -> true）
@@ -940,13 +951,16 @@ static void lift_down_step_drive_2006_backward(void) {
     float elapsed_sec = (now_tick - g_lift_handle.step3_start_tick) *
                         (portTICK_PERIOD_MS * 0.001f);
 
-    /* 2006 转速：up_R1_flag 为 true 时恒定 1500rpm，否则分段变速 */
+    /* 2006 转速：up_R1_flag 为 true 时恒定 -1500rpm，否则三段变速：
+       0 ~ TIME_DURATION_FRONT: 低速, TIME_DURATION_FRONT ~ TIME_DURATION_REAR: 高速, > TIME_DURATION_REAR: 低速 */
     if (up_R1_flag) {
         g_lift_handle.target_2006_rpm = -1500.0f;
-    } else if (elapsed_sec < 1.70f) {
-        g_lift_handle.target_2006_rpm = -4650.0f;
+    } else if (elapsed_sec < TIME_DURATION_FRONT) {
+        g_lift_handle.target_2006_rpm = -LIFT_2006_LOW_SPEED;
+    } else if (elapsed_sec < TIME_DURATION_REAR) {
+        g_lift_handle.target_2006_rpm = -LIFT_2006_HIGH_SPEED;
     } else {
-        g_lift_handle.target_2006_rpm = -3550.0f;
+        g_lift_handle.target_2006_rpm = -LIFT_2006_LOW_SPEED;
     }
 
     /* ---- VL53L1 距离检测：距离 >= 150mm 时触发 ---- */
