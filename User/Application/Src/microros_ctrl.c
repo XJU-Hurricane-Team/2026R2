@@ -368,6 +368,7 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
         }
 
     } else if (req_in->event == 1) {
+        arm_return_enabel = req_in->is_return;
         switch (req_in->command_mode) {
             case 0:
                 robot_arm_set_state_index(0); // 初始化
@@ -381,6 +382,7 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 last_command_mode = 2;
                 break;
             case 3:
+                pump_set_state(1); // 提前开气泵
                 robot_arm_set_state_index(3); // 准备（40cm的向上抓取）
                 last_command_mode = 3;
                 break;
@@ -423,6 +425,9 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
             case 11:
                 robot_arm_set_state_index(11); // 关闭气泵
                 break;
+            case 12:
+                robot_arm_start_place_return_sequence(1); // 放置完成后回到初始化位
+                break;
             default:
                 break;
         }
@@ -437,6 +442,19 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 break;
             case 2:
                 chassis_proximity_switch();
+                break;
+            case 3:
+                lift_set_target(0.0f); // 抬升复位
+                break;
+            case 4:
+                //lift_begin_catch_up_until_proximity();
+                auto_lift_set_target(LIFT_TARGET_UP_RAMP_DEG);
+                break;
+            case 5:
+                // auto_lift_set_target(LIFT_TARGET_UP_R1_DEG);
+                lift_set_target(-LIFT_TARGET_UP_R1_DEG);
+                up_R1_flag = true;
+                break;
             default:
                 break;
         }

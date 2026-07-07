@@ -15,11 +15,10 @@ static void robot_arm_task(void *pvParameters);
 static void arm_feedback_task(void *pvParameters);
 static float arm_ctrl_wrap_pi(float angle);
 static void robot_arm_mark_reach_target(float y, float z, float pitch);
-static void arm_pump_place_check(void);
+static void arm_pump_place_check(bool publish_result);
 static void arm_pump_catch_check(void);
 static bool arm_is_motor_reached(void);
 
-static void pump_set_state(uint8_t on);
 static uint8_t pump_read_adc(uint16_t *out_value);
 static uint8_t pump_read_adc_filtered(uint16_t *out_value);
 
@@ -32,9 +31,11 @@ static uint8_t g_arm_target_index;            /* 当前目标状态索引 (0~8) 
 static TaskHandle_t g_robot_arm_task_handle;  /* 机械臂任务句柄 */
 static TaskHandle_t arm_feedback_task_handle; /* 机械臂反馈任务句柄 */
 static uint8_t g_last_target_index;           /* 上一次下发的目标状态索引 */
+static uint8_t g_place_return_sequence_active = 0; /* 放置后回位组合动作标志 */
+static uint8_t g_place_return_target_index = 0; /* 放置完成后跳转的目标状态 */
 
-static uint8_t g_place_target_index = 2;          /* 放置层级索引 (0~2) */
-static uint8_t g_wait_takeout_target_index = 1;   /* 待取出层级索引 (0~2) */
+static uint8_t g_place_target_index = 0;          /* 放置层级索引 (0~2), 初始中层 */
+static uint8_t g_wait_takeout_target_index = ARM_TAKEOUT_START_LAYER;   /* 待取出层级索引 (0~2) */
 static arm_target_point_t g_dynamic_target = {0}; /* 动态抓取目标点 (mm/rad) */
 static uint8_t g_has_dynamic_target = 0;          /* 是否存在动态抓取目标 */
 
@@ -45,18 +46,23 @@ static uint8_t g_last_switch_key = 0xFF; /* 上一次遥控器切换键值 */
 
 static float g_pump_retry_offset_y = 0.0f; /* 气泵重试Y轴累积偏移量 (mm) */
 
+bool arm_return_enabel = false; /* 放置完成后回位功能使能标志 */
+
 /* ---------------- 预设目标点位 ---------------- */
 
 static const arm_target_point_t g_arm_target_points[11] = {
-    {139.95f + 20.0f + 50.0f, 102.70f + 30.0f, 0.6955f}, /* 0: INIT */
+    //{139.95f + 20.0f + 50.0f, 102.70f + 30.0f, 0.6955f}, /* 0: INIT (旧) */
+    {245.7f, 62.7f, 0.3655f},                            /* 0: INIT */
     {200.000f, 10.0f, 0.0f},                             /* 1: READY_1 */
     {420.000f, -50.0f, CATCH_READY_2_ANGEL},             /* 2: READY_2 */
-    {570.000f, 180.0f, 0.08f},                           /* 3: READY_3 */
+    //{570.000f, 180.0f, 0.08f},                         /* 3: READY_3 */
+    {270.000f, 200.0f, 0.08f},                           /* 3: READY_3 */
     {250.0f, -230.f, 0.0f},                              /* 4: READY_4 */
-    {513.142f, 200.0f, 0.0f},                            /* 5: CATCH */
+    // {513.142f, 200.0f, 0.0f},                            /* 5: CATCH */
+    {360.0f, -180.0f, 0.0f},                            /* 5: CATCH */
     {-275.12f, 493.991f, -PI / 2.0},                     /* 6: PLACE */
     {533.142f, 300.0f, 0.0f},                            /* 7: WAIT_TAKEOUT */
-    {430.000f, 800.0f, PI / 12.0},                       /* 8: TAKEOUT_1 */
+    {430.000f, 860.0f, PI / 9.0},                       /* 8: TAKEOUT_1 */
     {740.0f, 670.0f, 0.0f},                              /* 9: TAKEOUT_2  */
     {170.0f, 900.0f, PI * 0.75 + 0.1},                   /* 10: OVERLOOK */
 };
@@ -66,14 +72,15 @@ static const arm_target_point_t g_arm_place_points[3] = {
     {-265.12f + 175.0f, FIRST_POINT_Z_LOW + 175.0f, -PI}, /* 1: 中层 */
     // {-265.12f + 175.0f + 30.0f, FIRST_POINT_Z_LOW + 175.0f + 350.0f,
     //  -PI}, /* 2: 高层 */
-    {400.0f, 500.0f, -PI/2 }, /* 2: 高层 */
+    {400.0f, 500.0f, -PI / 2}, /* 2: 高层 */
 }; /* 放置层级点位 */
 
 static const arm_target_point_t g_arm_wait_takeout_points[3] = {
     {-360.0f, FIRST_POINT_Z_LOW, -PI / 2},                        /* 0: 低层 */
-    {-265.12f + 165.0f, FIRST_POINT_Z_LOW + 175.0f - 20.0f, -PI}, /* 1: 中层 */
-    {-265.12f + 165.0f + 20.0f, FIRST_POINT_Z_LOW + 175.0f + 350.0f - 60.0f,
-     -PI}, /* 2: 高层 */
+    {-265.12f + 165.0f, FIRST_POINT_Z_LOW + 175.0f - 15.0f, -PI}, /* 1: 中层 */
+    // {-265.12f + 165.0f + 20.0f, FIRST_POINT_Z_LOW + 175.0f + 350.0f - 60.0f,
+    //  -PI}, /* 2: 高层 */
+    {400.0f, 500.0f, -PI / 2}, /* 2: 高层 */
 }; /* 待取出层级点位 */
 
 /* ======================== 【配置与外部接口模块】 ============================ */
@@ -126,8 +133,13 @@ static arm_status_t arm_status_from_index(uint8_t index) {
 void robot_arm_set_dynamic_catch_target_up(float y, float x, float z) {
     /* 将米单位转换为毫米，并校准摄像头与吸盘中心的偏移补偿 */
 
+    // 正赛台阶点位
     g_dynamic_target.y = y * 1000.0f + 200.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
     g_dynamic_target.z = z * 1000.0f + 10.0f + CAM_TO_CAT_Z_OFFSET + 30.0f;
+
+    // 技能赛三区点位
+        // g_dynamic_target.y = 360.0f;
+        // g_dynamic_target.z = -180.0f;
 
     g_has_dynamic_target = 1;
     (void)x; //x不使用，仅用于底盘校准，与机械臂校准无关
@@ -141,8 +153,11 @@ void robot_arm_set_dynamic_catch_target_up(float y, float x, float z) {
  */
 void robot_arm_set_dynamic_catch_target_up2(float y, float x, float z) {
 
-    g_dynamic_target.y = y * 1000.0f + 570.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
-    g_dynamic_target.z = z * 1000.0f + 180.0f + CAM_TO_CAT_Z_OFFSET;
+    // g_dynamic_target.y = y * 1000.0f + 570.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
+    // g_dynamic_target.z = z * 1000.0f + 180.0f + CAM_TO_CAT_Z_OFFSET;
+
+    g_dynamic_target.y = y * 1000.0f + 270.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
+    g_dynamic_target.z = z * 1000.0f + 130.0f + CAM_TO_CAT_Z_OFFSET;
 
     g_has_dynamic_target = 1;
     (void)x; //x不使用，仅用于底盘校准，与机械臂校准无关
@@ -162,7 +177,7 @@ void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
     float z_cam = y * sinf(theta) + z * cosf(theta);
 
     /* 旋转到机械臂水平坐标系 */
-    g_dynamic_target.y = y_cam * 1000.0f + 420.0f -
+    g_dynamic_target.y = y_cam * 1000.0f + 320.0f -
                          (CAM_TO_CAT_Y_OFFSET * cosf(theta) +
                           CAM_TO_CAT_Z_OFFSET * sinf(theta)) +
                          20.0f - 2.0f;
@@ -183,7 +198,7 @@ void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
  */
 void robot_arm_set_dynamic_catch_target_down2(float y, float x, float z) {
     /* 将米单位转换为毫米，并校准摄像头与吸盘中心的偏移补偿 */
-    g_dynamic_target.y = y * 1000.0f + 250.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
+    g_dynamic_target.y = y * 1000.0f + 250.0f - CAM_TO_CAT_Y_OFFSET + 60.0f;
     g_dynamic_target.z = z * 1000.0f - 230.0f + CAM_TO_CAT_Z_OFFSET;
 
     g_has_dynamic_target = 1;
@@ -221,8 +236,10 @@ void robot_arm_init(void) {
     /* 复位应用层状态 */
     g_arm_target_index = 0;
     g_last_target_index = 0;
+    g_place_return_sequence_active = 0;
+    g_place_return_target_index = 0;
     g_place_target_index = 0;
-    g_wait_takeout_target_index = 2;
+    g_wait_takeout_target_index = 1;
     g_has_dynamic_target = 0;
     g_pump_wait_state = PUMP_WAIT_NONE;
     g_last_switch_key = 0xFF;
@@ -232,11 +249,13 @@ void robot_arm_init(void) {
     robot_arm_apply_target(g_arm_target_index);
 
 #if ARM_USE_REMOTE_KEY
-    for (uint8_t i = 0; i < ARM_REMOTE_KEY_COUNT; ++i) {
-        remote_register_key_callback((uint8_t)(ARM_SWITCH_KEY + i),
-                                     REMOTE_KEY_PRESS_UP,
-                                     arm_remote_state_switch);
-    }
+    remote_register_key_callback(10, REMOTE_KEY_PRESS_UP, arm_remote_state_switch); /* INIT        */
+    remote_register_key_callback(11, REMOTE_KEY_PRESS_UP, arm_remote_state_switch); /* READY_4     */
+    remote_register_key_callback(12, REMOTE_KEY_PRESS_UP, arm_remote_state_switch); /* CATCH       */
+    remote_register_key_callback(13, REMOTE_KEY_PRESS_UP, arm_remote_state_switch); /* PLACE       */
+    remote_register_key_callback(14, REMOTE_KEY_PRESS_UP, arm_remote_state_switch); /* WAIT_TAKEOUT*/
+    remote_register_key_callback(15, REMOTE_KEY_PRESS_UP, arm_remote_state_switch); /* TAKEOUT_1   */
+    remote_register_key_callback(16, REMOTE_KEY_PRESS_UP, arm_remote_state_switch); /* TAKEOUT_2   */
 #endif
 
     /* 启动机械臂控制任务 */
@@ -257,6 +276,8 @@ void robot_arm_init(void) {
 /** @defgroup RTOS_Task 机械臂核心轮询任务与事件驱动反馈任务 */
 /** @{ */
 
+// uint16_t test_adc_value = 0; /* 气泵 ADC 测试值 */
+
 /**
  * @brief 机械臂控制任务主循环
  * @param pvParameters RTOS 任务参数 (未使用)
@@ -266,6 +287,8 @@ static void robot_arm_task(void *pvParameters) {
     while (1) {
         /* 周期更新控制、到位检测与气泵状态 */
         robot_arm_update(&g_robot_arm);
+        // pump_set_state(1); //气泵测试
+        // pump_read_adc_filtered(&test_adc_value);
         vTaskDelay(pdMS_TO_TICKS(ARM_TASK_PERIOD_MS));
     }
 }
@@ -282,7 +305,7 @@ static void arm_feedback_task(void *pvParameters) {
 
         // 直接单纯关闭气泵，不进行后续的到位检测和状态检查
         if (current_status == ARM_STATE_CLOSE_PUMP) {
-            arm_pump_place_check();
+            arm_pump_place_check(1);
             continue;
         }
 
@@ -308,10 +331,26 @@ static void arm_feedback_task(void *pvParameters) {
                 break;
 
             case ARM_STATE_PLACE:
-                arm_pump_place_check();
+                arm_pump_place_check(arm_return_enabel);
+                if (g_robot_arm.status == current_status &&
+                    g_place_return_sequence_active) {
+                    uint8_t return_index = g_place_return_target_index;
+                    robot_arm_set_state_index(return_index);
+                }
                 break;
             default:
-                control_dispatch_publish(1);
+                if (g_place_return_sequence_active == 1) {
+                    g_place_return_sequence_active = 0;
+                    g_place_return_target_index = 0;
+                    if (arm_return_enabel) {
+                        control_dispatch_publish(1); // 成功抓取
+                    }
+
+                } else {
+                    if (arm_return_enabel) {
+                        control_dispatch_publish(1); // 成功抓取
+                    }
+                }
                 break;
         }
     }
@@ -327,14 +366,28 @@ static void arm_feedback_task(void *pvParameters) {
 
 /**
  * @brief 设置机械臂当前目标状态索引
- * @param index 状态索引 (0~12)
+ * @param index 状态索引 (0~11)
  */
 void robot_arm_set_state_index(uint8_t index) {
-    if (index > 12) {
+    if (index > 11) {
         return;
     }
     g_arm_target_index = index;
     robot_arm_apply_target(index);
+}
+
+/**
+ * @brief 启动放置后自动回位/识别的组合动作
+ * @param return_index 放置完成后跳转的状态索引
+ */
+void robot_arm_start_place_return_sequence(uint8_t return_index) {
+    if (return_index > 11) {
+        return;
+    }
+    g_place_return_sequence_active = 1;
+    g_place_return_target_index = return_index;
+    g_arm_target_index = 6;
+    robot_arm_apply_target(6);
 }
 
 /**
@@ -347,14 +400,6 @@ void robot_arm_apply_target(uint8_t index) {
     /* 放置层级循环递增 */
     if (prev_status == ARM_STATE_PLACE && index != ARM_STATE_PLACE) {
         g_place_target_index = (g_place_target_index + 1) % 3;
-    }
-
-    /* 待取出层级递减 */
-    if (prev_status == ARM_STATE_WAIT_TAKEOUT &&
-        index != ARM_STATE_WAIT_TAKEOUT) {
-        g_wait_takeout_target_index = (g_wait_takeout_target_index == 0)
-                                          ? 2
-                                          : (g_wait_takeout_target_index - 1);
     }
 
     g_pump_wait_state = PUMP_WAIT_NONE;
@@ -397,14 +442,24 @@ void robot_arm_apply_target(uint8_t index) {
         target_z = g_arm_wait_takeout_points[g_wait_takeout_target_index].z;
         target_pitch =
             g_arm_wait_takeout_points[g_wait_takeout_target_index].pitch;
+        g_robot_arm.takeout_layer = g_wait_takeout_target_index;
     }
 
     /**
-     * TAKEOUT_1/TAKEOUT_2 采用阶段式动作：需要沿用 WAIT_TAKEOUT 的吸盘角度
-     * 使用扩展状态机避免动作分散在多个函数内
+     * TAKEOUT_1/TAKEOUT_2 阶段式顺序步进（防碰撞）：
+     *   1. 大臂先抬起（小臂、吸盘锁定）
+     *   2. 小臂运动（大臂、吸盘锁定）
+     *   3. 三关节协同到达最终目标
+     * 从 READY 态切换时不执行避障序列，直接运动到位。
      */
-    if (arm_is_takeout_state(&g_robot_arm) &&
-        prev_status == ARM_STATE_WAIT_TAKEOUT) {
+    if (arm_is_takeout_state(g_robot_arm.status) &&
+        !arm_is_ready_state(prev_status)) {
+
+        /* 设定取出层数（独立于 place_layer），并逐层递减 */
+        g_robot_arm.takeout_layer = g_wait_takeout_target_index;
+        g_wait_takeout_target_index = (g_wait_takeout_target_index == 0)
+                                          ? 2
+                                          : (g_wait_takeout_target_index - 1);
 
         float wait_takeout_suction_angle = g_arm_reach_target_joint[2];
         robot_arm_start_takeout_sequence(&g_robot_arm, target_y, target_z,
@@ -526,28 +581,32 @@ static void arm_pump_catch_check(void) {
         if (pump_read_adc_filtered(&adc_val)) {
             if (adc_val < PUMP_ADC_READY_LOW) {
                 log_message(LOG_INFO, "ARM_CATCH Success, adc=%d", adc_val);
-                control_dispatch_publish(1); // 成功抓取
+                if (arm_return_enabel) {
+                    control_dispatch_publish(1); // 成功抓取
+                }
                 return;
             }
         }
 #else
         // 未开启 ADC 检测，延时默认成功
         if (HAL_GetTick() - wait_start_tick >= 2000U) {
-            control_dispatch_publish(1);
+            if (arm_return_enabel) {
+                control_dispatch_publish(1); // 成功抓取
+            }
             return;
         }
 #endif
 
         /* 超时与推进重试逻辑 */
-        if (HAL_GetTick() - wait_start_tick >= 1000U) {
+        if (HAL_GetTick() - wait_start_tick >= 500U) {
 #if ARM_USE_PUMP_ADC_CHECK
 
             if (retry_count < 10) {
                 if (g_wait_takeout_target_index != 0) {
                     if (g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
-                        retry_offset_y -= 10.0f;
+                        retry_offset_y -= 20.0f;
                     } else if (g_robot_arm.status == ARM_STATE_CATCH) {
-                        retry_offset_y += 10.0f;
+                        retry_offset_y += 20.0f;
                     }
                     float new_y = g_robot_arm.final_target_y + retry_offset_y;
 
@@ -581,7 +640,9 @@ static void arm_pump_catch_check(void) {
             }
 #endif
             // 重试耗尽，抓取失败
-            control_dispatch_publish(2);
+            if (arm_return_enabel) {
+                control_dispatch_publish(1); // 成功抓取
+            }
             return;
         }
 
@@ -592,9 +653,11 @@ static void arm_pump_catch_check(void) {
 /**
  * @brief 执行放置状态下的压力释放检测
  */
-static void arm_pump_place_check(void) {
+static void arm_pump_place_check(bool publish_result) {
     if (g_place_target_index == 2 && g_robot_arm.status == ARM_STATE_PLACE) {
-        control_dispatch_publish(1); // 第三层不关气泵
+        if (publish_result) {
+            control_dispatch_publish(1); // 第三层不关气泵
+        }
         return;
     }
     pump_set_state(0); // 关闭气泵
@@ -607,13 +670,17 @@ static void arm_pump_place_check(void) {
         if (pump_read_adc_filtered(&adc_val)) {
             if (adc_val > PUMP_ADC_READY_HIGH) {
                 log_message(LOG_INFO, "ARM_PLACE Success, adc=%d", adc_val);
-                control_dispatch_publish(1);
+                if (publish_result) {
+                    control_dispatch_publish(1);
+                }
                 return;
             }
         }
 #endif
         if (HAL_GetTick() - wait_start_tick >= 2000U) {
-            control_dispatch_publish(1); // 超时也认为放置完成
+            if (publish_result) {
+                control_dispatch_publish(1); // 超时也认为放置完成
+            }
             return;
         }
 
@@ -625,7 +692,7 @@ static void arm_pump_place_check(void) {
  * @brief 设置气泵开关状态
  * @param on 1: 打开气泵, 0: 关闭气泵
  */
-static void pump_set_state(uint8_t on) {
+void pump_set_state(uint8_t on) {
     HAL_GPIO_WritePin(PUMP_GPIO_Port, PUMP_Pin,
                       on ? GPIO_PIN_SET : GPIO_PIN_RESET);
 }
@@ -680,6 +747,19 @@ static uint8_t pump_read_adc_filtered(uint16_t *out_value) {
 /** @defgroup Remote_Control 物理遥控器按键状态机调度 */
 /** @{ */
 
+/* 按键 → 状态索引 映射表，按需增删改 */
+static const uint8_t g_arm_key_index_map[][2] = {
+    {10, 0},  /* INIT        */
+    {11, 1},  /* READY_1     */
+    {12, 5},  /* CATCH       */
+    {13, 6},  /* PLACE       */
+    {14, 7},  /* WAIT_TAKEOUT*/
+    {15, 8},  /* TAKEOUT_1   */
+    {16, 11},  /* TAKEOUT_2   */
+};
+#define ARM_KEY_MAP_COUNT \
+    (sizeof(g_arm_key_index_map) / sizeof(g_arm_key_index_map[0]))
+
 /**
  * @brief 遥控器按键切换状态回调
  * @param key 按键值
@@ -687,13 +767,15 @@ static uint8_t pump_read_adc_filtered(uint16_t *out_value) {
  */
 static void arm_remote_state_switch(uint8_t key, remote_key_event_t event) {
     UNUSED(event);
-    if (key >= ARM_SWITCH_KEY &&
-        key < (uint8_t)(ARM_SWITCH_KEY + ARM_REMOTE_KEY_COUNT)) {
-        if (key == g_last_switch_key) {
+    for (uint8_t i = 0; i < ARM_KEY_MAP_COUNT; i++) {
+        if (g_arm_key_index_map[i][0] == key) {
+            if (key == g_last_switch_key) {
+                return;
+            }
+            g_last_switch_key = key;
+            robot_arm_set_state_index(g_arm_key_index_map[i][1]);
             return;
         }
-        g_last_switch_key = key;
-        robot_arm_set_state_index((uint8_t)(key - ARM_SWITCH_KEY));
     }
 }
 

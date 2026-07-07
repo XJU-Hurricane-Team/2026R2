@@ -29,6 +29,7 @@ typedef struct custom_msg__srv__ControlDispatch_Request
   int8_t command_mode;
   int8_t event;
   geometry_msgs__msg__Point point;
+  bool is_return;
 } custom_msg__srv__ControlDispatch_Request;
 
 // Struct for a sequence of custom_msg__srv__ControlDispatch_Request.

@@ -13,12 +13,10 @@
 
 /* ================== 应用层宏定义 ================== */
 #define ARM_USE_REMOTE_KEY                                                     \
-    0 /**< 是否使用遥控器按键切换状态位 (0:禁用, 1:启用) */
-#define ARM_SWITCH_KEY          10    /**< 遥控器映射起始键值 */
-#define ARM_REMOTE_KEY_COUNT    9U    /**< 支持的遥控器按键数量 */
-#define ARM_TASK_PERIOD_MS      20    /**< 机械臂控制任务周期 (毫秒) */
+    1 /**< 是否使用遥控器按键切换状态位 (0:禁用, 1:启用) */
+#define ARM_TASK_PERIOD_MS      10    /**< 机械臂控制任务周期 (毫秒) */
 #define ARM_REACH_POS_TOL_MM    5.0f  /**< 位置到位判定容差 (mm) */
-#define ARM_REACH_JOINT_TOL_RAD 0.05f /**< 关节角到位判定容差 (rad) */
+#define ARM_REACH_JOINT_TOL_RAD 0.10f /**< 关节角到位判定容差 (rad) */
 
 #define ARM_USE_PUMP_ADC_CHECK  1     /**< 是否使用气泵ADC压力检测 */
 #define PUMP_ADC_READY_LOW      3000U /**< 抓取成功判定的低压阈值 */
@@ -54,10 +52,14 @@ typedef enum {
     PUMP_WAIT_PLACE,    /**< 等待释放成功 */
 } pump_wait_state_t;
 
+extern bool arm_return_enabel; /* 放置完成后回位功能使能标志 */
+
 /* ================== API 声明 ================== */
 
 void robot_arm_init(void);
 void robot_arm_set_state_index(uint8_t index);
+void pump_set_state(uint8_t on);
+void robot_arm_start_place_return_sequence(uint8_t return_index);
 void robot_arm_apply_target(uint8_t index);
 void robot_arm_set_dynamic_catch_target_up(float y, float x, float z);
 void robot_arm_set_dynamic_catch_target_down(float y, float x, float z);

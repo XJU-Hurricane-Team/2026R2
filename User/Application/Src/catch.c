@@ -266,7 +266,7 @@ static void catch_feedback_task(void *pvParameters) {
                     uint16_t dist = 0;
                     uint32_t total_dist = 0;
                     uint8_t valid_count = 0;
-                    // VL53L1_StartMeasurement(g_vl53l1_handle);
+                    VL53L1_StartMeasurement(g_vl53l1_handle);
                     for (int i = 0; i < 3; i++) {
                         if (vl53l1_apply_get_distance_mm(&dist,
                                                          g_vl53l1_handle)) {
@@ -281,7 +281,7 @@ static void catch_feedback_task(void *pvParameters) {
                     } else {
                         control_dispatch_publish(1); // ×¥È¡Ê§°Ü
                     }
-                    //  VL53L1_StopMeasurement(g_vl53l1_handle);
+                     VL53L1_StopMeasurement(g_vl53l1_handle);
                     log_message(LOG_INFO, "Check! dist = %d", dist);
                 }
                 break;

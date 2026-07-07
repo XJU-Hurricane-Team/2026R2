@@ -40,7 +40,7 @@
             "rtos": "FreeRTOS",
             "liveWatch": {
                 "enabled": true,
-                "samplesPerSecond": 4
+                "samplesPerSecond": 20
             },
             "svdFile": ".pack/Keil/STM32G4xx_DFP.1.6.0/CMSIS/SVD/STM32G474.svd"
         }

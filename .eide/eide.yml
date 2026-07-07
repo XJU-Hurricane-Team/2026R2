@@ -23,6 +23,8 @@ virtualFolder:
         - path: User/Bsp/npn_switch/npn_switch.c
         - path: User/Bsp/iic/iic.c
         - path: User/Bsp/ws2812/ws2812.c
+        - path: User/Bsp/iic/iic2.c
+        - path: User/Bsp/iic/iic3.c
       folders:
         - name: VL53L1
           files:
@@ -275,4 +277,4 @@ targets:
         resetMode: default
         runAfterProgram: true
         speed: 4000
-    uploader: OpenOCD
+    uploader: JLink
