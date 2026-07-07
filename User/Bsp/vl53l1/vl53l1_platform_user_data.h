@@ -50,6 +50,8 @@ typedef struct {
 	uint16_t  comms_speed_khz;
 	uint32_t  new_data_ready_poll_duration_ms;
 
+	uint8_t   i2c_bus_id;  /* 0=I2C1, 1=I2C2, 2=I2C3 — 选择对应软件I2C总线 */
+
 } VL53L1_Dev_t;
 
 typedef VL53L1_Dev_t *VL53L1_DEV;

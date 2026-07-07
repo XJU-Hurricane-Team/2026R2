@@ -13,7 +13,7 @@
 static dm_handle_t g_dm_motor;
 static catch_head_dm_joint_t g_dm_joint = {
 	.motor_handle = &g_dm_motor,
-	.target_position_rad = {0.00f, 1.50f , 3.12f},
+	.target_position_rad = {0.00f, 1.50f , 3.08f},
 	.target_index = 0,
 };
 
@@ -34,7 +34,7 @@ static void catch_head_apply_default_targets(void);
  * @note 使用 TIM1 CH1 作为舵机输出通道，并配置上下限脉宽
  */
 void catch_head_servo_init(void) {
-	servo_init(&g_gripper_servo, &htim3, TIM_CHANNEL_3, 2500, 1600);
+	servo_init(&g_gripper_servo, &htim4, TIM_CHANNEL_2, 2500, 1600);
 }
 
 /**
@@ -143,6 +143,7 @@ bool catch_head_is_target_reached(void) {
 
 	uint8_t dm_ok = (uint8_t)(dm_err_rad <= CATCH_HEAD_DM_POS_TOL_RAD);
 	uint8_t servo_ok = 1; 
-
+	if(dm_ok && servo_ok)
+	LED3_TOGGLE();
 	return (bool)(dm_ok && servo_ok);
 }

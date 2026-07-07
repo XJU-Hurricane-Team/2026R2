@@ -1,60 +1,70 @@
 #include "vl53l1_platform.h"
-#include "./iic/iic.h"                // 引入你的IIC驱动
-#include "./core_delay/core_delay.h"  // 引入你的延时函数
+#include "./iic/iic.h"                // I2C1
+#include "./iic/iic2.h"               // I2C2
+#include "./iic/iic3.h"               // I2C3
+#include "./core_delay/core_delay.h"  // 延时函数
 
-// VL53L1X的默认I2C写地址为0x52，读地址为0x53。
-#define VL53L1X_DEFAULT_I2C_ADDR  0x52 
+/* ========== I2C 总线选择辅助宏 ========== */
+/* 根据 Dev->i2c_bus_id 分发到对应 I2C 总线的函数调用 */
+
+#define IIC_SELECT_START(bus)   do { if ((bus)==0) iic_start();  else if ((bus)==1) iic2_start();  else iic3_start();  } while(0)
+#define IIC_SELECT_STOP(bus)    do { if ((bus)==0) iic_stop();   else if ((bus)==1) iic2_stop();   else iic3_stop();   } while(0)
+#define IIC_SELECT_ACK(bus)     do { if ((bus)==0) iic_ack();    else if ((bus)==1) iic2_ack();    else iic3_ack();    } while(0)
+#define IIC_SELECT_NACK(bus)    do { if ((bus)==0) iic_nack();   else if ((bus)==1) iic2_nack();   else iic3_nack();   } while(0)
+#define IIC_SELECT_WAIT_ACK(bus) do { if ((bus)==0) iic_wait_ack(); else if ((bus)==1) iic2_wait_ack(); else iic3_wait_ack(); } while(0)
+#define IIC_SELECT_SEND(bus, d)  do { if ((bus)==0) iic_send_byte(d); else if ((bus)==1) iic2_send_byte(d); else iic3_send_byte(d); } while(0)
+#define IIC_SELECT_READ(bus, a)  ((bus)==0 ? iic_read_byte(a) : ((bus)==1 ? iic2_read_byte(a) : iic3_read_byte(a)))
 
 /**
  * @brief 连续写多个字节
  */
 int8_t VL53L1_WriteMulti(VL53L1_DEV Dev, uint16_t index, uint8_t *pdata, uint32_t count) {
-    iic_start();                                  // 产生起始信号
-    iic_send_byte(VL53L1X_DEFAULT_I2C_ADDR);      // 发送设备地址(写)[cite: 1]
-    iic_wait_ack();                               // 等待应答[cite: 1]
-    
-    iic_send_byte((uint8_t)(index >> 8));         // 发送16位寄存器地址的高8位[cite: 1]
-    iic_wait_ack();
-    iic_send_byte((uint8_t)(index & 0xFF));       // 发送16位寄存器地址的低8位[cite: 1]
-    iic_wait_ack();
-    
+    uint8_t bus = Dev->i2c_bus_id;
+    uint8_t addr = Dev->I2cDevAddr;
+
+    IIC_SELECT_START(bus);
+    IIC_SELECT_SEND(bus, addr);
+    IIC_SELECT_WAIT_ACK(bus);
+
+    IIC_SELECT_SEND(bus, (uint8_t)(index >> 8));
+    IIC_SELECT_WAIT_ACK(bus);
+    IIC_SELECT_SEND(bus, (uint8_t)(index & 0xFF));
+    IIC_SELECT_WAIT_ACK(bus);
+
     for (uint32_t i = 0; i < count; i++) {
-        iic_send_byte(pdata[i]);                  // 逐字节发送数据[cite: 1]
-        iic_wait_ack();
+        IIC_SELECT_SEND(bus, pdata[i]);
+        IIC_SELECT_WAIT_ACK(bus);
     }
-    
-    iic_stop();                                   // 产生停止信号[cite: 1]
-    return 0; // 返回 VL53L1_ERROR_NONE
+
+    IIC_SELECT_STOP(bus);
+    return 0;
 }
 
 /**
  * @brief 连续读多个字节
  */
 int8_t VL53L1_ReadMulti(VL53L1_DEV Dev, uint16_t index, uint8_t *pdata, uint32_t count) {
-    iic_start();                                  // 产生起始信号[cite: 1]
-    iic_send_byte(VL53L1X_DEFAULT_I2C_ADDR);      // 发送设备地址(写)，用于定位寄存器[cite: 1]
-    iic_wait_ack();
-    
-    iic_send_byte((uint8_t)(index >> 8));         // 发送16位寄存器地址的高8位[cite: 1]
-    iic_wait_ack();
-    iic_send_byte((uint8_t)(index & 0xFF));       // 发送16位寄存器地址的低8位[cite: 1]
-    iic_wait_ack();
-    
-    iic_start();                                  // 产生重复起始信号[cite: 1]
-    iic_send_byte(VL53L1X_DEFAULT_I2C_ADDR | 0x01); // 发送设备地址(读)[cite: 1]
-    iic_wait_ack();
-    
+    uint8_t bus = Dev->i2c_bus_id;
+    uint8_t addr = Dev->I2cDevAddr;
+
+    IIC_SELECT_START(bus);
+    IIC_SELECT_SEND(bus, addr);
+    IIC_SELECT_WAIT_ACK(bus);
+
+    IIC_SELECT_SEND(bus, (uint8_t)(index >> 8));
+    IIC_SELECT_WAIT_ACK(bus);
+    IIC_SELECT_SEND(bus, (uint8_t)(index & 0xFF));
+    IIC_SELECT_WAIT_ACK(bus);
+
+    IIC_SELECT_START(bus);
+    IIC_SELECT_SEND(bus, addr | 0x01);
+    IIC_SELECT_WAIT_ACK(bus);
+
     for (uint32_t i = 0; i < count; i++) {
-        if (i == count - 1) {
-            // 根据你的代码逻辑，参数为0时不发送ACK (发送NACK)[cite: 1]
-            pdata[i] = iic_read_byte(0);          
-        } else {
-            // 参数为1时发送ACK[cite: 1]
-            pdata[i] = iic_read_byte(1);          
-        }
+        pdata[i] = IIC_SELECT_READ(bus, (i != count - 1));
     }
-    
-    iic_stop();                                   // 产生停止信号[cite: 1]
+
+    IIC_SELECT_STOP(bus);
     return 0;
 }
 

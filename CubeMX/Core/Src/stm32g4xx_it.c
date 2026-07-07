@@ -24,11 +24,12 @@
 /* USER CODE BEGIN Includes */
 #include <FreeRTOS.h>
 #include <task.h>
+#include "lift.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
-
+#include "gpio.h"
 /* USER CODE END TD */
 
 /* Private define ------------------------------------------------------------*/
@@ -44,12 +45,16 @@
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN PV */
 
+#define PA1_DEBOUNCE_MS 10U
+
 volatile uint32_t g_fault_hfsr __attribute__((section(".noinit")));
 volatile uint32_t g_fault_cfsr __attribute__((section(".noinit")));
 volatile uint32_t g_fault_mmfar __attribute__((section(".noinit")));
 volatile uint32_t g_fault_bfar __attribute__((section(".noinit")));
 volatile uint32_t g_fault_afsr __attribute__((section(".noinit")));
 volatile uint32_t g_fault_ipsr __attribute__((section(".noinit")));
+
+static uint32_t g_pa1_last_valid_tick = 0U;
 
 static inline void fault_debug_break_if_attached(void) {
   if ((CoreDebug->DHCSR & CoreDebug_DHCSR_C_DEBUGEN_Msk) != 0U) {
@@ -236,6 +241,48 @@ void SysTick_Handler(void)
 /* For the available peripheral interrupt handler names,                      */
 /* please refer to the startup file (startup_stm32g4xx.s).                    */
 /******************************************************************************/
+
+/**
+  * @brief This function handles EXTI line0 interrupt.
+  */
+void EXTI0_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI0_IRQn 0 */
+
+  /* USER CODE END EXTI0_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+  /* USER CODE BEGIN EXTI0_IRQn 1 */
+
+  /* USER CODE END EXTI0_IRQn 1 */
+}
+
+/**
+  * @brief This function handles EXTI line1 interrupt.
+  */
+void EXTI1_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI1_IRQn 0 */
+
+  /* USER CODE END EXTI1_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
+  /* USER CODE BEGIN EXTI1_IRQn 1 */
+
+  /* USER CODE END EXTI1_IRQn 1 */
+}
+
+/**
+  * @brief This function handles EXTI line2 interrupt.
+  */
+void EXTI2_IRQHandler(void)
+{
+  /* USER CODE BEGIN EXTI2_IRQn 0 */
+
+  /* USER CODE END EXTI2_IRQn 0 */
+  HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2);
+  /* USER CODE BEGIN EXTI2_IRQn 1 */
+
+  /* USER CODE END EXTI2_IRQn 1 */
+}
 
 /**
   * @brief This function handles DMA1 channel1 global interrupt.
@@ -516,5 +563,45 @@ void DMA1_Channel8_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+  // if (GPIO_Pin == GPIO_PIN_1) {
+  //   uint32_t now_tick = HAL_GetTick();
 
+  //   if ((now_tick - g_pa1_last_valid_tick) < PA1_DEBOUNCE_MS) {
+  //     return;
+  //   }
+
+  //   if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1) == GPIO_PIN_RESET) {
+  //     g_pa1_last_valid_tick = now_tick;
+  //     LED3_TOGGLE();
+  //     lift_on_catch_proximity_falling_edge();
+  //   }
+  // }
+  // if(GPIO_Pin == GPIO_PIN_0) {
+  //       uint32_t now_tick = HAL_GetTick();
+
+  //   if ((now_tick - g_pa1_last_valid_tick) < PA1_DEBOUNCE_MS) {
+  //     return;
+  //   }
+
+  //   if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0) == GPIO_PIN_RESET) {
+  //     g_pa1_last_valid_tick = now_tick;
+  //     LED3_TOGGLE();
+  //     lift_on_catch_proximity_falling_edge();
+  //   }
+  // }
+    if(GPIO_Pin == GPIO_PIN_2) {
+        uint32_t now_tick = HAL_GetTick();
+
+    if ((now_tick - g_pa1_last_valid_tick) < PA1_DEBOUNCE_MS) {
+      return;
+    }
+
+    if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_2) == GPIO_PIN_RESET) {
+      g_pa1_last_valid_tick = now_tick;
+      LED3_TOGGLE();
+      lift_on_catch_proximity_falling_edge();
+    }
+  }
+}
 /* USER CODE END 1 */
