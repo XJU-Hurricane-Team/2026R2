@@ -123,10 +123,10 @@ void vl53l1_apply_init(void) {
     g_vl53l1_ready[2] = vl53l1_apply_init_single(g_vl53l1_handle3,
                             VL53L1_3_XSHUT_GPIO_PORT, VL53L1_3_XSHUT_GPIO_PIN);
 
-    /* ---- 5. 初始化后默认启动测距 ---- */
-    vl53l1_apply_start_measurement(g_vl53l1_handle);
-    vl53l1_apply_start_measurement(g_vl53l1_handle2);
-    vl53l1_apply_start_measurement(g_vl53l1_handle3);
+    /* ---- 5. 初始化后默认关闭测距 ---- */
+    vl53l1_apply_stop_measurement(g_vl53l1_handle);
+    vl53l1_apply_stop_measurement(g_vl53l1_handle2);
+    vl53l1_apply_stop_measurement(g_vl53l1_handle3);
 }
 
 /**

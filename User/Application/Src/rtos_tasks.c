@@ -47,23 +47,23 @@ void start_task(void *pvParameters) {
     can_list_add_can(can2_selected, 4, 4);
     can_list_add_can(can3_selected, 4, 4);
 
-    // if (microros_init() != 0) {
-    //     log_message(LOG_ERROR, "start_task: microros_init failed");
-    //     Error_Handler();
-    // }
+    if (microros_init() != 0) {
+        log_message(LOG_ERROR, "start_task: microros_init failed");
+        Error_Handler();
+    }
 
-    // logger_module_init();
+    logger_module_init();
 
-    // if (xTaskCreate(microros_task, "microros_task", 128 * 8, NULL, 3,
-    //                 &microros_task_handle) != pdPASS) {
-    //     log_message(LOG_ERROR, "start_task: microros_task create failed");
-    //     Error_Handler();
-    // }
-    vl53l1_apply_init();
-    // chassis_init();
-    // catch_init();
-    // msg_process_init();
-    // robot_arm_init();
+    if (xTaskCreate(microros_task, "microros_task", 128 * 8, NULL, 3,
+                    &microros_task_handle) != pdPASS) {
+        log_message(LOG_ERROR, "start_task: microros_task create failed");
+        Error_Handler();
+    }
+
+    chassis_init();
+    catch_init();
+    msg_process_init();
+    robot_arm_init();
     
 
     if (xTaskCreate(task1, "task1", 256, NULL, 2, &task1_handle) != pdPASS) {
@@ -73,15 +73,15 @@ void start_task(void *pvParameters) {
 
     vTaskDelete(NULL);
 }
-uint16_t dist1 = 0;
-uint16_t dist2 = 0;
+// uint16_t dist1 = 0;
+// uint16_t dist2 = 0;
 
 /* VL53L1 距离跳变测试——统计 15~30cm 跳变次数 */
-static uint16_t s_test_last_dist_mm = 0;
-static bool     s_test_has_last = false;
-static uint32_t s_test_delta_trigger_count = 0;  /* 触发次数计数器 */
-uint16_t cur_dist_mm2 = 0;
-uint16_t cur_dist_mm = 0;
+// static uint16_t s_test_last_dist_mm = 0;
+// static bool     s_test_has_last = false;
+// static uint32_t s_test_delta_trigger_count = 0;  /* 触发次数计数器 */
+// uint16_t cur_dist_mm2 = 0;
+// uint16_t cur_dist_mm = 0;
 /**
  * @brief Task1: VL53L1 距离跳变测试 + LED 指示
  *
@@ -95,8 +95,8 @@ void task1(void *pvParameters) {
         LED0_TOGGLE();
 
         // /* ---- 读取 VL53L1 距离 ---- */
-        vl53l1_apply_get_distance_mm(&cur_dist_mm2, g_vl53l1_handle2);
-        vl53l1_apply_get_distance_mm(&cur_dist_mm, g_vl53l1_handle);
+        // vl53l1_apply_get_distance_mm(&cur_dist_mm2, g_vl53l1_handle2);
+        // vl53l1_apply_get_distance_mm(&cur_dist_mm, g_vl53l1_handle);
         // if (vl53l1_apply_get_distance_mm(&cur_dist_mm, g_vl53l1_handle2)) {
         //     /* 距离跳变检测：delta ∈ [150, 300] mm 时计数 */
         //     if (s_test_has_last && s_test_last_dist_mm > 0) {
@@ -114,19 +114,19 @@ void task1(void *pvParameters) {
         //     s_test_has_last = true;
 
             /* LED3: 距离 >= 150mm 亮灯 */
-            if (cur_dist_mm >= 150) {
-                LED3_ON();
-            } else {
-                LED3_OFF();
-            }
-            if (cur_dist_mm2 >= 150) {
-                LED2_ON();
-            } else {
-                LED2_OFF();
-            }
+            // if (cur_dist_mm >= 150) {
+            //     LED3_ON();
+            // } else {
+            //     LED3_OFF();
+            // }
+            // if (cur_dist_mm2 >= 150) {
+            //     LED2_ON();
+            // } else {
+            //     LED2_OFF();
+            // }
         //}
 
-        vTaskDelay(5);
+        vTaskDelay(1000);
     }
 }
 
