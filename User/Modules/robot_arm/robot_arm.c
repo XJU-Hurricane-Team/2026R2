@@ -171,6 +171,10 @@ static void arm_update_motion_state(RobotArm *arm, float joint_target[3]) {
                     float overshoot_by_layer =
                         ARM_BIG_ARM_FLIP_OVERSHOOT_FORCE_RAD -
                         arm->place_layer * 0.30f;
+                                        /* 第一层过冲额外多加0.05rad */
+                    if (arm->place_layer == 0) {
+                        overshoot_by_layer += 0.2f;
+                    }
                     if (overshoot_by_layer < 0.0f) {
                         overshoot_by_layer = 0.0f;
                     }

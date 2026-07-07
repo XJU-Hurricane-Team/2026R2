@@ -382,7 +382,7 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 last_command_mode = 2;
                 break;
             case 3:
-                // pump_set_state(1); // 提前开气泵
+                pump_set_state(1); // 提前开气泵
                 robot_arm_set_state_index(3); // 准备（40cm的向上抓取）
                 last_command_mode = 3;
                 break;

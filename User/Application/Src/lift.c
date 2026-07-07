@@ -879,10 +879,10 @@ static void lift_up_step_drive_2006_forward(void) {
     /* 2006 转速：up_R1_flag 为 true 时恒定 1500rpm，否则分段变速 */
     if (up_R1_flag) {
         g_lift_handle.target_2006_rpm = 1500.0f;
-    } else if (elapsed_sec < 1.5f) {
-        g_lift_handle.target_2006_rpm = 4000.0f;
+    } else if (elapsed_sec < 1.70f) {
+        g_lift_handle.target_2006_rpm = 4650.0f;
     } else {
-        g_lift_handle.target_2006_rpm = 2500.0f;
+        g_lift_handle.target_2006_rpm = 3550.0f;
     }
 
     // 检查后光电的上升沿（false -> true）
@@ -943,10 +943,10 @@ static void lift_down_step_drive_2006_backward(void) {
     /* 2006 转速：up_R1_flag 为 true 时恒定 1500rpm，否则分段变速 */
     if (up_R1_flag) {
         g_lift_handle.target_2006_rpm = -1500.0f;
-    } else if (elapsed_sec < 1.5f) {
-        g_lift_handle.target_2006_rpm = -4000.0f;
+    } else if (elapsed_sec < 1.70f) {
+        g_lift_handle.target_2006_rpm = -4650.0f;
     } else {
-        g_lift_handle.target_2006_rpm = -2500.0f;
+        g_lift_handle.target_2006_rpm = -3550.0f;
     }
 
     /* ---- VL53L1 距离检测：距离 >= 150mm 时触发 ---- */

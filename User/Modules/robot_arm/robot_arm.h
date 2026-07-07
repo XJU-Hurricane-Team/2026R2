@@ -72,7 +72,7 @@
 #define ARM_BIG_ARM_READY_ERR_RAD                                              \
     0.20f /**< 等待大臂到达指定位置的允许误差 (rad) */
 #define ARM_SMALL_ARM_READY_ERR_RAD                                            \
-    0.20f /**< 等待小臂到达指定位置的允许误差 (rad) */
+    0.07f /**< 等待小臂到达指定位置的允许误差 (rad) */
 #define ARM_SUCTION_PLACE_SPEED_BASE      0.55f /**< 放置态吸盘基础速度 */
 #define ARM_SUCTION_PLACE_SPEED_GAIN      1.10f /**< 放置态吸盘速度增益 */
 #define ARM_SUCTION_PLACE_SPEED_MIN       0.70f /**< 放置态吸盘最小速度 */
@@ -83,7 +83,7 @@
 #define ARM_PLACE_SUCTION_OFFSET_RAD      -0.0f /**< 放置下压预紧力 */
 
 #define ARM_SUCTION_WAIT_HOLD_SPEED       1.20f  /**< 吸盘锁死保持速度 */
-#define ARM_SUCTION_WAIT_TIMEOUT_MS       800U /**< 吸盘等待超时时间 (ms) */
+#define ARM_SUCTION_WAIT_TIMEOUT_MS       1000U /**< 吸盘等待超时时间 (ms) */
 #define ARM_TAKEOUT_WAIT_TIMEOUT_MS       4000U /**< 取出动作超时时间 (ms) */
 #define ARM_SMALL_WAIT_HOLD_SPEED         1.80f /**< 小臂锁死保持速度 */
 #define ARM_SMALL_SPEED_DEADBAND_RAD      0.05f /**< 速度模式下小臂到位死区 (rad) */
