@@ -58,7 +58,8 @@ static const arm_target_point_t g_arm_target_points[11] = {
     //{570.000f, 180.0f, 0.08f},                         /* 3: READY_3 */
     {270.000f, 200.0f, 0.08f},                           /* 3: READY_3 */
     {250.0f, -230.f, 0.0f},                              /* 4: READY_4 */
-    {513.142f, 200.0f, 0.0f},                            /* 5: CATCH */
+    // {513.142f, 200.0f, 0.0f},                            /* 5: CATCH */
+    {360.0f, -180.0f, 0.0f},                            /* 5: CATCH */
     {-275.12f, 493.991f, -PI / 2.0},                     /* 6: PLACE */
     {533.142f, 300.0f, 0.0f},                            /* 7: WAIT_TAKEOUT */
     {430.000f, 860.0f, PI / 9.0},                       /* 8: TAKEOUT_1 */
@@ -132,8 +133,13 @@ static arm_status_t arm_status_from_index(uint8_t index) {
 void robot_arm_set_dynamic_catch_target_up(float y, float x, float z) {
     /* 将米单位转换为毫米，并校准摄像头与吸盘中心的偏移补偿 */
 
+    // 正赛台阶点位
     g_dynamic_target.y = y * 1000.0f + 200.0f - CAM_TO_CAT_Y_OFFSET + 20.0f;
     g_dynamic_target.z = z * 1000.0f + 10.0f + CAM_TO_CAT_Z_OFFSET + 30.0f;
+
+    // 技能赛三区点位
+        // g_dynamic_target.y = 360.0f;
+        // g_dynamic_target.z = -180.0f;
 
     g_has_dynamic_target = 1;
     (void)x; //x不使用，仅用于底盘校准，与机械臂校准无关
@@ -744,7 +750,7 @@ static uint8_t pump_read_adc_filtered(uint16_t *out_value) {
 /* 按键 → 状态索引 映射表，按需增删改 */
 static const uint8_t g_arm_key_index_map[][2] = {
     {10, 0},  /* INIT        */
-    {11, 4},  /* READY_1     */
+    {11, 1},  /* READY_1     */
     {12, 5},  /* CATCH       */
     {13, 6},  /* PLACE       */
     {14, 7},  /* WAIT_TAKEOUT*/

@@ -13,7 +13,7 @@
 #include <stdint.h>
 #include "remote_ctrl/remote_ctrl.h"
 
-#define LIFT_TARGET_UP_R1_DEG    1.42f
+#define LIFT_TARGET_UP_R1_DEG    0.5f
 #define LIFT_TARGET_UP_RAMP_DEG  2.37f
 
 extern bool up_R1_flag;

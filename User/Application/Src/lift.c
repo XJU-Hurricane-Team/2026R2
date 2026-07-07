@@ -317,7 +317,7 @@ void lift_switch_mode(uint8_t key, remote_key_event_t event) {
             break;
         
         case LIFT_UP_R1_KEY:
-            lift_set_target(LIFT_TARGET_UP_R1_DEG);
+            lift_set_target(-LIFT_TARGET_UP_R1_DEG);
             break;
 
         case LIFT_SEQ_UP_KEY:

@@ -452,7 +452,7 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 break;
             case 5:
                 // auto_lift_set_target(LIFT_TARGET_UP_R1_DEG);
-                lift_set_target(LIFT_TARGET_UP_R1_DEG);
+                lift_set_target(-LIFT_TARGET_UP_R1_DEG);
                 up_R1_flag = true;
                 break;
             default:
