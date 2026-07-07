@@ -248,7 +248,8 @@ static void lift_state_task(void *pvParameters) {
                               motor_2006_out[0], motor_2006_out[1], 0, 0);
 
         dm_pos_speed_ctrl(&dm_motor_handle[0], g_lift_handle.lift_target_degree,
-                          LIFT_TARGET_SPEED);
+                  lift_select_target_speed(g_lift_handle.lift_target_degree,
+                               dm_motor_handle[1].position));
         dm_pos_speed_ctrl(&dm_motor_handle[1],
                   -g_lift_handle.lift_target_degree,
                   lift_select_target_speed(-g_lift_handle.lift_target_degree,
@@ -544,7 +545,7 @@ static void lift_seq_down_update(void) {
         lift_down_step_drive_2006_backward,
         lift_down_step_wait_up_arrived_and_finish,
     };
-    // log_message(LOG_INFO, "2006_speed:%d", (int)dji_2006_handle[0].speed_rpm);
+    log_message(LOG_INFO, "2006_speed:%d", (int)dji_2006_handle[0].speed_rpm);
     if (g_lift_handle.lift_fsm.step <
             (sizeof(step_handlers) / sizeof(step_handlers[0])) &&
         step_handlers[g_lift_handle.lift_fsm.step] != NULL) {
@@ -721,7 +722,6 @@ static bool dm_position_check(lift_state_t state) {
         motor1_ready = (fabs(fabs(dm_motor_handle[1].position) -
                              LIFT_TARGET_DEG_DOWN_SEQ) < 0.1f);
         // return motor0_ready && motor1_ready;
-        log_message(LOG_INFO, "!!!!");
         return motor1_ready;
     }
 
@@ -731,7 +731,6 @@ static bool dm_position_check(lift_state_t state) {
         motor1_ready = (fabs(fabs(dm_motor_handle[1].position) -
                              LIFT_TARGET_DEG_UP_SEQ) < 0.1f);
         //return motor0_ready && motor1_ready;
-        log_message(LOG_INFO, "!!!!");
         return motor1_ready;
     }
 
@@ -881,9 +880,9 @@ static void lift_up_step_drive_2006_forward(void) {
     if (up_R1_flag) {
         g_lift_handle.target_2006_rpm = 1500.0f;
     } else if (elapsed_sec < 1.5f) {
-        g_lift_handle.target_2006_rpm = 6000.0f;
-    } else {
         g_lift_handle.target_2006_rpm = 4000.0f;
+    } else {
+        g_lift_handle.target_2006_rpm = 2500.0f;
     }
 
     // 检查后光电的上升沿（false -> true）
@@ -907,8 +906,6 @@ static void lift_up_step_wait_up_arrived_and_finish(void) {
 
 // 下降步骤1：等待后光电下降沿
 static void lift_down_step_wait_rear_release(void) {
-    // 检查后光电的下降沿（true -> false）
-    if (get_rear_photoelectric_falling_edge()) {
     // 检查后光电的下降沿（true -> false）
     if (get_rear_photoelectric_falling_edge()) {
         log_message(LOG_INFO, "chassis down");
@@ -947,9 +944,9 @@ static void lift_down_step_drive_2006_backward(void) {
     if (up_R1_flag) {
         g_lift_handle.target_2006_rpm = -1500.0f;
     } else if (elapsed_sec < 1.5f) {
-        g_lift_handle.target_2006_rpm = -6000.0f;
-    } else {
         g_lift_handle.target_2006_rpm = -4000.0f;
+    } else {
+        g_lift_handle.target_2006_rpm = -2500.0f;
     }
 
     /* ---- VL53L1 距离检测：距离 >= 150mm 时触发 ---- */
