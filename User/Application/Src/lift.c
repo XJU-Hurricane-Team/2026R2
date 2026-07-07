@@ -14,7 +14,7 @@
 #include "includes.h"
 #include "microros_ctrl.h"
 #include "lift.h"
-#include "VL53L1/vl53l1_apply.h"
+#include "vl53l1/vl53l1_apply.h"
 
 #define CHASSIS_CAN_SELECT       can1_selected
 #define LIFT_CAN_SELECT          can2_selected
@@ -48,11 +48,8 @@
 #define LIFT_TARGET_DEG_DOWN_SEQ 12.275f
 #define LIFT_TARGET_DEG_STEP     0.025f
 #define LIFT_TARGET_SPEED_UP_R1  5.0f  
-#define LIFT_TARGET_SPEED_HIGH   21.0f      //距离较远时，抬升速度较快
-#define LIFT_TARGET_SPEED_LOW    10.0f      //距离较近时，抬升速度较慢
-#define LIFT_TARGET_SPEED_SWITCH  1.75f       //差值，大于则快速度，小于则慢速度
-#define LIFT_CATCH_DEG_STEP      0.410f
-#define LIFT_CATCH_SLOW_STEP     0.0010f
+#define LIFT_TARGET_SPEED_HIGH   21.0f      //抬升快速
+#define LIFT_TARGET_SPEED_LOW    7.5f       //抬升慢速
 #define LIFT_TARGET_SPEED        10.0f
 
 #define LIFT_2006_HIGH_SPEED     4850.0f
@@ -215,21 +212,9 @@ static void lift_state_task(void *pvParameters) {
 
             switch (g_lift_handle.lift_state) {
                 case LIFT_STATE_UP:
-                {
-                    float step = LIFT_TARGET_DEG_STEP;
-
-                    if (g_lift_handle.catch_up_until_proximity_active) {
-                        if (g_lift_handle.lift_target_degree <
-                            LIFT_TARGET_CATCH_DEG) {
-                            step = LIFT_CATCH_DEG_STEP;
-                        } else {
-                            step = LIFT_CATCH_SLOW_STEP;
-                        }
-                    }
-
-                    lift_set_target(g_lift_handle.lift_target_degree + step);
+                     lift_set_target(g_lift_handle.lift_target_degree +
+                                    LIFT_TARGET_DEG_STEP);
                     break;
-                }
                 case LIFT_STATE_DOWN:
                     lift_set_target(g_lift_handle.lift_target_degree -
                                     LIFT_TARGET_DEG_STEP);
@@ -840,8 +825,15 @@ static float lift_select_target_speed(float target_degree, float real_degree) {
     if (up_R1_flag) {
         return LIFT_TARGET_SPEED_UP_R1;
     }
+    /* 非序列模式：恒定速度 */
+    if (g_lift_handle.lift_fsm.action == 0) {
+        return LIFT_TARGET_SPEED;
+    }
+    /* 序列模式：三段变速，基于总行程 LIFT_TARGET_DEG_DOWN_SEQ(12.275f)
+       前 1/5(~2.455) 低速起步，中间 3/5 高速，后 1/5(~2.455) 低速收尾 */
     float target_error = fabsf(fabsf(target_degree) - fabsf(real_degree));
-    if (target_error <= LIFT_TARGET_SPEED_SWITCH) {
+    float one_fifth = LIFT_TARGET_DEG_DOWN_SEQ / 5.0f;
+    if (target_error <= one_fifth || target_error >= 4.0f * one_fifth) {
         return LIFT_TARGET_SPEED_LOW;
     }
     return LIFT_TARGET_SPEED_HIGH;

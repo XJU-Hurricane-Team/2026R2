@@ -7,7 +7,7 @@
  */
 
 #include "includes.h"
-#include "VL53L1/vl53l1_apply.h"
+#include "vl53l1/vl53l1_apply.h"
 static void log_task_stack_usage(TaskHandle_t task_handle,
                                  const char *task_name,
                                  configSTACK_DEPTH_TYPE stack_words);
