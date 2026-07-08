@@ -22,6 +22,11 @@
 #define PUMP_ADC_READY_LOW      3000U /**< 抓取成功判定的低压阈值 */
 #define PUMP_ADC_READY_HIGH     3900U /**< 释放成功判定的高压阈值 */
 
+#define ARM_PUMP_PLACE_TIMEOUT_ENABLE  0 /**< 放置态气泵超时检测使能 (0:禁用, 1:启用) */
+
+#define USE_FLASH               1     /**< 是否使用Flash存储放置/取出层级 (0:禁用, 1:启用) */
+#define ARM_PLACE_INC_ON_ENTRY  1     /**< 【测试】切到PLACE态即递增放置索引 (0:禁用, 1:启用) */
+
 #define CATCH_READY_2_ANGEL                                                    \
     -0.893f /**< READY_2 吸盘关节相对于水平面旋转角度 (rad) */
 #define FIRST_POINT_Z     (493.991) /**< 第一排底层基准高度 (mm) */
