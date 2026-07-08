@@ -13,7 +13,7 @@
 
 /* ================== 应用层宏定义 ================== */
 #define ARM_USE_REMOTE_KEY                                                     \
-    1 /**< 是否使用遥控器按键切换状态位 (0:禁用, 1:启用) */
+    0 /**< 是否使用遥控器按键切换状态位 (0:禁用, 1:启用) */
 #define ARM_TASK_PERIOD_MS      10    /**< 机械臂控制任务周期 (毫秒) */
 #define ARM_REACH_POS_TOL_MM    5.0f  /**< 位置到位判定容差 (mm) */
 #define ARM_REACH_JOINT_TOL_RAD 0.10f /**< 关节角到位判定容差 (rad) */
