@@ -57,7 +57,7 @@ static uint8_t g_last_target_index;           /* 上一次下发的目标状态�
 static uint8_t g_place_return_sequence_active = 0; /* 放置后回位组合动作标志 */
 static uint8_t g_place_return_target_index = 0; /* 放置完成后跳转的目标状态 */
 
-static uint8_t g_place_target_index = 0;          /* 放置层级索引 (0~2), 初始底层 */
+static uint8_t g_place_target_index = ARM_PLACE_START_LAYER;          /* 放置层级索引 (0~2), 初始底层 */
 static uint8_t g_wait_takeout_target_index = ARM_TAKEOUT_START_LAYER;   /* 待取出层级索引 (0~2) */
 static arm_target_point_t g_dynamic_target = {0}; /* 动态抓取目标点 (mm/rad) */
 static uint8_t g_has_dynamic_target = 0;          /* 是否存在动态抓取目标 */
@@ -86,8 +86,8 @@ static const arm_target_point_t g_arm_target_points[11] = {
     {360.0f, -180.0f, 0.0f},                            /* 5: CATCH */
     {-275.12f, 493.991f, -PI / 2.0},                     /* 6: PLACE */
     {533.142f, 300.0f, 0.0f},                            /* 7: WAIT_TAKEOUT */
-    {430.000f, 860.0f, PI / 9.0},                       /* 8: TAKEOUT_1 */
-    {740.0f, 670.0f, 0.0f},                              /* 9: TAKEOUT_2  */
+    {430.000f, 860.0f, PI / 8.0},                       /* 8: TAKEOUT_1 */
+    {510.0f, 670.0f, PI / 8.0},                              /* 9: TAKEOUT_2  */
     {170.0f, 900.0f, PI * 0.75 + 0.1},                   /* 10: OVERLOOK */
 };
 
@@ -620,7 +620,7 @@ static void arm_pump_catch_check(void) {
         }
 #else
         // 未开启 ADC 检测，延时默认成功
-        if (HAL_GetTick() - wait_start_tick >= 2000U) {
+        if (HAL_GetTick() - wait_start_tick >= 4000U) {
             if (arm_return_enabel) {
                 control_dispatch_publish(1); // 成功抓取
             }
@@ -629,7 +629,7 @@ static void arm_pump_catch_check(void) {
 #endif
 
         /* 超时与推进重试逻辑 */
-        if (HAL_GetTick() - wait_start_tick >= 500U) {
+        if (HAL_GetTick() - wait_start_tick >= 200U) {
 #if ARM_USE_PUMP_ADC_CHECK
 
             if (retry_count < 10) {
@@ -665,7 +665,7 @@ static void arm_pump_catch_check(void) {
                     vTaskDelay(pdMS_TO_TICKS(10));
                 }
 
-                wait_start_tick = HAL_GetTick(); // 重置 2 秒计时器
+                wait_start_tick = HAL_GetTick(); // 重置 4 秒计时器
                 retry_count++;
                 continue;
             }
@@ -728,6 +728,7 @@ static void arm_pump_place_check(bool publish_result) {
             }
         }
 #endif
+#if ARM_PUMP_PLACE_TIMEOUT_ENABLE
         if (HAL_GetTick() - wait_start_tick >= 2000U) {
             /* 超时也认为放置完成，层级累加 */
             if (g_robot_arm.status == ARM_STATE_PLACE) {
@@ -741,6 +742,7 @@ static void arm_pump_place_check(bool publish_result) {
             }
             return;
         }
+#endif
 
         vTaskDelay(pdMS_TO_TICKS(10));
     }
@@ -830,10 +832,10 @@ static void arm_remote_state_switch(uint8_t key, remote_key_event_t event) {
     /* 按键16: 擦除Flash存储，恢复默认层级 */
     if (key == 16) {
         flash_store_erase();
-        g_place_target_index = 0;
+        g_place_target_index = ARM_PLACE_START_LAYER;
         g_wait_takeout_target_index = ARM_TAKEOUT_START_LAYER;
-        log_message(LOG_INFO, "ARM_FLASH erased, place=0 takeout=%d",
-                    ARM_TAKEOUT_START_LAYER);
+        log_message(LOG_INFO, "ARM_FLASH erased, place=%d takeout=%d",
+                    ARM_PLACE_START_LAYER, ARM_TAKEOUT_START_LAYER);
         return;
     }
 #endif

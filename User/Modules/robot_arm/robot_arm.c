@@ -1027,12 +1027,18 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
         cmd_speed = fminf(cmd_speed, ARM_J8006_FINE_SPEED_MAX +
                                          blend * (ARM_J8006_NEAR_SPEED_MAX -
                                                   ARM_J8006_FINE_SPEED_MAX));
+    } else if (err_abs > ARM_J8006_DEADBAND_RAD) {
+        /* 精细区：速度随误差比例缩放，避免惯性过冲 */
+        float fine_proportional = 3.0f * err_abs; 
+        cmd_speed = fminf(cmd_speed, fine_proportional);
     } else {
-        cmd_speed = fminf(cmd_speed, ARM_J8006_FINE_SPEED_MAX);
+        /* 到位死区：误差极小，直接停发速度，消除微震颤 */
+        cmd_speed = 0.0f;
     }
 
     if ((joint0_err * arm->damiao_1.speed) < 0.0f) {
-        cmd_speed = fminf(cmd_speed, ARM_J8006_FINE_SPEED_MAX);
+        /* 过冲刹车：使用极低限速，避免反向冲量引发震颤 */
+        cmd_speed = fminf(cmd_speed, ARM_J8006_BRAKE_SPEED_MAX);
     }
 
     if (arm->big_arm_overshoot_phase == ARM_OVERSHOOT_PHASE_RECOVER) {
@@ -1045,7 +1051,7 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
     if (arm->flags.place_exit_safety_active) {
         cmd_speed = fminf(cmd_speed, ARM_BIG_PLACE_EXIT_SPEED_MAX);
     }
-    cmd_speed = arm_clampf(cmd_speed, 0.06f, ARM_J8006_CMD_SPEED_MAX);
+    cmd_speed = arm_clampf(cmd_speed, 0.0f, ARM_J8006_CMD_SPEED_MAX);
 
     float joint2_cmd = joint_des[2];
     if (arm_is_place_like(arm->status) || arm_is_takeout_state(arm->status)) {

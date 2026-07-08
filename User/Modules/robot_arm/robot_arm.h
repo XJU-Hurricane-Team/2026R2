@@ -43,8 +43,12 @@
     1.80f /**< 指令变化率限制 (rad/s)，防止阶跃信号 */
 #define ARM_J8006_NEAR_ERR_RAD   0.08f /**< 接近目标时的减速触发阈值 (rad) */
 #define ARM_J8006_FINE_ERR_RAD   0.03f /**< 微调阶段的误差阈值 (rad) */
-#define ARM_J8006_NEAR_SPEED_MAX 0.90f /**< 接近阶段的最大速度限制 (rad/s) */
-#define ARM_J8006_FINE_SPEED_MAX 0.80f /**< 微调阶段的最大速度限制 (rad/s) */
+#define ARM_J8006_NEAR_SPEED_MAX 0.6f /**< 接近阶段的最大速度限制 (rad/s) */
+#define ARM_J8006_FINE_SPEED_MAX 0.05f /**< 微调阶段的最大速度限制 (rad/s) */
+#define ARM_J8006_BRAKE_SPEED_MAX                                              \
+    0.08f /**< 过冲刹车时的最大速度限制 (rad/s)，防止反向震颤 */
+#define ARM_J8006_DEADBAND_RAD                                                 \
+    0.02f /**< 大臂到位死区 (rad)，误差小于此值时速度置零 */
 #define ARM_J8006_PHASE2_Q2TOQ1_SPEED_MAX                                      \
     0.6f /**< 象限翻转阶段的限速 (rad/s) */
 
@@ -102,7 +106,10 @@
     0.10f /**< 取出二层时小臂预移动步长 (rad) */
 #define ARM_TAKEOUT_SEQ_LAYER0_SMALL_LOCK_RAD                                  \
     4.0f /**< 取出第一层时小臂中间锁定角度 (rad)，到达后等大臂到位再继续 */
+
 #define ARM_TAKEOUT_START_LAYER            2    /**< 取出序列起始层数 (0~2)，逐层递减 */
+#define ARM_PLACE_START_LAYER             0    /**< 放置序列起始层数 (0~2)，逐层递增 */
+
 #define ARM_TAKEOUT_SEQ_ERR_TOLERANCE_RAD                                      \
     0.12f /**< 序列步骤到位误差阈值 (rad) */
 
