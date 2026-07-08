@@ -53,7 +53,6 @@ virtualFolder:
         - path: User/Application/Src/microros_ctrl.c
         - path: User/Application/Src/lift.c
         - path: User/Application/Src/arm_ctrl.c
-        - path: User/Application/Src/flash_store.c
       folders: []
     - name: Middlewares
       files: []

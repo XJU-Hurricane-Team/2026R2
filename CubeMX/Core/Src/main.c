@@ -24,7 +24,6 @@
 #include "usart.h"
 #include "tim.h"
 #include "gpio.h"
-#include "flash_store.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <bsp.h>
@@ -87,7 +86,6 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
   delay_init(170);
-  flash_store_init();
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
