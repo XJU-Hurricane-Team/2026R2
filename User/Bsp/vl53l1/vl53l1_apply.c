@@ -15,8 +15,8 @@
 #define VL53L1_1_XSHUT_GPIO_PIN           GPIO_PIN_10
 #define VL53L1_2_XSHUT_GPIO_PORT          GPIOA
 #define VL53L1_2_XSHUT_GPIO_PIN           GPIO_PIN_7
-#define VL53L1_3_XSHUT_GPIO_PORT          GPIOA
-#define VL53L1_3_XSHUT_GPIO_PIN           GPIO_PIN_8
+#define VL53L1_3_XSHUT_GPIO_PORT          GPIOB
+#define VL53L1_3_XSHUT_GPIO_PIN           GPIO_PIN_10
 
 /* ========== 每个传感器绑定的软件 I2C 总线 ID ========== */
 #define VL53L1_1_I2C_BUS_ID               0  /* I2C1: PC6/PC7 */
@@ -139,6 +139,8 @@ bool vl53l1_apply_get_distance_mm(uint16_t *distance_mm, VL53L1_DEV handle) {
     uint8_t data_ready = 0;
     VL53L1_RangingMeasurementData_t ranging_data;
     bool *ready;
+    static uint8_t err_count[3] = {0, 0, 0}; /* 三个传感器的连续错误计数 */
+    uint8_t *err_p;
 
     if (distance_mm == NULL || handle == NULL) return false;
 
@@ -146,18 +148,41 @@ bool vl53l1_apply_get_distance_mm(uint16_t *distance_mm, VL53L1_DEV handle) {
     ready = vl53l1_get_ready_ptr(handle);
     if (ready == NULL || !(*ready)) return false;
 
-    /* 查询数据是否准备好 */
-    if (VL53L1_GetMeasurementDataReady(handle, &data_ready) != VL53L1_ERROR_NONE)
-        return false;
+    /* 获取对应错误计数器指针 */
+    if (handle == g_vl53l1_handle)  err_p = &err_count[0];
+    else if (handle == g_vl53l1_handle2) err_p = &err_count[1];
+    else err_p = &err_count[2];
 
-    if (data_ready == 0U) return false;
+    /* 查询数据是否准备好 */
+    if (VL53L1_GetMeasurementDataReady(handle, &data_ready) != VL53L1_ERROR_NONE) {
+        (*err_p)++;
+        return false;
+    }
+
+    if (data_ready == 0U) {
+        (*err_p) = 0; /* 数据未就绪是正常状态，清除错误计数 */
+        return false;
+    }
 
     /* 读取测距数据 */
     if (VL53L1_GetRangingMeasurementData(handle, &ranging_data) != VL53L1_ERROR_NONE) {
-        VL53L1_StopMeasurement(handle);
-        *ready = false;
+        (*err_p)++;
+        /* 连续错误超过阈值，尝试重新初始化传感器 */
+        if (*err_p >= 10) {
+            VL53L1_StopMeasurement(handle);
+            if (vl53l1_apply_configure(handle)) {
+                VL53L1_StartMeasurement(handle);
+            } else {
+                *ready = false;
+            }
+            *err_p = 0;
+        }
+        /* 单次错误不致命，重新触发下一次测量 */
+        VL53L1_ClearInterruptAndStartMeasurement(handle);
         return false;
     }
+
+    *err_p = 0; /* 成功读取，清零错误计数 */
 
     /* 清除中断，触发下一次测量 */
     VL53L1_ClearInterruptAndStartMeasurement(handle);

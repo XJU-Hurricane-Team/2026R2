@@ -599,7 +599,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
     if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_2) == GPIO_PIN_RESET) {
       g_pa1_last_valid_tick = now_tick;
-      LED3_TOGGLE();
+      // LED3_TOGGLE();
       lift_on_catch_proximity_falling_edge();
     }
   }
