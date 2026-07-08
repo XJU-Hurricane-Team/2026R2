@@ -51,7 +51,7 @@ static const catch_motor_target_t g_catch_motor_targets[CATCH_STATE_COUNT] = {
     [CATCH_STATE_INIT] =
         {
             .servo_target = CATCH_HEAD_SERVO_TARGET_OPEN,
-            .dm_target = CATCH_HEAD_DM_TARGET_RETRACT,
+            .dm_target = CATCH_HEAD_DM_TARGET_CHECK,
         },
     [CATCH_STATE_READY] =
         {

@@ -48,14 +48,14 @@
 #define LIFT_TARGET_DEG_DOWN_SEQ 12.275f
 #define LIFT_TARGET_DEG_STEP     0.025f
 #define LIFT_TARGET_SPEED_UP_R1  5.0f  
-#define LIFT_TARGET_SPEED_HIGH   21.0f      //抬升快速
-#define LIFT_TARGET_SPEED_LOW    7.5f       //抬升慢速
+#define LIFT_TARGET_SPEED_HIGH   30.0f      //抬升快速
+#define LIFT_TARGET_SPEED_LOW    7.0f       //抬升慢速
 #define LIFT_TARGET_SPEED        10.0f
 
-#define LIFT_2006_HIGH_SPEED     4850.0f
-#define LIFT_2006_LOW_SPEED      3550.0f
+#define LIFT_2006_HIGH_SPEED     6150.0f
+#define LIFT_2006_LOW_SPEED      3050.0f
 #define TIME_DURATION_FRONT      0.4f
-#define TIME_DURATION_REAR       1.70f   
+#define TIME_DURATION_REAR       1.57f   
 
 typedef enum {
     LIFT_STATE_NORMAL = 0,
@@ -200,6 +200,8 @@ static void lift_state_task(void *pvParameters) {
     dm_motor_enable(&dm_motor_handle[0]);
     vTaskDelay(pdMS_TO_TICKS(10));
     dm_motor_enable(&dm_motor_handle[1]);
+
+    lift_set_chassis_mode(1);
 
     while (1) {
         if (g_lift_handle.lift_fsm.action == 0) {
@@ -447,7 +449,7 @@ static void lift_bottom_init(void) {
 
     for (int i = 0; i < 2; i++) {
         pid_init(&dji_2006_pid[i], 16384.0f, 500.0f, 2.0f, 15000.0f, POSITION_PID,
-                 2.30f, 0.001f, 0.00f);
+                 3.30f, 0.001f, 0.00f);
     }
 }
 
@@ -974,7 +976,8 @@ static void lift_down_step_drive_2006_backward(void) {
     }
 
     /* 检查中光电的下降沿 或 VL53L1 距离 >= 150mm，完成时清除开始 tick 并前进步骤 */
-    if (get_middle_photoelectric_falling_edge() || vl53l1_triggered) {
+    if (get_middle_photoelectric_falling_edge() || vl53l1_triggered){
+    // if ( vl53l1_triggered) 
         /* 记录本次耗时供调试（可选） */
         float total_time = elapsed_sec;
         g_lift_handle.step3_last_duration = total_time;

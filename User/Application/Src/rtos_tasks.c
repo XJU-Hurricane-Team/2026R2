@@ -42,7 +42,7 @@ void freertos_start(void) {
 void start_task(void *pvParameters) {
     UNUSED(pvParameters);
 
-    // log_init(LOG_DEBUG);
+    log_init(LOG_DEBUG);
     can_list_add_can(can1_selected, 4, 4);
     can_list_add_can(can2_selected, 4, 4);
     can_list_add_can(can3_selected, 4, 4);

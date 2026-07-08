@@ -436,6 +436,7 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
         switch (req_in->command_mode) {
             case 0:
                 lift_set_stair_mode(1); // 上台阶
+                log_message(LOG_INFO, "receive 2,0");
                 break;
             case 1:
                 lift_set_stair_mode(2); // 下台阶

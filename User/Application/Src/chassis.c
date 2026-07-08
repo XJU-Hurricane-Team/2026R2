@@ -35,7 +35,7 @@ typedef struct {
 } chassis_handle_t;
 
 static chassis_handle_t chassis_handle = {
-    .mode = CHASSIS_MODE_MANUAL,
+    .mode = CHASSIS_MODE_AUTO,
     .chassis_speed =
         {
             .target_rpm = {0.0f, 0.0f, 0.0f, 0.0f},
