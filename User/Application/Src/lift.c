@@ -845,6 +845,10 @@ static float lift_select_target_speed(float target_degree, float real_degree) {
 
 // 上升步骤1：等待前光电上升沿
 static void lift_up_step_wait_front_trigger(void) {
+    if(up_R1_flag) {
+        g_lift_handle.lift_fsm.step = 1;
+        return;
+    }
     if (get_front_photoelectric_rising_edge()) {
         log_message(LOG_INFO, "chassis up");
         lift_publish_if_auto(0);
@@ -896,6 +900,10 @@ static void lift_up_step_drive_2006_forward(void) {
     if (get_rear_photoelectric_rising_edge()) {
         step4_start_tick = 0;
         g_lift_handle.target_2006_rpm = 0.0f;
+        if(up_R1_flag) {
+            g_lift_handle.lift_fsm.step = 4;
+            return;
+        }
         g_lift_handle.lift_state = LIFT_STATE_UP;
         lift_set_target(LIFT_TARGET_DEG_UP_SEQ);
         g_lift_handle.lift_fsm.step = 4;
@@ -904,6 +912,11 @@ static void lift_up_step_drive_2006_forward(void) {
 
 // 上升步骤5：等待DM电机上升到位并完成序列
 static void lift_up_step_wait_up_arrived_and_finish(void) {
+    if(up_R1_flag) {
+        lift_publish_if_auto(1);
+        lift_finish_sequence();
+        return;
+    }
     if (dm_position_check(LIFT_STATE_UP)) {
         log_message(LOG_INFO, "dm arrived");
         lift_publish_if_auto(1);
