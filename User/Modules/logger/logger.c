@@ -218,35 +218,40 @@ void log_task(void *pvParameters) {
         });
 
         /* ---------------- 系统状态检测处理块 ---------------- */
-        size_t free_space = xMessageBufferSpaceAvailable(log_msg_buffer);
-        size_t current_usage = total_buffer_size - free_space;
+        if (log_msg_buffer != NULL) {
+            size_t free_space = xMessageBufferSpaceAvailable(log_msg_buffer);
+            size_t current_usage = total_buffer_size - free_space;
 
-        /* 缓存使用超过80% */
-        if (current_usage > threshold_80) {
-            // 打印一次警告
-            if (!warned_80_percent) {
-                char warn_str[128];
-                int len =
-                    snprintf(warn_str, sizeof(warn_str),
-                             "[LOG WARN] Buffer > 80%%! (%d/%d bytes)\r\n",
-                             (int)current_usage, (int)total_buffer_size);
-                if (len > 0) {
-                    log_msg_output_function(warn_str, len);
+            /* 缓存使用超过80% */
+            if (current_usage > threshold_80) {
+                // 打印一次警告
+                if (!warned_80_percent) {
+                    warned_80_percent = true;
+                    if (log_msg_output_function != NULL) {
+                        char warn_str[128];
+                        int len =
+                            snprintf(warn_str, sizeof(warn_str),
+                                     "[LOG WARN] Buffer > 80%%! (%d/%d bytes)\r\n",
+                                     (int)current_usage, (int)total_buffer_size);
+                        if (len > 0) {
+                            log_msg_output_function(warn_str, len);
+                        }
+                    }
                 }
-
-                warned_80_percent = true;
             }
-        }
-        // 降到 50% 以下，解除警报状态
-        else if (current_usage < threshold_50 && warned_80_percent) {
-            warned_80_percent = false;
-            char warn_str[128];
-            int len = snprintf(
-                warn_str, sizeof(warn_str),
-                "[LOG WARN] Buffer < 50%%, back to normal. (%d/%d bytes)\r\n",
-                (int)current_usage, (int)total_buffer_size);
-            if (len > 0) {
-                log_msg_output_function(warn_str, len);
+            // 降到 50% 以下，解除警报状态
+            else if (current_usage < threshold_50 && warned_80_percent) {
+                warned_80_percent = false;
+                if (log_msg_output_function != NULL) {
+                    char warn_str[128];
+                    int len = snprintf(
+                        warn_str, sizeof(warn_str),
+                        "[LOG WARN] Buffer < 50%%, back to normal. (%d/%d bytes)\r\n",
+                        (int)current_usage, (int)total_buffer_size);
+                    if (len > 0) {
+                        log_msg_output_function(warn_str, len);
+                    }
+                }
             }
         }
 

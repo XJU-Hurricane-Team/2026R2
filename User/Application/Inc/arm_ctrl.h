@@ -19,8 +19,8 @@
 #define ARM_REACH_JOINT_TOL_RAD 0.10f /**< 关节角到位判定容差 (rad) */
 
 #define ARM_USE_PUMP_ADC_CHECK  1     /**< 是否使用气泵ADC压力检测 */
-#define PUMP_ADC_READY_LOW      3500U /**< 抓取成功判定的低压阈值 */
-#define PUMP_ADC_READY_HIGH     3900U /**< 释放成功判定的高压阈值 */
+#define PUMP_ADC_READY_LOW      3700U /**< 抓取成功判定的低压阈值 */
+#define PUMP_ADC_READY_HIGH     4000U /**< 释放成功判定的高压阈值 */
 
 #define ARM_PUMP_PLACE_TIMEOUT_ENABLE                                          \
     1               /**< 放置态气泵超时检测使能 (0:禁用, 1:启用) */
