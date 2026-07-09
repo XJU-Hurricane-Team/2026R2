@@ -288,6 +288,7 @@ static void arm_update_motion_state(RobotArm *arm, float joint_target[3]) {
                 /* Step3 吸盘不锁，提前朝最终目标预转 */
                 arm->arm_joint_target[2] = arm->takeout_seq_suction_target;
             }
+            
             break;
 
         case ARM_MOTION_STATE_TAKEOUT_SEQ_FINAL:

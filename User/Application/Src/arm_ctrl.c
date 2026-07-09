@@ -205,7 +205,7 @@ void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
     float z_cam = y * sinf(theta) + z * cosf(theta);
 
     /* 旋转到机械臂水平坐标系 */
-    g_dynamic_target.y = y_cam * 1000.0f + 340.0f -
+    g_dynamic_target.y = y_cam * 1000.0f + 320.0f -
                          (CAM_TO_CAT_Y_OFFSET * cosf(theta) +
                           CAM_TO_CAT_Z_OFFSET * sinf(theta)) +
                          20.0f - 2.0f;
