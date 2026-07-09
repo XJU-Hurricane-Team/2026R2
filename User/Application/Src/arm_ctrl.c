@@ -626,6 +626,22 @@ static bool arm_is_motor_reached(void) {
  */
 static void arm_pump_catch_check(void) {
     pump_set_state(1); // 打开气泵
+
+#if ARM_PUMP_CATCH_TIMEOUT_ENABLE
+    /* 纯超时模式：电机到位后等待2秒自动完成抓取，不依赖ADC */
+    uint32_t wait_start_tick = HAL_GetTick();
+    while (g_robot_arm.status == ARM_STATE_CATCH ||
+           g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
+        if (HAL_GetTick() - wait_start_tick >= 2000U) {
+            log_message(LOG_INFO, "ARM_CATCH Timeout Success");
+            if (arm_return_enabel) {
+                control_dispatch_publish(1);
+            }
+            return;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+#else
     uint32_t wait_start_tick = HAL_GetTick();
     uint8_t retry_count = 0;
     float retry_offset_y = 0.0f;
@@ -707,6 +723,7 @@ static void arm_pump_catch_check(void) {
 
         vTaskDelay(pdMS_TO_TICKS(10));
     }
+#endif
 }
 
 /**
@@ -830,12 +847,12 @@ static uint8_t pump_read_adc_filtered(uint16_t *out_value) {
 /* 按键 → 状态索引 映射表，按需增删改 */
 static const uint8_t g_arm_key_index_map[][2] = {
     {10, 0},  /* INIT        */
-    {11, 4},  /* READY_1     */
+    {11, 4},  /* READY_4     */
     {12, 5},  /* CATCH       */
     {13, 6},  /* PLACE       */
     {14, 7},  /* WAIT_TAKEOUT*/
     {15, 8},  /* TAKEOUT_1   */
-    {16, 11}, /* TAKEOUT_2   */
+    {16, 11}, /* PUMP_CLOSE   */
 };
 #define ARM_KEY_MAP_COUNT                                                      \
     (sizeof(g_arm_key_index_map) / sizeof(g_arm_key_index_map[0]))

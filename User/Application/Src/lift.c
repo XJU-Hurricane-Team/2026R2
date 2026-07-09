@@ -883,7 +883,7 @@ static void lift_up_step_drive_2006_forward(void) {
     /* 2006 转速：up_R1_flag 为 true 时恒定 1500rpm，否则三段变速：
        0 ~ TIME_DURATION_FRONT: 低速, TIME_DURATION_FRONT ~ TIME_DURATION_REAR: 高速, > TIME_DURATION_REAR: 低速 */
     if (up_R1_flag) {
-        g_lift_handle.target_2006_rpm = 1500.0f;
+        g_lift_handle.target_2006_rpm = 2250.0f;
     } else if (elapsed_sec < TIME_DURATION_FRONT) {
         g_lift_handle.target_2006_rpm = LIFT_2006_LOW_SPEED;
     } else if (elapsed_sec < TIME_DURATION_REAR) {
