@@ -34,7 +34,7 @@ static void catch_head_apply_default_targets(void);
  * @note 使用 TIM1 CH1 作为舵机输出通道，并配置上下限脉宽
  */
 void catch_head_servo_init(void) {
-	servo_init(&g_gripper_servo, &htim4, TIM_CHANNEL_2, 2500, 1600);
+	servo_init(&g_gripper_servo, &htim4, TIM_CHANNEL_2, 1930, 1150);
 }
 
 /**
