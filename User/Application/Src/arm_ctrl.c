@@ -207,7 +207,7 @@ void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
                          (CAM_TO_CAT_Y_OFFSET * sinf(theta) +
                           CAM_TO_CAT_Z_OFFSET * cosf(theta)) +
                          30.0f;
-    g_dynamic_target.pitch = 0.1f; /* 末端吸盘姿态 (弧度，水平为0，下倾为负) */
+    g_dynamic_target.pitch = 0.05f; /* 末端吸盘姿态 (弧度，水平为0，下倾为负) */
     g_has_dynamic_target = 1;
 
     (void)x; //x不使用，仅用于底盘校准，与机械臂校准无关
@@ -239,7 +239,9 @@ uint8_t robot_arm_get_layer_count(void) {
 void robot_arm_set_layer_count(uint8_t count) {
     if (count <= 3) {
         g_layer_count = count;
+#if USE_FLASH
         arm_flash_save();
+#endif
     }
 }
 
@@ -710,7 +712,9 @@ static void arm_pump_place_check(bool publish_result) {
     if (g_layer_count == 2 && g_robot_arm.status == ARM_STATE_PLACE) {
         /* 放置完成：已放置数量+1 */
         g_layer_count++;
+#if USE_FLASH
         arm_flash_save();
+#endif
         if (publish_result) {
             control_dispatch_publish(2);
         }
@@ -728,7 +732,9 @@ static void arm_pump_place_check(bool publish_result) {
                 log_message(LOG_INFO, "ARM_PLACE Success, adc=%d", adc_val);
                 /* 放置完成：已放置数量+1 */
                 g_layer_count++;
+#if USE_FLASH
                 arm_flash_save();
+#endif
                 if (publish_result) {
                     control_dispatch_publish(2);
                 }
@@ -740,7 +746,9 @@ static void arm_pump_place_check(bool publish_result) {
         if (HAL_GetTick() - wait_start_tick >= 2000U) {
             /* 超时也算放置完成：已放置数量+1 */
             g_layer_count++;
+#if USE_FLASH
             arm_flash_save();
+#endif
             if (publish_result) {
                 control_dispatch_publish(2);
             }
