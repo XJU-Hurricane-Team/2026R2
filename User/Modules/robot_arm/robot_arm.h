@@ -265,9 +265,8 @@ typedef struct {
         last_target_quadrant; /**< 上一次目标所处的象限 (1: 正向象限, -1: 反向象限) */
     int8_t flip_transition_dir; /**< 机械臂象限翻转的方向指示 */
 
-    /* 放置层数 (0=底层, 1=中层, 2=顶层) */
-    uint8_t place_layer;   /**< 当前放置目标层数，用于选择过渡点 */
-    uint8_t takeout_layer; /**< 当前取出层数 (0~2)，逐层递减，独立于放置 */
+    /* 层数计数 (0=底层, 1=中层, 2=顶层)，放置与取出共用 */
+    uint8_t layer_count;
 
     /* 位域压缩标志位 (节省内存，优化布尔变量存储) */
     struct {

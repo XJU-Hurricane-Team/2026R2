@@ -368,7 +368,7 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
         }
 
     } else if (req_in->event == 1) {
-        arm_return_enabel = req_in->is_return;
+        arm_return_enabel = true;
         switch (req_in->command_mode) {
             case 0:
                 robot_arm_set_state_index(0); // 初始化

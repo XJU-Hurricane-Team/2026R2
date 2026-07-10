@@ -24,6 +24,7 @@
 #include "usart.h"
 #include "tim.h"
 #include "gpio.h"
+
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <bsp.h>
@@ -102,6 +103,7 @@ int main(void)
   MX_TIM5_Init();
   MX_TIM3_Init();
   MX_TIM4_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
   bsp_init();
   freertos_start();

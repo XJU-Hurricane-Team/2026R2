@@ -48,8 +48,7 @@ void WS2812_SetColor(uint16_t led_index, uint32_t color) {
  * @brief  启动硬件 DMA 发送 
  */
 void WS2812_Send(void) {
-  
-    // HAL_TIM_PWM_Start_DMA(&htim1, TIM_CHANNEL_1, (uint32_t *)pwm_data, (NUM_LEDS * 24 + RESET_PULSES));
+    HAL_TIM_PWM_Start_DMA(&htim1, TIM_CHANNEL_1, (uint32_t *)pwm_data, (NUM_LEDS * 24 + RESET_PULSES));
 }
 
 

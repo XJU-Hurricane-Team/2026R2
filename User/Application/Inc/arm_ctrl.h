@@ -26,9 +26,7 @@
     1               /**< 放置态气泵超时检测使能 (0:禁用, 1:启用) */
 #define ARM_PUMP_CATCH_TIMEOUT_ENABLE                                          \
     1 /**< 抓取/待取态纯超时使能 (电机到位后等2秒自动抓取, 0:原ADC重试逻辑) */
-#define USE_FLASH 0 /**< 是否使用Flash存储放置/取出层级 (0:禁用, 1:启用) */
-#define ARM_PLACE_INC_ON_ENTRY                                                 \
-    0 /**< 【测试】切到PLACE态即递增放置索引 (0:禁用, 1:启用) */
+#define USE_FLASH 1 /**< 是否使用Flash存储层数 (0:禁用, 1:启用) */
 
 #define CATCH_READY_2_ANGEL                                                    \
     -0.893f /**< READY_2 吸盘关节相对于水平面旋转角度 (rad) */
@@ -73,7 +71,7 @@ void robot_arm_set_dynamic_catch_target_up(float y, float x, float z);
 void robot_arm_set_dynamic_catch_target_down(float y, float x, float z);
 void robot_arm_set_dynamic_catch_target_up2(float y, float x, float z);
 void robot_arm_set_dynamic_catch_target_down2(float y, float x, float z);
-void robot_arm_set_place_index(uint8_t place_idx);
-void robot_arm_set_wait_takeout_index(uint8_t takeout_idx);
+uint8_t robot_arm_get_layer_count(void);
+void robot_arm_set_layer_count(uint8_t count);
 
 #endif /* __ARM_CTRL_H */

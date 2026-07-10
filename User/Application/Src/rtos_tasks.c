@@ -8,6 +8,8 @@
 
 #include "includes.h"
 #include "vl53l1/vl53l1_apply.h"
+#include "arm_ctrl.h"
+#include "ws2812/ws2812.h"
 static void log_task_stack_usage(TaskHandle_t task_handle,
                                  const char *task_name,
                                  configSTACK_DEPTH_TYPE stack_words);
@@ -18,6 +20,9 @@ void start_task(void *pvParameters);
 
 static TaskHandle_t task1_handle;
 void task1(void *pvParameters);
+
+static TaskHandle_t task2_handle;
+void task2(void *pvParameters);
                                   
 static TaskHandle_t microros_task_handle;
 void microros_task(void *pvParameters);
@@ -83,50 +88,51 @@ void start_task(void *pvParameters) {
 // uint16_t cur_dist_mm2 = 0;
 // uint16_t cur_dist_mm = 0;
 /**
- * @brief Task1: VL53L1 距离跳变测试 + LED 指示
- *
- * @param pvParameters Start parameters.
+ * @brief Task1: 按键扫描 + WS2812 层数反馈
  */
 void task1(void *pvParameters) {
     UNUSED(pvParameters);
     LED0_OFF();
 
+    uint8_t last_layer = 0xFF; /* 上一次显示的层数，用于减少WS2812刷新 */
+
     while (1) {
         LED0_TOGGLE();
 
-        // /* ---- 读取 VL53L1 距离 ---- */
-        // vl53l1_apply_get_distance_mm(&cur_dist_mm2, g_vl53l1_handle2);
-        // vl53l1_apply_get_distance_mm(&cur_dist_mm, g_vl53l1_handle);
-        // if (vl53l1_apply_get_distance_mm(&cur_dist_mm, g_vl53l1_handle2)) {
-        //     /* 距离跳变检测：delta ∈ [150, 300] mm 时计数 */
-        //     if (s_test_has_last && s_test_last_dist_mm > 0) {
-        //         uint16_t delta;
-        //         if (cur_dist_mm > s_test_last_dist_mm) {
-        //             delta = cur_dist_mm - s_test_last_dist_mm;
-        //         } else {
-        //             delta = s_test_last_dist_mm - cur_dist_mm;
-        //         }
-        //         if (delta >= 150 && delta <= 300) {
-        //             s_test_delta_trigger_count++;
-        //         }
-        //     }
-        //     s_test_last_dist_mm = cur_dist_mm;
-        //     s_test_has_last = true;
+        /* 按键扫描：KEY0 递减，KEY1 递增 */
+        key_press_t key = key_scan(0);
+        uint8_t layer = robot_arm_get_layer_count();
 
-            /* LED3: 距离 >= 150mm 亮灯 */
-            // if (cur_dist_mm >= 150) {
-            //     LED3_ON();
-            // } else {
-            //     LED3_OFF();
-            // }
-            // if (cur_dist_mm2 >= 150) {
-            //     LED2_ON();
-            // } else {
-            //     LED2_OFF();
-            // }
-        //}
+        if (key == KEY0_PRESS) {
+            layer = (layer == 0) ? 3 : (layer - 1);
+            robot_arm_set_layer_count(layer);
+        } else if (key == KEY1_PRESS) {
+            layer = (layer + 1) % 4;
+            robot_arm_set_layer_count(layer);
+        }
 
-        vTaskDelay(1000);
+        /* WS2812 灯带反馈当前已放置数量 */
+        layer = robot_arm_get_layer_count();
+        if (layer != last_layer) {
+            last_layer = layer;
+            uint8_t led_count = layer * 7; /* 0→0, 1→7, 2→14, 3→21 */
+            uint32_t color;
+            if (layer == 0) {
+                color = COLOR_OFF;
+            } else if (layer == 1) {
+                color = COLOR_GREEN;
+            } else if (layer == 2) {
+                color = COLOR_YELLOW;
+            } else {
+                color = COLOR_RED;
+            }
+            for (int i = 0; i < NUM_LEDS; i++) {
+                WS2812_SetColor(i, (i < led_count) ? color : COLOR_OFF);
+            }
+            WS2812_Send();
+        }
+
+        vTaskDelay(50);
     }
 }
 

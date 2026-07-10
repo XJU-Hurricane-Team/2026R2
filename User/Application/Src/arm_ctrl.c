@@ -14,24 +14,20 @@
 #if USE_FLASH
 #include "flash_store/flash_store.h"
 
-/** @brief Flash 存储放置/取出层级索引（user_data: [0]=0xA5有效标记, [1]=place, [2]=takeout） */
+/** @brief Flash 存储层数索引（user_data: [0]=0xA5有效标记, [1]=layer_count） */
 #define arm_flash_save()                                                       \
     do {                                                                       \
-        uint8_t _buf[3] = {0xA5, g_place_target_index,                         \
-                           g_wait_takeout_target_index};                       \
+        uint8_t _buf[2] = {0xA5, g_layer_count};                               \
         flash_store_user_write(_buf, sizeof(_buf));                            \
     } while (0)
 
-/** @brief 从 Flash 恢复放置/取出层级索引 */
+/** @brief 从 Flash 恢复层数索引 */
 #define arm_flash_load()                                                       \
     do {                                                                       \
-        uint8_t _buf[3];                                                       \
+        uint8_t _buf[2];                                                       \
         flash_store_user_read(_buf, sizeof(_buf));                             \
-        if (_buf[0] == 0xA5) {                                                 \
-            if (_buf[1] <= 2U)                                                 \
-                g_place_target_index = _buf[1];                                \
-            if (_buf[2] <= 2U)                                                 \
-                g_wait_takeout_target_index = _buf[2];                         \
+        if (_buf[0] == 0xA5 && _buf[1] <= 3U) {                                \
+            g_layer_count = _buf[1];                                           \
         }                                                                      \
     } while (0)
 #else
@@ -62,10 +58,8 @@ static uint8_t g_last_target_index;           /* 上一次下发的目标状态�
 static uint8_t g_place_return_sequence_active = 0; /* 放置后回位组合动作标志 */
 static uint8_t g_place_return_target_index = 0; /* 放置完成后跳转的目标状态 */
 
-static uint8_t g_place_target_index =
-    ARM_PLACE_START_LAYER; /* 放置层级索引 (0~2), 初始底层 */
-static uint8_t g_wait_takeout_target_index =
-    ARM_TAKEOUT_START_LAYER;                      /* 待取出层级索引 (0~2) */
+static uint8_t g_layer_count =
+    ARM_PLACE_START_LAYER; /* 层数计数 (0~2), 放置与取出共用 */
 static arm_target_point_t g_dynamic_target = {0}; /* 动态抓取目标点 (mm/rad) */
 static uint8_t g_has_dynamic_target = 0;          /* 是否存在动态抓取目标 */
 
@@ -213,6 +207,7 @@ void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
                          (CAM_TO_CAT_Y_OFFSET * sinf(theta) +
                           CAM_TO_CAT_Z_OFFSET * cosf(theta)) +
                          30.0f;
+    g_dynamic_target.pitch = 0.1f; /* 末端吸盘姿态 (弧度，水平为0，下倾为负) */
     g_has_dynamic_target = 1;
 
     (void)x; //x不使用，仅用于底盘校准，与机械臂校准无关
@@ -237,23 +232,14 @@ void robot_arm_set_dynamic_catch_target_down2(float y, float x, float z) {
     (void)x; //x不使用，仅用于底盘校准，与机械臂校准无关
 }
 
-/**
- * @brief 手动设置放置层级索引 (临时覆盖)
- * @param place_idx 放置层级索引 (0~2)
- */
-void robot_arm_set_place_index(uint8_t place_idx) {
-    if (place_idx < 3) {
-        g_place_target_index = place_idx;
-    }
+uint8_t robot_arm_get_layer_count(void) {
+    return g_layer_count;
 }
 
-/**
- * @brief 手动设置待取出层级索引 (临时覆盖)
- * @param takeout_idx 待取出层级索引 (0~2)
- */
-void robot_arm_set_wait_takeout_index(uint8_t takeout_idx) {
-    if (takeout_idx < 3) {
-        g_wait_takeout_target_index = takeout_idx;
+void robot_arm_set_layer_count(uint8_t count) {
+    if (count <= 3) {
+        g_layer_count = count;
+        arm_flash_save();
     }
 }
 
@@ -368,12 +354,11 @@ static void arm_feedback_task(void *pvParameters) {
 
         g_robot_arm.arm_motion_active = 0;
 
-        /* 取出态到位时，取出层级递减 */
+        /* 取出态到位时，已放置数量递减 */
         if (arm_is_takeout_state(current_status)) {
-            g_wait_takeout_target_index =
-                (g_wait_takeout_target_index == 0)
-                    ? 2
-                    : (g_wait_takeout_target_index - 1);
+            if (g_layer_count > 0) {
+                g_layer_count--;
+            }
 #if USE_FLASH
             arm_flash_save();
 #endif
@@ -399,12 +384,12 @@ static void arm_feedback_task(void *pvParameters) {
                     g_place_return_sequence_active = 0;
                     g_place_return_target_index = 0;
                     if (arm_return_enabel) {
-                        control_dispatch_publish(1); // 成功抓取
+                        control_dispatch_publish(2); // 成功抓取
                     }
 
                 } else {
                     if (arm_return_enabel) {
-                        control_dispatch_publish(1); // 成功抓取
+                        control_dispatch_publish(2); // 成功抓取
                     }
                 }
                 break;
@@ -429,17 +414,6 @@ void robot_arm_set_state_index(uint8_t index) {
         return;
     }
     g_arm_target_index = index;
-
-#if ARM_PLACE_INC_ON_ENTRY
-    /* 【测试】切到 PLACE 态立即递增放置索引，不动机械臂即可验证 Flash 存储 */
-    if (index == 6) {
-        g_place_target_index = (g_place_target_index + 1) % 3;
-        arm_flash_save();
-        log_message(LOG_INFO, "ARM_TEST place=%d takeout=%d",
-                    g_place_target_index, g_wait_takeout_target_index);
-    }
-#endif
-
     robot_arm_apply_target(index);
 }
 
@@ -490,21 +464,23 @@ void robot_arm_apply_target(uint8_t index) {
         g_has_dynamic_target = 0;
     }
 
-    /* 放置层级点位覆盖 */
+    /* 放置层级点位覆盖: g_layer_count=已放置数, 即下一个空位 */
     if (g_robot_arm.status == ARM_STATE_PLACE) {
-        target_y = g_arm_place_points[g_place_target_index].y;
-        target_z = g_arm_place_points[g_place_target_index].z;
-        target_pitch = g_arm_place_points[g_place_target_index].pitch;
-        g_robot_arm.place_layer = g_place_target_index;
+        uint8_t idx = (g_layer_count < 3) ? g_layer_count : 2;
+        target_y = g_arm_place_points[idx].y;
+        target_z = g_arm_place_points[idx].z;
+        target_pitch = g_arm_place_points[idx].pitch;
+        g_robot_arm.layer_count = idx;
     }
 
-    /* 待取出层级点位覆盖 */
+    /* 待取出层级点位覆盖: 顶层 = g_layer_count - 1 */
     if (g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
-        target_y = g_arm_wait_takeout_points[g_wait_takeout_target_index].y;
-        target_z = g_arm_wait_takeout_points[g_wait_takeout_target_index].z;
+        uint8_t idx = (g_layer_count > 0) ? (g_layer_count - 1) : 0;
+        target_y = g_arm_wait_takeout_points[idx].y;
+        target_z = g_arm_wait_takeout_points[idx].z;
         target_pitch =
-            g_arm_wait_takeout_points[g_wait_takeout_target_index].pitch;
-        g_robot_arm.takeout_layer = g_wait_takeout_target_index;
+            g_arm_wait_takeout_points[idx].pitch;
+        g_robot_arm.layer_count = idx;
     }
 
     /**
@@ -517,8 +493,8 @@ void robot_arm_apply_target(uint8_t index) {
     if (arm_is_takeout_state(g_robot_arm.status) &&
         !arm_is_ready_state(prev_status)) {
 
-        /* 设定取出层数（独立于 place_layer） */
-        g_robot_arm.takeout_layer = g_wait_takeout_target_index;
+        /* 设定层数（物理层索引 = 已放置数 - 1） */
+        g_robot_arm.layer_count = (g_layer_count > 0) ? (g_layer_count - 1) : 0;
 
         float wait_takeout_suction_angle = g_arm_reach_target_joint[2];
         robot_arm_start_takeout_sequence(&g_robot_arm, target_y, target_z,
@@ -635,7 +611,7 @@ static void arm_pump_catch_check(void) {
         if (HAL_GetTick() - wait_start_tick >= 2000U) {
             log_message(LOG_INFO, "ARM_CATCH Timeout Success");
             if (arm_return_enabel) {
-                control_dispatch_publish(1);
+                control_dispatch_publish(2);
             }
             return;
         }
@@ -657,7 +633,7 @@ static void arm_pump_catch_check(void) {
             if (adc_val < PUMP_ADC_READY_LOW) {
                 log_message(LOG_INFO, "ARM_CATCH Success, adc=%d", adc_val);
                 if (arm_return_enabel) {
-                    control_dispatch_publish(1); // 成功抓取
+                    control_dispatch_publish(2); // 成功抓取
                 }
                 return;
             }
@@ -666,7 +642,7 @@ static void arm_pump_catch_check(void) {
         // 未开启 ADC 检测，延时默认成功
         if (HAL_GetTick() - wait_start_tick >= 4000U) {
             if (arm_return_enabel) {
-                control_dispatch_publish(1); // 成功抓取
+                control_dispatch_publish(2); // 成功抓取
             }
             return;
         }
@@ -677,7 +653,7 @@ static void arm_pump_catch_check(void) {
 #if ARM_USE_PUMP_ADC_CHECK
 
             if (retry_count < 8) {
-                if (g_wait_takeout_target_index != 0) {
+                if (g_layer_count != 0) {
                     if (g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
                         retry_offset_y -= 20.0f;
                     } else if (g_robot_arm.status == ARM_STATE_CATCH) {
@@ -690,7 +666,7 @@ static void arm_pump_catch_check(void) {
                                                 g_robot_arm.final_target_z,
                                                 g_robot_arm.final_target_pitch);
                     g_robot_arm.arm_target_y = new_y;
-                } else if (g_wait_takeout_target_index == 0) {
+                } else if (g_layer_count == 0) {
                     retry_offset_z -= 10.0f;
                     float new_z = g_robot_arm.final_target_z + retry_offset_z;
 
@@ -716,7 +692,7 @@ static void arm_pump_catch_check(void) {
 #endif
             // 重试耗尽，抓取失败
             if (arm_return_enabel) {
-                control_dispatch_publish(1); // 成功抓取
+                control_dispatch_publish(2); // 成功抓取
             }
             return;
         }
@@ -730,14 +706,13 @@ static void arm_pump_catch_check(void) {
  * @brief 执行放置状态下的压力释放检测
  */
 static void arm_pump_place_check(bool publish_result) {
-    /* 第3层（索引2）不关气泵，但仍需递增层级 */
-    if (g_place_target_index == 2 && g_robot_arm.status == ARM_STATE_PLACE) {
-#if !ARM_PLACE_INC_ON_ENTRY
-        g_place_target_index = (g_place_target_index + 1) % 3;
+    /* 第3层（索引2）不关气泵 */
+    if (g_layer_count == 2 && g_robot_arm.status == ARM_STATE_PLACE) {
+        /* 放置完成：已放置数量+1 */
+        g_layer_count++;
         arm_flash_save();
-#endif
         if (publish_result) {
-            control_dispatch_publish(1);
+            control_dispatch_publish(2);
         }
         return;
     }
@@ -751,15 +726,11 @@ static void arm_pump_place_check(bool publish_result) {
         if (pump_read_adc_filtered(&adc_val)) {
             if (adc_val > PUMP_ADC_READY_HIGH) {
                 log_message(LOG_INFO, "ARM_PLACE Success, adc=%d", adc_val);
-                /* 放置完成：层级累加 */
-                if (g_robot_arm.status == ARM_STATE_PLACE) {
-#if !ARM_PLACE_INC_ON_ENTRY
-                    g_place_target_index = (g_place_target_index + 1) % 3;
-                    arm_flash_save();
-#endif
-                }
+                /* 放置完成：已放置数量+1 */
+                g_layer_count++;
+                arm_flash_save();
                 if (publish_result) {
-                    control_dispatch_publish(1);
+                    control_dispatch_publish(2);
                 }
                 return;
             }
@@ -767,15 +738,11 @@ static void arm_pump_place_check(bool publish_result) {
 #endif
 #if ARM_PUMP_PLACE_TIMEOUT_ENABLE
         if (HAL_GetTick() - wait_start_tick >= 2000U) {
-            /* 超时也认为放置完成，层级累加 */
-            if (g_robot_arm.status == ARM_STATE_PLACE) {
-#if !ARM_PLACE_INC_ON_ENTRY
-                g_place_target_index = (g_place_target_index + 1) % 3;
-                arm_flash_save();
-#endif
-            }
+            /* 超时也算放置完成：已放置数量+1 */
+            g_layer_count++;
+            arm_flash_save();
             if (publish_result) {
-                control_dispatch_publish(1);
+                control_dispatch_publish(2);
             }
             return;
         }
@@ -866,13 +833,12 @@ static void arm_remote_state_switch(uint8_t key, remote_key_event_t event) {
     UNUSED(event);
 
 #if USE_FLASH
-    /* 按键16: 擦除Flash存储，恢复默认层级 */
+    /* 按键16: 擦除Flash存储，恢复默认层数 */
     if (key == 16) {
         flash_store_erase();
-        g_place_target_index = ARM_PLACE_START_LAYER;
-        g_wait_takeout_target_index = ARM_TAKEOUT_START_LAYER;
-        log_message(LOG_INFO, "ARM_FLASH erased, place=%d takeout=%d",
-                    ARM_PLACE_START_LAYER, ARM_TAKEOUT_START_LAYER);
+        g_layer_count = ARM_PLACE_START_LAYER;
+        log_message(LOG_INFO, "ARM_FLASH erased, layer=%d",
+                    ARM_PLACE_START_LAYER);
         return;
     }
 #endif

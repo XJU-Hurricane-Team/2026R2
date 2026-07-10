@@ -172,9 +172,9 @@ static void arm_update_motion_state(RobotArm *arm, float joint_target[3]) {
                     /* 三点过渡完成，根据层数决定是否进入过冲序列 */
                     float overshoot_by_layer =
                         ARM_BIG_ARM_FLIP_OVERSHOOT_FORCE_RAD -
-                        arm->place_layer * 0.30f;
+                        arm->layer_count * 0.30f;
                     /* 第一层过冲额外多加0.05rad */
-                    if (arm->place_layer == 0) {
+                    if (arm->layer_count == 0) {
                         overshoot_by_layer += 0.2f;
                     }
                     if (overshoot_by_layer < 0.0f) {
@@ -269,7 +269,7 @@ static void arm_update_motion_state(RobotArm *arm, float joint_target[3]) {
                 arm->flags.big_arm_wait_locked_inited = 0;
                 arm->flags.suction_wait_locked_inited = 0;
                 /* 小臂旋转一定角度（基于取出层数） */
-                float step = (arm->takeout_layer == 2)
+                float step = (arm->layer_count == 2)
                                  ? ARM_TAKEOUT_SEQ_SMALL_ARM_STEP_RAD_LAYER2
                                  : ARM_TAKEOUT_SEQ_SMALL_ARM_STEP_RAD;
                 arm->arm_joint_target[1] = arm->damiao_3.position - step;
@@ -617,7 +617,7 @@ void robot_arm_system_init(RobotArm *arm) {
     arm->joint_cmd_prev[1] = DEFAULT_ANGLE_2;
     arm->joint_cmd_prev[2] = DEFAULT_ANGLE_3;
     arm->big_arm_cmd_filtered = DEFAULT_ANGLE_1;
-    arm->takeout_layer = ARM_TAKEOUT_START_LAYER;
+    arm->layer_count = ARM_TAKEOUT_START_LAYER;
 }
 
 /**
@@ -706,10 +706,7 @@ void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch) {
         arm->trans_y[1] = 372.826f;
         arm->trans_z[1] = 835.271f;
         arm->trans_pitch[1] = PI / 2.0f;
-        /* 根据当前状态选择层数：放置用 place_layer，待取出用 takeout_layer */
-        uint8_t layer = (arm->status == ARM_STATE_WAIT_TAKEOUT)
-                            ? arm->takeout_layer
-                            : arm->place_layer;
+        uint8_t layer = arm->layer_count;
         if (layer == 1) {
             arm->trans_y[2] = 30.000f;
             arm->trans_z[2] = 850.000f;
@@ -844,7 +841,7 @@ uint8_t robot_arm_start_takeout_sequence(RobotArm *arm, float y, float z,
     /* Step1: 大臂过冲目标（二层减少0.25 rad） */
     float big_arm_overshoot_target =
         arm->damiao_1.position + ARM_TAKEOUT_SEQ_BIG_ARM_STEP_RAD * 2 + 0.2;
-    if (arm->takeout_layer == 1) {
+    if (arm->layer_count == 1) {
         big_arm_overshoot_target -= 0.45f;
     }
     if (big_arm_overshoot_target < ARM_BIG_ARM_MIN_ANGLE_RAD) {
