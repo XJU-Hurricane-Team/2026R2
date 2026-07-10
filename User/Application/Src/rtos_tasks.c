@@ -7,7 +7,6 @@
  */
 
 #include "includes.h"
-#include "vl53l1/vl53l1_apply.h"
 #include "arm_ctrl.h"
 #include "ws2812/ws2812.h"
 static void log_task_stack_usage(TaskHandle_t task_handle,
@@ -20,9 +19,6 @@ void start_task(void *pvParameters);
 
 static TaskHandle_t task1_handle;
 void task1(void *pvParameters);
-
-static TaskHandle_t task2_handle;
-void task2(void *pvParameters);
                                   
 static TaskHandle_t microros_task_handle;
 void microros_task(void *pvParameters);
@@ -78,15 +74,6 @@ void start_task(void *pvParameters) {
 
     vTaskDelete(NULL);
 }
-// uint16_t dist1 = 0;
-// uint16_t dist2 = 0;
-
-/* VL53L1 距离跳变测试——统计 15~30cm 跳变次数 */
-// static uint16_t s_test_last_dist_mm = 0;
-// static bool     s_test_has_last = false;
-// static uint32_t s_test_delta_trigger_count = 0;  /* 触发次数计数器 */
-// uint16_t cur_dist_mm2 = 0;
-// uint16_t cur_dist_mm = 0;
 /**
  * @brief Task1: PA1 层数切换 + WS2812 层数反馈
  */

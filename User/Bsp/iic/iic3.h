@@ -10,13 +10,13 @@
 #include <cubemx.h>
 
 /* ========== I2C3 引脚宏定义（请按实际接线修改） ========== */
-#define IIC3_SCL_GPIO_PORT     GPIOA
-#define IIC3_SCL_GPIO_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
-#define IIC3_SCL_GPIO_PIN      GPIO_PIN_6
+#define IIC3_SCL_GPIO_PORT     GPIOD
+#define IIC3_SCL_GPIO_ENABLE() __HAL_RCC_GPIOD_CLK_ENABLE()
+#define IIC3_SCL_GPIO_PIN      GPIO_PIN_9
 
-#define IIC3_SDA_GPIO_PORT     GPIOA
-#define IIC3_SDA_GPIO_ENABLE() __HAL_RCC_GPIOA_CLK_ENABLE()
-#define IIC3_SDA_GPIO_PIN      GPIO_PIN_7
+#define IIC3_SDA_GPIO_PORT     GPIOD
+#define IIC3_SDA_GPIO_ENABLE() __HAL_RCC_GPIOD_CLK_ENABLE()
+#define IIC3_SDA_GPIO_PIN      GPIO_PIN_8
 
 /* ========== I2C3 操作宏 ========== */
 #define IIC3_SCL(x)                                                            \

@@ -10,6 +10,7 @@
 #include "arm_ctrl.h"
 #include "microros_ctrl.h"
 #include "adc.h"
+#include "vl53l1/vl53l1_apply.h"
 
 #if USE_FLASH
 #include "flash_store/flash_store.h"
@@ -600,10 +601,93 @@ static bool arm_is_motor_reached(void) {
 /** @{ */
 
 /**
- * @brief 执行抓取状态下的气压检测与重试逻辑
+ * @brief 执行抓取状态下的检测与重试逻辑
+ * @note ARM_USE_VL53L1_CATCH=1 时使用 VL53L1 测距判定（距离 < 阈值即成功）；
+ *       =0 时使用原有 ADC 气压 / 超时判定逻辑。
  */
 static void arm_pump_catch_check(void) {
     pump_set_state(1); // 打开气泵
+
+#if ARM_USE_VL53L1_CATCH
+    /* ========== VL53L1 测距模式 ========== */
+    vl53l1_apply_start_measurement(g_vl53l1_handle3);
+
+    uint32_t wait_start_tick = HAL_GetTick();
+    uint8_t retry_count = 0;
+    float retry_offset_y = 0.0f;
+    float retry_offset_z = 0.0f;
+
+    while (g_robot_arm.status == ARM_STATE_CATCH ||
+           g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
+
+        /* VL53L1 测距检测：距离 < 阈值 判定抓取成功 */
+        {
+            uint16_t dist_mm = 0;
+            if (vl53l1_apply_get_distance_mm(&dist_mm, g_vl53l1_handle3)) {
+                if (dist_mm > 0 && dist_mm < ARM_VL53L1_CATCH_DISTANCE_MM) {
+                    log_message(LOG_INFO, "ARM_CATCH Success, dist=%d mm",
+                                dist_mm);
+                    vl53l1_apply_stop_measurement(g_vl53l1_handle3);
+                    if (arm_return_enabel) {
+                        control_dispatch_publish(2);
+                    }
+                    return;
+                }
+            }
+        }
+
+        /* 超时与推进重试逻辑 */
+        if (HAL_GetTick() - wait_start_tick >= 800U) {
+            if (retry_count < 8) {
+                if (g_layer_count != 0) {
+                    if (g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
+                        retry_offset_y -= 20.0f;
+                    } else if (g_robot_arm.status == ARM_STATE_CATCH) {
+                        retry_offset_y += 20.0f;
+                    }
+                    float new_y = g_robot_arm.final_target_y + retry_offset_y;
+                    robot_arm_mark_reach_target(new_y,
+                                                g_robot_arm.final_target_z,
+                                                g_robot_arm.final_target_pitch);
+                    g_robot_arm.arm_target_y = new_y;
+                } else if (g_layer_count == 0) {
+                    retry_offset_z -= 10.0f;
+                    float new_z = g_robot_arm.final_target_z + retry_offset_z;
+                    robot_arm_mark_reach_target(g_robot_arm.final_target_y,
+                                                new_z,
+                                                g_robot_arm.final_target_pitch);
+                    g_robot_arm.arm_target_z = new_z;
+                }
+
+                g_robot_arm.motion_state = ARM_MOTION_STATE_DIRECT_MOVE;
+
+                while (!arm_is_motor_reached() &&
+                       (g_robot_arm.status == ARM_STATE_CATCH ||
+                        g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT)) {
+                    vTaskDelay(pdMS_TO_TICKS(10));
+                }
+
+                wait_start_tick = HAL_GetTick();
+                retry_count++;
+                continue;
+            }
+
+            /* 重试耗尽，超时也算抓取成功 */
+            log_message(LOG_INFO, "ARM_CATCH Timeout");
+            vl53l1_apply_stop_measurement(g_vl53l1_handle3);
+            if (arm_return_enabel) {
+                control_dispatch_publish(2);
+            }
+            return;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    vl53l1_apply_stop_measurement(g_vl53l1_handle3);
+
+#else
+    /* ========== 原有 ADC 气压 / 超时判定模式 ========== */
 
 #if ARM_PUMP_CATCH_TIMEOUT_ENABLE
     /* 纯超时模式：电机到位后等待2秒自动完成抓取，不依赖ADC */
@@ -701,7 +785,8 @@ static void arm_pump_catch_check(void) {
 
         vTaskDelay(pdMS_TO_TICKS(10));
     }
-#endif
+#endif /* ARM_PUMP_CATCH_TIMEOUT_ENABLE */
+#endif /* ARM_USE_VL53L1_CATCH */
 }
 
 /**

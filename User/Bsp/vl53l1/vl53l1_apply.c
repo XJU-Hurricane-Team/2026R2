@@ -15,8 +15,8 @@
 #define VL53L1_1_XSHUT_GPIO_PIN           GPIO_PIN_10
 #define VL53L1_2_XSHUT_GPIO_PORT          GPIOA
 #define VL53L1_2_XSHUT_GPIO_PIN           GPIO_PIN_7
-#define VL53L1_3_XSHUT_GPIO_PORT          GPIOB
-#define VL53L1_3_XSHUT_GPIO_PIN           GPIO_PIN_10
+#define VL53L1_3_XSHUT_GPIO_PORT          GPIOD
+#define VL53L1_3_XSHUT_GPIO_PIN           GPIO_PIN_11
 
 /* ========== 每个传感器绑定的软件 I2C 总线 ID ========== */
 #define VL53L1_1_I2C_BUS_ID               0  /* I2C1: PC6/PC7 */
@@ -34,7 +34,7 @@ VL53L1_Dev_t g_vl53l1_dev3;
 VL53L1_DEV g_vl53l1_handle3 = &g_vl53l1_dev3;
 
 /* ========== 每个设备独立的就绪标志 ========== */
-static bool g_vl53l1_ready[3] = {false, false, false};
+static bool g_vl53l1_ready[3] = {true, true, true};
 
 /* ---- 辅助：根据句柄获取就绪标志 ---- */
 static bool *vl53l1_get_ready_ptr(VL53L1_DEV handle) {
@@ -109,13 +109,28 @@ void vl53l1_apply_init(void) {
     g_vl53l1_handle3->I2cDevAddr = VL53L1_APPLY_I2C_ADDR;
     g_vl53l1_handle3->i2c_bus_id = VL53L1_3_I2C_BUS_ID;
 
-    /* ---- 3. 全部 XSHUT 拉低复位 ---- */
+    /* ---- 3. 配置 XSHUT 引脚为输出模式（CubeMX 默认可能为模拟） ---- */
+    {
+        GPIO_InitTypeDef gpio = {0};
+        gpio.Mode = GPIO_MODE_OUTPUT_PP;
+        gpio.Pull = GPIO_NOPULL;
+        gpio.Speed = GPIO_SPEED_FREQ_LOW;
+
+        gpio.Pin = VL53L1_1_XSHUT_GPIO_PIN;
+        HAL_GPIO_Init(VL53L1_1_XSHUT_GPIO_PORT, &gpio);
+        gpio.Pin = VL53L1_2_XSHUT_GPIO_PIN;
+        HAL_GPIO_Init(VL53L1_2_XSHUT_GPIO_PORT, &gpio);
+        gpio.Pin = VL53L1_3_XSHUT_GPIO_PIN;
+        HAL_GPIO_Init(VL53L1_3_XSHUT_GPIO_PORT, &gpio);
+    }
+
+    /* ---- 4. 全部 XSHUT 拉低复位 ---- */
     HAL_GPIO_WritePin(VL53L1_1_XSHUT_GPIO_PORT, VL53L1_1_XSHUT_GPIO_PIN, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(VL53L1_2_XSHUT_GPIO_PORT, VL53L1_2_XSHUT_GPIO_PIN, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(VL53L1_3_XSHUT_GPIO_PORT, VL53L1_3_XSHUT_GPIO_PIN, GPIO_PIN_RESET);
     vTaskDelay(pdMS_TO_TICKS(10));
 
-    /* ---- 4. 逐一初始化各传感器 ---- */
+    /* ---- 5. 逐一初始化各传感器 ---- */
     g_vl53l1_ready[0] = vl53l1_apply_init_single(g_vl53l1_handle,
                             VL53L1_1_XSHUT_GPIO_PORT, VL53L1_1_XSHUT_GPIO_PIN);
     g_vl53l1_ready[1] = vl53l1_apply_init_single(g_vl53l1_handle2,
@@ -123,7 +138,7 @@ void vl53l1_apply_init(void) {
     g_vl53l1_ready[2] = vl53l1_apply_init_single(g_vl53l1_handle3,
                             VL53L1_3_XSHUT_GPIO_PORT, VL53L1_3_XSHUT_GPIO_PIN);
 
-    /* ---- 5. 初始化后默认关闭测距 ---- */
+    /* ---- 6. 初始化后默认关闭测距 ---- */
     vl53l1_apply_stop_measurement(g_vl53l1_handle);
     vl53l1_apply_stop_measurement(g_vl53l1_handle2);
     vl53l1_apply_stop_measurement(g_vl53l1_handle3);
@@ -172,9 +187,8 @@ bool vl53l1_apply_get_distance_mm(uint16_t *distance_mm, VL53L1_DEV handle) {
             VL53L1_StopMeasurement(handle);
             if (vl53l1_apply_configure(handle)) {
                 VL53L1_StartMeasurement(handle);
-            } else {
-                *ready = false;
             }
+            /* 即使重配置失败也不标记永久不可用，下次还会重试 */
             *err_p = 0;
         }
         /* 单次错误不致命，重新触发下一次测量 */
