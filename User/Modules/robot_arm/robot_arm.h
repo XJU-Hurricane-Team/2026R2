@@ -105,8 +105,7 @@
 #define ARM_TAKEOUT_SEQ_SMALL_ARM_STEP_RAD_LAYER2                              \
     0.50f /**< 取出二层时小臂预移动步长 (rad) */
 
-#define ARM_TAKEOUT_START_LAYER 2 /**< 取出序列起始层数 (0~2)，逐层递减 */
-#define ARM_PLACE_START_LAYER   0 /**< 放置序列起始层数 (0~2)，逐层递增 */
+#define ARM_PLACE_START_LAYER   1 /**< 起始层数 (0~2)，放置逐层递增，取出逐层递减 */
 
 #define ARM_TAKEOUT_SEQ_ERR_TOLERANCE_RAD                                      \
     0.12f /**< 序列步骤到位误差阈值 (rad) */

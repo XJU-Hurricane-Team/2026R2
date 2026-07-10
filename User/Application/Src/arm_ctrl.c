@@ -708,8 +708,8 @@ static void arm_pump_catch_check(void) {
 static void arm_pump_place_check(bool publish_result) {
     /* 第3层（索引2）不关气泵 */
     if (g_layer_count == 2 && g_robot_arm.status == ARM_STATE_PLACE) {
-        /* 放置完成：已放置数量+1 */
-        g_layer_count++;
+        /* 放置完成：已放置数量+1，上限3 */
+        if (g_layer_count < 3) g_layer_count++;
         arm_flash_save();
         if (publish_result) {
             control_dispatch_publish(2);
@@ -726,8 +726,8 @@ static void arm_pump_place_check(bool publish_result) {
         if (pump_read_adc_filtered(&adc_val)) {
             if (adc_val > PUMP_ADC_READY_HIGH) {
                 log_message(LOG_INFO, "ARM_PLACE Success, adc=%d", adc_val);
-                /* 放置完成：已放置数量+1 */
-                g_layer_count++;
+                /* 放置完成：已放置数量+1，上限3 */
+                if (g_layer_count < 3) g_layer_count++;
                 arm_flash_save();
                 if (publish_result) {
                     control_dispatch_publish(2);
@@ -738,8 +738,8 @@ static void arm_pump_place_check(bool publish_result) {
 #endif
 #if ARM_PUMP_PLACE_TIMEOUT_ENABLE
         if (HAL_GetTick() - wait_start_tick >= 2000U) {
-            /* 超时也算放置完成：已放置数量+1 */
-            g_layer_count++;
+            /* 超时也算放置完成：已放置数量+1，上限3 */
+            if (g_layer_count < 3) g_layer_count++;
             arm_flash_save();
             if (publish_result) {
                 control_dispatch_publish(2);

@@ -617,7 +617,7 @@ void robot_arm_system_init(RobotArm *arm) {
     arm->joint_cmd_prev[1] = DEFAULT_ANGLE_2;
     arm->joint_cmd_prev[2] = DEFAULT_ANGLE_3;
     arm->big_arm_cmd_filtered = DEFAULT_ANGLE_1;
-    arm->layer_count = ARM_TAKEOUT_START_LAYER;
+    arm->layer_count = ARM_PLACE_START_LAYER;
 }
 
 /**
