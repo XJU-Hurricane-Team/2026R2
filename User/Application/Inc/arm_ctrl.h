@@ -24,6 +24,8 @@
 
 #define ARM_PUMP_PLACE_TIMEOUT_ENABLE                                          \
     1               /**< 放置态气泵超时检测使能 (0:禁用, 1:启用) */
+#define ARM_PUMP_CATCH_TIMEOUT_ENABLE                                          \
+    1 /**< 抓取/待取态纯超时使能 (电机到位后等2秒自动抓取, 0:原ADC重试逻辑) */
 #define USE_FLASH 0 /**< 是否使用Flash存储放置/取出层级 (0:禁用, 1:启用) */
 #define ARM_PLACE_INC_ON_ENTRY                                                 \
     0 /**< 【测试】切到PLACE态即递增放置索引 (0:禁用, 1:启用) */

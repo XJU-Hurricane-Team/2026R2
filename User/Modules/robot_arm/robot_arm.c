@@ -292,10 +292,10 @@ static void arm_update_motion_state(RobotArm *arm, float joint_target[3]) {
             break;
 
         case ARM_MOTION_STATE_TAKEOUT_SEQ_FINAL:
-            /* Step3: 大臂回位到位 → Step4: 小臂+吸盘协同 */
-            if (err0 <= ARM_TAKEOUT_SEQ_ERR_TOLERANCE_RAD) {
+            /* Step3: 大臂回位到位 → Step4: 三关节协同 */
+            if (err0 <= 0.3f) {
                 arm->motion_state = ARM_MOTION_STATE_TAKEOUT_SEQ_SUCTION;
-                arm->latch_type = ARM_LATCH_SEQ_BIG_LOCKED;
+                arm->latch_type = ARM_LATCH_NONE;
                 arm->suction_wait_start_tick = HAL_GetTick();
                 arm->flags.big_arm_wait_locked_inited = 0;
                 arm->arm_joint_target[1] = arm->takeout_seq_small_arm_target;
@@ -711,8 +711,8 @@ void robot_arm_set_target(RobotArm *arm, float y, float z, float pitch) {
                             ? arm->takeout_layer
                             : arm->place_layer;
         if (layer == 1) {
-            arm->trans_y[2] = -1.000f;
-            arm->trans_z[2] = 950.000f;
+            arm->trans_y[2] = 30.000f;
+            arm->trans_z[2] = 850.000f;
             arm->trans_pitch[2] = PI / 2.0f;
         } else if (layer == 2) {
             arm->trans_y[2] = 400.000f;
@@ -914,8 +914,8 @@ void robot_arm_update(RobotArm *arm) {
         arm->arm_joint_target[0] = arm->takeout_seq_big_arm_target;
         joint_target[0] = arm->takeout_seq_big_arm_target;
     }
-    /* TAKEOUT_SEQ_SUCTION: Step4 保持关节模式，小臂+吸盘向最终目标运动，
-       大臂由 ARM_LATCH_SEQ_BIG_LOCKED 锁定，arm_update_motion_state 在到位后切 IDLE */
+    /* TAKEOUT_SEQ_SUCTION: Step4 三关节协同向最终目标运动，
+       arm_update_motion_state 在到位后切 IDLE */
 
     arm_update_overshoot(arm, joint_target);
 
