@@ -154,22 +154,22 @@ static bool load_from_flash(void) {
 void flash_store_init(void) {
     uint32_t bank, page;
     get_bank_and_page(&bank, &page);
-    log_message(LOG_INFO, "Flash Store: bank=%lu page=%lu addr=0x%08lX",
-                bank, page, FLASH_STORE_ADDR);
+    // log_message(LOG_INFO, "Flash Store: bank=%lu page=%lu addr=0x%08lX",
+    //             bank, page, FLASH_STORE_ADDR);
 
     if (load_from_flash()) {
         g_data.boot_count++;
-        log_message(LOG_INFO, "Flash Store: prev=%lu → now=%lu",
-                    g_data.boot_count - 1, g_data.boot_count);
+        // log_message(LOG_INFO, "Flash Store: prev=%lu → now=%lu",
+        //             g_data.boot_count - 1, g_data.boot_count);
     } else {
         g_data.magic      = FLASH_STORE_MAGIC;
         g_data.boot_count = 1;
         memset(g_data.user_data, 0, sizeof(g_data.user_data));
-        log_message(LOG_INFO, "Flash Store: first boot, count=1");
+        // log_message(LOG_INFO, "Flash Store: first boot, count=1");
     }
 
     if (erase_and_write(&g_data)) {
-        log_message(LOG_INFO, "Flash Store: saved OK, count=%lu", g_data.boot_count);
+        log_message(LOG_INFO, "Flash Store: saved OK");
     } else {
         log_message(LOG_ERROR, "Flash Store: save FAILED!");
     }

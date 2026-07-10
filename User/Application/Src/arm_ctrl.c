@@ -493,6 +493,7 @@ void robot_arm_apply_target(uint8_t index) {
      *   2. 小臂运动（大臂、吸盘锁定）
      *   3. 三关节协同到达最终目标
      * 从 READY 态切换时不执行避障序列，直接运动到位。
+     * 顶层 (layer=2) 无障碍，也直接到位。
      */
     if (arm_is_takeout_state(g_robot_arm.status) &&
         !arm_is_ready_state(prev_status)) {
@@ -500,14 +501,19 @@ void robot_arm_apply_target(uint8_t index) {
         /* 设定层数（物理层索引 = 已放置数 - 1） */
         g_robot_arm.layer_count = (g_layer_count > 0) ? (g_layer_count - 1) : 0;
 
-        float wait_takeout_suction_angle = g_arm_reach_target_joint[2];
-        robot_arm_start_takeout_sequence(&g_robot_arm, target_y, target_z,
-                                         target_pitch,
-                                         wait_takeout_suction_angle);
-        robot_arm_mark_reach_target(target_y, target_z, target_pitch);
-        g_last_target_index = index;
-        xTaskNotifyGive(arm_feedback_task_handle);
-        return;
+        /* 顶层无上层遮挡，直接到位，不走4步避障序列 */
+        if (g_robot_arm.layer_count == 2) {
+            /* fall through to direct move below */
+        } else {
+            float wait_takeout_suction_angle = g_arm_reach_target_joint[2];
+            robot_arm_start_takeout_sequence(&g_robot_arm, target_y, target_z,
+                                             target_pitch,
+                                             wait_takeout_suction_angle);
+            robot_arm_mark_reach_target(target_y, target_z, target_pitch);
+            g_last_target_index = index;
+            xTaskNotifyGive(arm_feedback_task_handle);
+            return;
+        }
     }
 
     robot_arm_mark_reach_target(target_y, target_z, target_pitch);
@@ -786,17 +792,9 @@ static void arm_pump_catch_check(void) {
 static void arm_pump_place_check(bool publish_result) {
     /* 第3层（索引2）不关气泵 */
     if (g_layer_count == 2 && g_robot_arm.status == ARM_STATE_PLACE) {
-<<<<<<< HEAD
-        /* 放置完成：已放置数量+1 */
-        g_layer_count++;
-#if USE_FLASH
-        arm_flash_save();
-#endif
-=======
         /* 放置完成：已放置数量+1，上限3 */
         // if (g_layer_count < 3) g_layer_count++;
         // arm_flash_save();
->>>>>>> d582747 (修正kfs计数错误)
         if (publish_result) {
             control_dispatch_publish(2);
         }

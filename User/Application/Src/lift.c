@@ -53,9 +53,9 @@
 #define LIFT_TARGET_SPEED        10.0f
 
 #define LIFT_2006_HIGH_SPEED     6250.0f
-#define LIFT_2006_LOW_SPEED      2850.0f
+#define LIFT_2006_LOW_SPEED      2750.0f
 #define TIME_DURATION_FRONT      0.4f
-#define TIME_DURATION_REAR       1.40f   
+#define TIME_DURATION_REAR       1.37f   
 
 typedef enum {
     LIFT_STATE_NORMAL = 0,

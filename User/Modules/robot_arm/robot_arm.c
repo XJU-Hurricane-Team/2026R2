@@ -293,7 +293,7 @@ static void arm_update_motion_state(RobotArm *arm, float joint_target[3]) {
 
         case ARM_MOTION_STATE_TAKEOUT_SEQ_FINAL:
             /* Step3: 大臂回位到位 → Step4: 三关节协同 */
-            if (err0 <= 0.3f) {
+            if (err0 <= 0.5f) {
                 arm->motion_state = ARM_MOTION_STATE_TAKEOUT_SEQ_SUCTION;
                 arm->latch_type = ARM_LATCH_NONE;
                 arm->suction_wait_start_tick = HAL_GetTick();

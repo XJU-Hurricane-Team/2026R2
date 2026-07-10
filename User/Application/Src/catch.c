@@ -220,9 +220,10 @@ static void catch_feedback_task(void *pvParameters) {
             if (catch_state != current_state) {
                 break;
             }
+            
             vTaskDelay(pdMS_TO_TICKS(10));
         }
-        log_message(LOG_INFO, "State %d reached target", current_state);
+        log_message(LOG_INFO, "Catch State %d reached target", current_state);
 
         if (catch_state != current_state) {
             continue; // 状态已被打断，重新等待新通知
