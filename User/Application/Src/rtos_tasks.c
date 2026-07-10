@@ -88,31 +88,29 @@ void start_task(void *pvParameters) {
 // uint16_t cur_dist_mm2 = 0;
 // uint16_t cur_dist_mm = 0;
 /**
- * @brief Task1: 按键扫描 + WS2812 层数反馈
+ * @brief Task1: PA1 层数切换 + WS2812 层数反馈
  */
 void task1(void *pvParameters) {
     UNUSED(pvParameters);
     LED0_OFF();
 
     uint8_t last_layer = 0xFF; /* 上一次显示的层数，用于减少WS2812刷新 */
+    uint8_t pa1_last = 1;      /* PA1 上一次电平（上拉默认高） */
 
     while (1) {
         LED0_TOGGLE();
 
-        /* 按键扫描：KEY0 递减，KEY1 递增 */
-        key_press_t key = key_scan(0);
-        uint8_t layer = robot_arm_get_layer_count();
-
-        if (key == KEY0_PRESS) {
-            layer = (layer == 0) ? 3 : (layer - 1);
-            robot_arm_set_layer_count(layer);
-        } else if (key == KEY1_PRESS) {
+        /* PA1 下降沿检测：层数加1 */
+        uint8_t pa1_now = (uint8_t)HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1);
+        if (pa1_last == 1 && pa1_now == 0) {
+            uint8_t layer = robot_arm_get_layer_count();
             layer = (layer + 1) % 4;
             robot_arm_set_layer_count(layer);
         }
+        pa1_last = pa1_now;
 
         /* WS2812 灯带反馈当前已放置数量 */
-        layer = robot_arm_get_layer_count();
+        uint8_t layer = robot_arm_get_layer_count();
         if (layer != last_layer) {
             last_layer = layer;
             uint8_t led_count = layer * 7; /* 0→0, 1→7, 2→14, 3→21 */
