@@ -335,10 +335,21 @@ static void arm_feedback_task(void *pvParameters) {
 
         arm_status_t current_status = g_robot_arm.status;
 
-        // 直接单纯关闭气泵，不进行后续的到位检测和状态检查
+        // 直接关泵，不参与层数计数
         if (current_status == ARM_STATE_CLOSE_PUMP) {
-            arm_pump_place_check(1);
+            pump_set_state(0);
+            control_dispatch_publish(2);
             continue;
+        }
+
+        /* 取出态进入时立即递减已放置数量，不等电机到位 */
+        if (arm_is_takeout_state(current_status)) {
+            if (g_layer_count > 0) {
+                g_layer_count--;
+            }
+#if USE_FLASH
+            arm_flash_save();
+#endif
         }
 
         /* 阻塞等待电机物理到位 */
@@ -356,16 +367,6 @@ static void arm_feedback_task(void *pvParameters) {
         }
 
         g_robot_arm.arm_motion_active = 0;
-
-        /* 取出态到位时，已放置数量递减 */
-        if (arm_is_takeout_state(current_status)) {
-            if (g_layer_count > 0) {
-                g_layer_count--;
-            }
-#if USE_FLASH
-            arm_flash_save();
-#endif
-        }
 
         /* 电机到位后，根据不同业务状态执行特定检测 */
         switch (current_status) {
@@ -473,7 +474,7 @@ void robot_arm_apply_target(uint8_t index) {
         target_y = g_arm_place_points[idx].y;
         target_z = g_arm_place_points[idx].z;
         target_pitch = g_arm_place_points[idx].pitch;
-        g_robot_arm.layer_count = idx;
+        g_robot_arm.layer_count = idx; /* 当前放置的层级索引 (0/1/2) */
     }
 
     /* 待取出层级点位覆盖: 顶层 = g_layer_count - 1 */
@@ -639,25 +640,21 @@ static void arm_pump_catch_check(void) {
         /* 超时与推进重试逻辑 */
         if (HAL_GetTick() - wait_start_tick >= 800U) {
             if (retry_count < 8) {
-                if (g_layer_count != 0) {
-                    if (g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
+                if (g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
+                    if (g_layer_count != 0) {
                         retry_offset_y -= 20.0f;
-                    } else if (g_robot_arm.status == ARM_STATE_CATCH) {
-                        retry_offset_y += 20.0f;
+                        g_robot_arm.arm_target_y = g_robot_arm.final_target_y + retry_offset_y;
+                    } else {
+                        retry_offset_z -= 10.0f;
+                        g_robot_arm.arm_target_z = g_robot_arm.final_target_z + retry_offset_z;
                     }
-                    float new_y = g_robot_arm.final_target_y + retry_offset_y;
-                    robot_arm_mark_reach_target(new_y,
-                                                g_robot_arm.final_target_z,
-                                                g_robot_arm.final_target_pitch);
-                    g_robot_arm.arm_target_y = new_y;
-                } else if (g_layer_count == 0) {
-                    retry_offset_z -= 10.0f;
-                    float new_z = g_robot_arm.final_target_z + retry_offset_z;
-                    robot_arm_mark_reach_target(g_robot_arm.final_target_y,
-                                                new_z,
-                                                g_robot_arm.final_target_pitch);
-                    g_robot_arm.arm_target_z = new_z;
+                } else {
+                    retry_offset_y += 20.0f;  /* CATCH: 前推 */
+                    g_robot_arm.arm_target_y = g_robot_arm.final_target_y + retry_offset_y;
                 }
+                robot_arm_mark_reach_target(g_robot_arm.arm_target_y,
+                                            g_robot_arm.arm_target_z,
+                                            g_robot_arm.final_target_pitch);
 
                 g_robot_arm.motion_state = ARM_MOTION_STATE_DIRECT_MOVE;
 
@@ -739,29 +736,23 @@ static void arm_pump_catch_check(void) {
 #if ARM_USE_PUMP_ADC_CHECK
 
             if (retry_count < 8) {
-                if (g_layer_count != 0) {
-                    if (g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
+                if (g_robot_arm.status == ARM_STATE_WAIT_TAKEOUT) {
+                    if (g_layer_count != 0) {
                         retry_offset_y -= 20.0f;
-                    } else if (g_robot_arm.status == ARM_STATE_CATCH) {
-                        retry_offset_y += 20.0f;
+                        g_robot_arm.arm_target_y = g_robot_arm.final_target_y + retry_offset_y;
+                    } else {
+                        retry_offset_z -= 10.0f;
+                        g_robot_arm.arm_target_z = g_robot_arm.final_target_z + retry_offset_z;
                     }
-                    float new_y = g_robot_arm.final_target_y + retry_offset_y;
-
-                    // 重新设定推进目标
-                    robot_arm_mark_reach_target(new_y,
-                                                g_robot_arm.final_target_z,
-                                                g_robot_arm.final_target_pitch);
-                    g_robot_arm.arm_target_y = new_y;
-                } else if (g_layer_count == 0) {
-                    retry_offset_z -= 10.0f;
-                    float new_z = g_robot_arm.final_target_z + retry_offset_z;
-
-                    // 重新设定推进目标
-                    robot_arm_mark_reach_target(g_robot_arm.final_target_y,
-                                                new_z,
-                                                g_robot_arm.final_target_pitch);
-                    g_robot_arm.arm_target_z = new_z;
+                } else {
+                    retry_offset_y += 20.0f;  /* CATCH: 前推 */
+                    g_robot_arm.arm_target_y = g_robot_arm.final_target_y + retry_offset_y;
                 }
+
+                // 重新设定推进目标
+                robot_arm_mark_reach_target(g_robot_arm.arm_target_y,
+                                            g_robot_arm.arm_target_z,
+                                            g_robot_arm.final_target_pitch);
 
                 g_robot_arm.motion_state = ARM_MOTION_STATE_DIRECT_MOVE;
 
@@ -795,11 +786,17 @@ static void arm_pump_catch_check(void) {
 static void arm_pump_place_check(bool publish_result) {
     /* 第3层（索引2）不关气泵 */
     if (g_layer_count == 2 && g_robot_arm.status == ARM_STATE_PLACE) {
+<<<<<<< HEAD
         /* 放置完成：已放置数量+1 */
         g_layer_count++;
 #if USE_FLASH
         arm_flash_save();
 #endif
+=======
+        /* 放置完成：已放置数量+1，上限3 */
+        // if (g_layer_count < 3) g_layer_count++;
+        // arm_flash_save();
+>>>>>>> d582747 (修正kfs计数错误)
         if (publish_result) {
             control_dispatch_publish(2);
         }
