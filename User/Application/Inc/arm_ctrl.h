@@ -13,7 +13,7 @@
 
 /* ================== 应用层宏定义 ================== */
 #define ARM_USE_REMOTE_KEY                                                     \
-    0 /**< 是否使用遥控器按键切换状态位 (0:禁用, 1:启用) */
+    1 /**< 是否使用遥控器按键切换状态位 (0:禁用, 1:启用) */
 #define ARM_TASK_PERIOD_MS      10    /**< 机械臂控制任务周期 (毫秒) */
 #define ARM_REACH_POS_TOL_MM    5.0f  /**< 位置到位判定容差 (mm) */
 #define ARM_REACH_JOINT_TOL_RAD 0.10f /**< 关节角到位判定容差 (rad) */
@@ -23,7 +23,7 @@
 #define PUMP_ADC_READY_HIGH     4000U /**< 释放成功判定的高压阈值 */
 
 #define ARM_USE_VL53L1_CATCH    1     /**< 是否使用VL53L1测距判定抓取成功 (1:VL53L1测距, 0:原有ADC/超时) */
-#define ARM_VL53L1_CATCH_DISTANCE_MM 64U /**< VL53L1抓取成功距离阈值 (mm) */
+#define ARM_VL53L1_CATCH_DISTANCE_MM 60U /**< VL53L1抓取成功距离阈值 (mm) */
 
 #define ARM_PUMP_PLACE_TIMEOUT_ENABLE                                          \
     1               /**< 放置态气泵超时检测使能 (0:禁用, 1:启用) */

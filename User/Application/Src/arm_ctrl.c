@@ -85,7 +85,7 @@ static const arm_target_point_t g_arm_target_points[11] = {
     {270.000f, 200.0f, 0.08f}, /* 3: READY_3 */
     // {250.0f, -230.f, 0.0f},                              /* 4: READY_4 */
     {200.0f, 10.0f, 0.0f},    /* 4: READY_4 */
-    {513.142f, 200.0f, 0.0f}, /* 5: CATCH */
+    {360.0f, -180.0f, 0.0f}, /* 5: CATCH */
     //{360.0f, -180.0f, 0.0f},                            /* 5: CATCH */
     {-275.12f, 493.991f, -PI / 2.0},   /* 6: PLACE */
     {533.142f, 300.0f, 0.0f},          /* 7: WAIT_TAKEOUT */
@@ -273,19 +273,19 @@ void robot_arm_init(void) {
 
 #if ARM_USE_REMOTE_KEY
     remote_register_key_callback(10, REMOTE_KEY_PRESS_UP,
-                                 arm_remote_state_switch); /* INIT        */
+                                 arm_remote_state_switch); /* READY_3     */
     remote_register_key_callback(11, REMOTE_KEY_PRESS_UP,
                                  arm_remote_state_switch); /* READY_4     */
     remote_register_key_callback(12, REMOTE_KEY_PRESS_UP,
                                  arm_remote_state_switch); /* CATCH       */
     remote_register_key_callback(13, REMOTE_KEY_PRESS_UP,
-                                 arm_remote_state_switch); /* PLACE       */
-    remote_register_key_callback(14, REMOTE_KEY_PRESS_UP,
-                                 arm_remote_state_switch); /* WAIT_TAKEOUT*/
-    remote_register_key_callback(15, REMOTE_KEY_PRESS_UP,
                                  arm_remote_state_switch); /* TAKEOUT_1   */
-    remote_register_key_callback(16, REMOTE_KEY_PRESS_UP,
+    remote_register_key_callback(14, REMOTE_KEY_PRESS_UP,
                                  arm_remote_state_switch); /* TAKEOUT_2   */
+    remote_register_key_callback(15, REMOTE_KEY_PRESS_UP,
+                                 arm_remote_state_switch); /* PLACE       */
+    remote_register_key_callback(16, REMOTE_KEY_PRESS_UP,
+                                 arm_remote_state_switch); /* PUMP_CLOSE  */
 #endif
 
     /* 启动机械臂控制任务 */
@@ -889,13 +889,13 @@ static uint8_t pump_read_adc_filtered(uint16_t *out_value) {
 
 /* 按键 → 状态索引 映射表，按需增删改 */
 static const uint8_t g_arm_key_index_map[][2] = {
-    {10, 0},  /* INIT        */
-    {11, 4},  /* READY_4     */
-    {12, 5},  /* CATCH       */
-    {13, 6},  /* PLACE       */
-    {14, 7},  /* WAIT_TAKEOUT*/
-    {15, 8},  /* TAKEOUT_1   */
-    {16, 11}, /* PUMP_CLOSE   */
+    {10, 1},  /* READY_1     */
+    {11, 3},  /* READY_3     */
+    {12, 4},  /* READY_4     */
+    {13, 5},  /* CATCH   */
+    {14, 8},  /* TAKEOUT_1   */
+    {15, 9},  /* TAKEOUT_2   */
+    {16, 11}, /* PUMP_CLOSE  */
 };
 #define ARM_KEY_MAP_COUNT                                                      \
     (sizeof(g_arm_key_index_map) / sizeof(g_arm_key_index_map[0]))
