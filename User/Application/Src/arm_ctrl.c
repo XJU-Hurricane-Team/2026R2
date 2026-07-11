@@ -901,13 +901,13 @@ static uint8_t pump_read_adc_filtered(uint16_t *out_value) {
 
 /* 按键 → 状态索引 映射表，按需增删改 */
 static const uint8_t g_arm_key_index_map[][2] = {
-    {10, 0},  /* INIT        */
+    {10, 3},  /* READY_3     */
     {11, 4},  /* READY_4     */
     {12, 5},  /* CATCH       */
-    {13, 6},  /* PLACE       */
-    {14, 7},  /* WAIT_TAKEOUT*/
-    {15, 8},  /* TAKEOUT_1   */
-    {16, 11}, /* PUMP_CLOSE   */
+    {13, 8},  /* TAKEOUT_1   */
+    {14, 9},  /* TAKEOUT_2   */
+    {15, 6},  /* PLACE       */
+    {16, 11}, /* PUMP_CLOSE  */
 };
 #define ARM_KEY_MAP_COUNT                                                      \
     (sizeof(g_arm_key_index_map) / sizeof(g_arm_key_index_map[0]))
