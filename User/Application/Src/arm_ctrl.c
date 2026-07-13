@@ -85,8 +85,8 @@ static const arm_target_point_t g_arm_target_points[11] = {
     {270.000f, 200.0f, 0.08f}, /* 3: READY_3 */
     // {250.0f, -230.f, 0.0f},                              /* 4: READY_4 */
     {200.0f, 10.0f, 0.0f},    /* 4: READY_4 */
-    {513.142f, 200.0f, 0.0f}, /* 5: CATCH */
-    //{360.0f, -180.0f, 0.0f},                            /* 5: CATCH */
+    //{513.142f, 200.0f, 0.0f}, /* 5: CATCH */
+    {360.0f, -180.0f, 0.0f},                            /* 5: CATCH */
     {-275.12f, 493.991f, -PI / 2.0},   /* 6: PLACE */
     {533.142f, 300.0f, 0.0f},          /* 7: WAIT_TAKEOUT */
     {430.000f, 860.0f, PI / 8.0},      /* 8: TAKEOUT_1 */
@@ -905,7 +905,7 @@ static const uint8_t g_arm_key_index_map[][2] = {
     {11, 4},  /* READY_4     */
     {12, 5},  /* CATCH       */
     {13, 8},  /* TAKEOUT_1   */
-    {14, 9},  /* TAKEOUT_2   */
+    {14, 7},  /* WAIT_TAKEOUT   */
     {15, 6},  /* PLACE       */
     {16, 11}, /* PUMP_CLOSE  */
 };

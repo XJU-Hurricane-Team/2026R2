@@ -105,11 +105,14 @@
 #define ARM_TAKEOUT_SEQ_SMALL_ARM_STEP_RAD_LAYER2                              \
     0.50f /**< 取出二层时小臂预移动步长 (rad) */
 
-#define ARM_TAKEOUT_START_LAYER 2 /**< 取出序列起始层数 (0~2)，逐层递减 */
-#define ARM_PLACE_START_LAYER   0 /**< 放置序列起始层数 (0~2)，逐层递增 */
+#define ARM_PLACE_START_LAYER   1 /**< 起始层数 (0~2)，放置逐层递增，取出逐层递减 */
 
 #define ARM_TAKEOUT_SEQ_ERR_TOLERANCE_RAD                                      \
     0.12f /**< 序列步骤到位误差阈值 (rad) */
+#define ARM_TAKEOUT_SEQ_SUCTION_SMALL_SPEED_MAX                                \
+    0.80f /**< 取出序列最终协同阶段小臂限速 (rad/s) */
+#define ARM_TAKEOUT_SEQ_SUCTION_SMALL_SPEED_KP                                 \
+    1.20f /**< 取出序列最终协同阶段小臂比例增益 */
 
 /**
  * @brief 机械臂工作状态枚举
@@ -152,8 +155,8 @@ typedef enum {
     ARM_MOTION_STATE_PLACE_BIG_RECOVER,   /**< 放置态：大臂回位阶段 */
     ARM_MOTION_STATE_TAKEOUT_SEQ_BIG,     /**< 取出序列: 大臂过冲 */
     ARM_MOTION_STATE_TAKEOUT_SEQ_SMALL,   /**< 取出序列: 小臂旋转 */
-    ARM_MOTION_STATE_TAKEOUT_SEQ_FINAL,   /**< 取出序列: 大臂回位 */
-    ARM_MOTION_STATE_TAKEOUT_SEQ_SUCTION, /**< 取出序列: 小臂吸盘协同 */
+    ARM_MOTION_STATE_TAKEOUT_SEQ_FINAL,   /**< @deprecated 取出序列: 大臂回位 (已删除，保留枚举值兼容) */
+    ARM_MOTION_STATE_TAKEOUT_SEQ_SUCTION, /**< 取出序列: 三关节协同 */
 } arm_motion_state_t;
 
 /**
@@ -169,7 +172,7 @@ typedef enum {
     ARM_LATCH_PLACE_BIG_RECOVER, /**< 放置态大臂回位阶段：大臂回位，小臂吸盘锁死 */
     ARM_LATCH_SEQ_BIG_ARM_ONLY,   /**< 取出序列：仅大臂运动，小臂和吸盘锁定 */
     ARM_LATCH_SEQ_SMALL_ARM_ONLY, /**< 取出序列：仅小臂运动，大臂和吸盘锁定 */
-    ARM_LATCH_SEQ_BIG_LOCKED, /**< 取出序列Step3：大臂锁定，小臂+吸盘协同运动 */
+    ARM_LATCH_SEQ_BIG_LOCKED, /**< @deprecated 取出序列Step3大臂锁定 (已删除) */
 } arm_latch_type_t;
 
 /**

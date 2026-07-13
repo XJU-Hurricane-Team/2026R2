@@ -277,34 +277,23 @@ static void arm_update_motion_state(RobotArm *arm, float joint_target[3]) {
             break;
 
         case ARM_MOTION_STATE_TAKEOUT_SEQ_SMALL:
-            /* Step2: 小臂到位 → Step3: 大臂回位到最终目标 */
+            /* Step2: 小臂到位 → Step3: 三关节协同到位 */
             if (err1 <= ARM_TAKEOUT_SEQ_ERR_TOLERANCE_RAD) {
-                arm->motion_state = ARM_MOTION_STATE_TAKEOUT_SEQ_FINAL;
-                arm->latch_type = ARM_LATCH_SEQ_BIG_ARM_ONLY;
+                arm->motion_state = ARM_MOTION_STATE_TAKEOUT_SEQ_SUCTION;
+                arm->latch_type = ARM_LATCH_NONE;
                 arm->suction_wait_start_tick = HAL_GetTick();
+                arm->flags.big_arm_wait_locked_inited = 0;
                 arm->flags.small_arm_wait_locked_inited = 0;
                 arm->flags.suction_wait_locked_inited = 0;
                 arm->arm_joint_target[0] = arm->takeout_seq_big_arm_target;
-                /* Step3 吸盘不锁，提前朝最终目标预转 */
+                arm->arm_joint_target[1] = arm->takeout_seq_small_arm_target;
                 arm->arm_joint_target[2] = arm->takeout_seq_suction_target;
             }
             
             break;
 
-        case ARM_MOTION_STATE_TAKEOUT_SEQ_FINAL:
-            /* Step3: 大臂回位到位 → Step4: 三关节协同 */
-            if (err0 <= 0.5f) {
-                arm->motion_state = ARM_MOTION_STATE_TAKEOUT_SEQ_SUCTION;
-                arm->latch_type = ARM_LATCH_NONE;
-                arm->suction_wait_start_tick = HAL_GetTick();
-                arm->flags.big_arm_wait_locked_inited = 0;
-                arm->arm_joint_target[1] = arm->takeout_seq_small_arm_target;
-                arm->arm_joint_target[2] = arm->takeout_seq_suction_target;
-            }
-            break;
-
         case ARM_MOTION_STATE_TAKEOUT_SEQ_SUCTION:
-            /* Step4: 小臂到位 → 序列完成 */
+            /* Step3: 小臂到位 → 序列完成 */
             if (err1 <= ARM_TAKEOUT_SEQ_ERR_TOLERANCE_RAD) {
                 arm->motion_state = ARM_MOTION_STATE_DIRECT_MOVE;
                 arm->latch_type = ARM_LATCH_NONE;
@@ -547,8 +536,7 @@ static void arm_apply_latch(RobotArm *arm, const float joint_des[3],
     /* 吸盘锁存判断 */
     if (arm->latch_type == ARM_LATCH_SUCTION_WAIT ||
         arm->latch_type == ARM_LATCH_TAKEOUT_WAIT ||
-        (arm->latch_type == ARM_LATCH_SEQ_BIG_ARM_ONLY &&
-         arm->motion_state != ARM_MOTION_STATE_TAKEOUT_SEQ_FINAL) ||
+        arm->latch_type == ARM_LATCH_SEQ_BIG_ARM_ONLY ||
         arm->latch_type == ARM_LATCH_SEQ_SMALL_ARM_ONLY ||
         arm->latch_type == ARM_LATCH_PLACE_BIG_RECOVER) {
         if (!arm->flags.suction_wait_locked_inited) {
@@ -617,7 +605,7 @@ void robot_arm_system_init(RobotArm *arm) {
     arm->joint_cmd_prev[1] = DEFAULT_ANGLE_2;
     arm->joint_cmd_prev[2] = DEFAULT_ANGLE_3;
     arm->big_arm_cmd_filtered = DEFAULT_ANGLE_1;
-    arm->layer_count = ARM_TAKEOUT_START_LAYER;
+    arm->layer_count = ARM_PLACE_START_LAYER;
 }
 
 /**
@@ -830,7 +818,7 @@ uint8_t robot_arm_start_takeout_sequence(RobotArm *arm, float y, float z,
     arm->final_target_z = z;
     arm->final_target_pitch = pitch;
 
-    /* 保存最终关节目标（Step3/4 使用） */
+    /* 保存最终关节目标（Step3 使用） */
     arm->takeout_seq_big_arm_target = final_joint[0];
     if (arm->takeout_seq_big_arm_target < ARM_BIG_ARM_MIN_ANGLE_RAD) {
         arm->takeout_seq_big_arm_target = ARM_BIG_ARM_MIN_ANGLE_RAD;
@@ -906,12 +894,7 @@ void robot_arm_update(RobotArm *arm) {
 
     arm_update_motion_state(arm, joint_target);
 
-    if (arm->motion_state == ARM_MOTION_STATE_TAKEOUT_SEQ_FINAL) {
-        /* Step3: 大臂回位到最终目标（小臂+吸盘由锁存锁定） */
-        arm->arm_joint_target[0] = arm->takeout_seq_big_arm_target;
-        joint_target[0] = arm->takeout_seq_big_arm_target;
-    }
-    /* TAKEOUT_SEQ_SUCTION: Step4 三关节协同向最终目标运动，
+    /* TAKEOUT_SEQ_SUCTION: Step3 三关节协同向最终目标运动，
        arm_update_motion_state 在到位后切 IDLE */
 
     arm_update_overshoot(arm, joint_target);
@@ -923,15 +906,6 @@ void robot_arm_update(RobotArm *arm) {
 
     /* 取出序列 Step2：锁定大臂位置（小臂旋转时） */
     if (arm->latch_type == ARM_LATCH_SEQ_SMALL_ARM_ONLY) {
-        if (!arm->flags.big_arm_wait_locked_inited) {
-            arm->big_arm_wait_locked_pos = arm->damiao_1.position;
-            arm->flags.big_arm_wait_locked_inited = 1;
-        }
-        joint_target[0] = arm->big_arm_wait_locked_pos;
-    }
-
-    /* 取出序列 Step4：锁定大臂位置（小臂+吸盘协同时） */
-    if (arm->latch_type == ARM_LATCH_SEQ_BIG_LOCKED) {
         if (!arm->flags.big_arm_wait_locked_inited) {
             arm->big_arm_wait_locked_pos = arm->damiao_1.position;
             arm->flags.big_arm_wait_locked_inited = 1;
@@ -1010,6 +984,12 @@ void arm_apply_ctrl(RobotArm *arm, const float joint_des[3]) {
     } else {
         small_speed_kp = ARM_SMALL_SPEED_KP;
         small_speed_max = ARM_SMALL_SPEED_MAX;
+    }
+
+    /* 取出序列最终协同阶段：小臂减速 + 降 Kp */
+    if (arm->motion_state == ARM_MOTION_STATE_TAKEOUT_SEQ_SUCTION) {
+        small_speed_kp = ARM_TAKEOUT_SEQ_SUCTION_SMALL_SPEED_KP;
+        small_speed_max = ARM_TAKEOUT_SEQ_SUCTION_SMALL_SPEED_MAX;
     }
 
     max_step = ARM_J8006_CMD_RATE_LIMIT * arm->ctrl_dt;
