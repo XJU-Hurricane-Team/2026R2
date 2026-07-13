@@ -52,11 +52,11 @@
 #define LIFT_TARGET_SPEED_LOW    7.0f       //抬升慢速
 #define LIFT_TARGET_SPEED        10.0f
 
-#define LIFT_2006_HIGH_SPEED     6250.0f
-#define LIFT_2006_LOW_SPEED      2750.0f
+#define LIFT_2006_HIGH_SPEED     6550.0f
+#define LIFT_2006_LOW_SPEED      2600.0f
 #define TIME_DURATION_FRONT      0.4f
 
-#define TIME_DURATION_REAR       1.37f   
+#define TIME_DURATION_REAR       1.28f   
 
 typedef enum {
     LIFT_STATE_NORMAL = 0,
@@ -450,7 +450,7 @@ static void lift_bottom_init(void) {
 
     for (int i = 0; i < 2; i++) {
         pid_init(&dji_2006_pid[i], 16384.0f, 500.0f, 2.0f, 15000.0f, POSITION_PID,
-                 3.65f, 0.001f, 0.00f);
+                 3.85f, 0.001f, 0.00f);
     }
 }
 
