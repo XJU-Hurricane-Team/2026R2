@@ -22,8 +22,8 @@ void start_task(void *pvParameters);
 static TaskHandle_t task1_handle;
 void task1(void *pvParameters);
 
-static TaskHandle_t task2_handle;
-void task2(void *pvParameters);
+// static TaskHandle_t task2_handle;
+// void task2(void *pvParameters);
 
 static TaskHandle_t microros_task_handle;
 void microros_task(void *pvParameters);
@@ -130,21 +130,21 @@ void task1(void *pvParameters) {
     }
 }
 
-uint16_t g_vl53l1_dist_mm = 0;
-uint16_t g_vl53l1_dist_mm4 = 0;
+// uint16_t g_vl53l1_dist_mm = 0;
+// uint16_t g_vl53l1_dist_mm4 = 0;
 
-void task2(void *pvParameters) {
-    UNUSED(pvParameters);
-    vl53l1_apply_start_measurement(g_vl53l1_handle4);
-    vl53l1_apply_start_measurement(g_vl53l1_handle);
-    while (1) {
-        vl53l1_apply_get_distance_mm(&g_vl53l1_dist_mm4, g_vl53l1_handle4);
-        vl53l1_apply_get_distance_mm(&g_vl53l1_dist_mm, g_vl53l1_handle);
-        // log_data(LOG_CHASSIS, nav_sub_pram.linear_x, nav_sub_pram.linear_y,
-        //      nav_sub_pram.angular_z);
-        vTaskDelay(20);
-    }
-}
+// void task2(void *pvParameters) {
+//     UNUSED(pvParameters);
+//     vl53l1_apply_start_measurement(g_vl53l1_handle4);
+//     vl53l1_apply_start_measurement(g_vl53l1_handle);
+//     while (1) {
+//         vl53l1_apply_get_distance_mm(&g_vl53l1_dist_mm4, g_vl53l1_handle4);
+//         vl53l1_apply_get_distance_mm(&g_vl53l1_dist_mm, g_vl53l1_handle);
+//         // log_data(LOG_CHASSIS, nav_sub_pram.linear_x, nav_sub_pram.linear_y,
+//         //      nav_sub_pram.angular_z);
+//         vTaskDelay(20);
+//     }
+// }
 static void log_task_stack_usage(TaskHandle_t task_handle,
                                  const char *task_name,
                                  configSTACK_DEPTH_TYPE stack_words) {
