@@ -52,11 +52,11 @@
 #define LIFT_TARGET_SPEED_LOW    7.0f       //抬升慢速
 #define LIFT_TARGET_SPEED        10.0f
 
-#define LIFT_2006_HIGH_SPEED     6550.0f
-#define LIFT_2006_LOW_SPEED      2600.0f
+#define LIFT_2006_HIGH_SPEED     6250.0f
+#define LIFT_2006_LOW_SPEED      2130.0f
 #define TIME_DURATION_FRONT      0.4f
 
-#define TIME_DURATION_REAR       1.28f   
+#define TIME_DURATION_REAR       1.18f   
 
 typedef enum {
     LIFT_STATE_NORMAL = 0,
@@ -434,6 +434,8 @@ void lift_init(void) {
 
 // 底层初始化：配置2006电机、DM电机和PID
 static void lift_bottom_init(void) {
+    LED3_OFF();
+    LED1_OFF();
     for (int i = 0; i < 2; i++) {
         if (dji_motor_init(&dji_2006_handle[i], DJI_M2006, CAN_Motor5_ID + i,
                            CHASSIS_CAN_SELECT) != 0) {
@@ -960,6 +962,7 @@ static void lift_down_step_wait_rear_release(void) {
     }
 
     if (get_rear_photoelectric_falling_edge() || vl53l1_triggered) {
+    //    if (vl53l1_triggered) {
         if(vl53l1_triggered) {
             log_message(LOG_INFO, "vl53l1 triggered");
         }
@@ -985,9 +988,12 @@ static void lift_down_step_wait_down_arrived(void) {
 
 // 下降步骤4：2006电机反转，等待中光电下降沿 或 VL53L1 距离跳变
 static void lift_down_step_drive_2006_backward(void) {
+    static uint32_t s_pe_delay_start_tick = 0;  /* 光电下降沿 100ms 延时起点 */
+
     /* 记录 step3 开始 tick（只在首次进入时记录） */
     if (g_lift_handle.step3_start_tick == 0) {
         g_lift_handle.step3_start_tick = xTaskGetTickCount();
+        s_pe_delay_start_tick = 0;  /* 新序列清除上一次延时 */
     }
 
     /* 计算自 step3 开始经过的秒数 */
@@ -1007,22 +1013,32 @@ static void lift_down_step_drive_2006_backward(void) {
         g_lift_handle.target_2006_rpm = -LIFT_2006_LOW_SPEED;
     }
 
-    /* ---- VL53L1 距离检测：距离 >= 150mm 时触发 ---- */
+    /* ---- VL53L1 距离检测：距离 >= 320mm 立即触发，不延时 ---- */
     bool vl53l1_triggered = false;
     uint16_t cur_dist_mm = 0;
     if (vl53l1_apply_get_distance_mm(&cur_dist_mm, g_vl53l1_handle)) {
-        if (cur_dist_mm >= 150) {
+        if (cur_dist_mm >= 320) {
             vl53l1_triggered = true;
-            LED3_ON();
+            LED1_ON();
         }
     }
 
-    /* 检查中光电的下降沿 或 VL53L1 距离 >= 150mm，完成时清除开始 tick 并前进步骤 */
-    if (get_middle_photoelectric_falling_edge() || vl53l1_triggered){
-    // if ( vl53l1_triggered) 
-        if(vl53l1_triggered) {
+    /* ---- 中光电下降沿：启动 100ms 延时，期间保持稳定再触发 ---- */
+    bool pe_falling = get_middle_photoelectric_falling_edge();
+    if (pe_falling && s_pe_delay_start_tick == 0) {
+        s_pe_delay_start_tick = xTaskGetTickCount();
+    }
+
+    /* 光电延时到期（100ms） 或 VL53L1 立即触发 */
+    bool pe_delay_done = (s_pe_delay_start_tick != 0) &&
+        ((xTaskGetTickCount() - s_pe_delay_start_tick) * portTICK_PERIOD_MS >= 90);
+
+    if (pe_delay_done || vl53l1_triggered) {
+        if (vl53l1_triggered) {
             log_message(LOG_INFO, "vl53l1 triggered");
         }
+        s_pe_delay_start_tick = 0;  /* 清除延时状态 */
+
         /* 记录本次耗时供调试（可选） */
         float total_time = elapsed_sec;
         g_lift_handle.step3_last_duration = total_time;
