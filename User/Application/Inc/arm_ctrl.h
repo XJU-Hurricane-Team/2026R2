@@ -23,13 +23,13 @@
 #define PUMP_ADC_READY_HIGH     4000U /**< 释放成功判定的高压阈值 */
 
 #define ARM_USE_VL53L1_CATCH    1     /**< 是否使用VL53L1测距判定抓取成功 (1:VL53L1测距, 0:原有ADC/超时) */
-#define ARM_VL53L1_CATCH_DISTANCE_MM 60U /**< VL53L1抓取成功距离阈值 (mm) */
+#define ARM_VL53L1_CATCH_DISTANCE_MM 64U /**< VL53L1抓取成功距离阈值 (mm) */
 
 #define ARM_PUMP_PLACE_TIMEOUT_ENABLE                                          \
     1               /**< 放置态气泵超时检测使能 (0:禁用, 1:启用) */
 #define ARM_PUMP_CATCH_TIMEOUT_ENABLE                                          \
     0 /**< 抓取/待取态纯超时使能 (电机到位后等2秒自动抓取, 0:原ADC重试逻辑) */
-#define USE_FLASH 1 /**< 是否使用Flash存储层数 (0:禁用, 1:启用) */
+#define USE_FLASH 0 /**< 是否使用Flash存储层数 (0:禁用, 1:启用) */
 
 #define CATCH_READY_2_ANGEL                                                    \
     -0.893f /**< READY_2 吸盘关节相对于水平面旋转角度 (rad) */

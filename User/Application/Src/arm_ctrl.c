@@ -85,8 +85,8 @@ static const arm_target_point_t g_arm_target_points[11] = {
     {270.000f, 200.0f, 0.08f}, /* 3: READY_3 */
     // {250.0f, -230.f, 0.0f},                              /* 4: READY_4 */
     {200.0f, 10.0f, 0.0f},    /* 4: READY_4 */
-    {360.0f, -180.0f, 0.0f}, /* 5: CATCH */
-    //{360.0f, -180.0f, 0.0f},                            /* 5: CATCH */
+    //{513.142f, 200.0f, 0.0f}, /* 5: CATCH */
+    {360.0f, -180.0f, 0.0f},                            /* 5: CATCH */
     {-275.12f, 493.991f, -PI / 2.0},   /* 6: PLACE */
     {533.142f, 300.0f, 0.0f},          /* 7: WAIT_TAKEOUT */
     {430.000f, 860.0f, PI / 8.0},      /* 8: TAKEOUT_1 */
@@ -208,7 +208,7 @@ void robot_arm_set_dynamic_catch_target_down(float y, float x, float z) {
                          (CAM_TO_CAT_Y_OFFSET * sinf(theta) +
                           CAM_TO_CAT_Z_OFFSET * cosf(theta)) +
                          30.0f;
-    g_dynamic_target.pitch = 0.1f; /* 末端吸盘姿态 (弧度，水平为0，下倾为负) */
+    g_dynamic_target.pitch = 0.05f; /* 末端吸盘姿态 (弧度，水平为0，下倾为负) */
     g_has_dynamic_target = 1;
 
     (void)x; //x不使用，仅用于底盘校准，与机械臂校准无关
@@ -240,7 +240,9 @@ uint8_t robot_arm_get_layer_count(void) {
 void robot_arm_set_layer_count(uint8_t count) {
     if (count <= 3) {
         g_layer_count = count;
+#if USE_FLASH
         arm_flash_save();
+#endif
     }
 }
 
@@ -273,19 +275,19 @@ void robot_arm_init(void) {
 
 #if ARM_USE_REMOTE_KEY
     remote_register_key_callback(10, REMOTE_KEY_PRESS_UP,
-                                 arm_remote_state_switch); /* READY_3     */
+                                 arm_remote_state_switch); /* INIT        */
     remote_register_key_callback(11, REMOTE_KEY_PRESS_UP,
                                  arm_remote_state_switch); /* READY_4     */
     remote_register_key_callback(12, REMOTE_KEY_PRESS_UP,
                                  arm_remote_state_switch); /* CATCH       */
     remote_register_key_callback(13, REMOTE_KEY_PRESS_UP,
-                                 arm_remote_state_switch); /* TAKEOUT_1   */
-    remote_register_key_callback(14, REMOTE_KEY_PRESS_UP,
-                                 arm_remote_state_switch); /* TAKEOUT_2   */
-    remote_register_key_callback(15, REMOTE_KEY_PRESS_UP,
                                  arm_remote_state_switch); /* PLACE       */
+    remote_register_key_callback(14, REMOTE_KEY_PRESS_UP,
+                                 arm_remote_state_switch); /* WAIT_TAKEOUT*/
+    remote_register_key_callback(15, REMOTE_KEY_PRESS_UP,
+                                 arm_remote_state_switch); /* TAKEOUT_1   */
     remote_register_key_callback(16, REMOTE_KEY_PRESS_UP,
-                                 arm_remote_state_switch); /* PUMP_CLOSE  */
+                                 arm_remote_state_switch); /* TAKEOUT_2   */
 #endif
 
     /* 启动机械臂控制任务 */
@@ -491,6 +493,7 @@ void robot_arm_apply_target(uint8_t index) {
      *   2. 小臂运动（大臂、吸盘锁定）
      *   3. 三关节协同到达最终目标
      * 从 READY 态切换时不执行避障序列，直接运动到位。
+     * 顶层 (layer=2) 无障碍，也直接到位。
      */
     if (arm_is_takeout_state(g_robot_arm.status) &&
         !arm_is_ready_state(prev_status)) {
@@ -498,14 +501,19 @@ void robot_arm_apply_target(uint8_t index) {
         /* 设定层数（物理层索引 = 已放置数 - 1） */
         g_robot_arm.layer_count = (g_layer_count > 0) ? (g_layer_count - 1) : 0;
 
-        float wait_takeout_suction_angle = g_arm_reach_target_joint[2];
-        robot_arm_start_takeout_sequence(&g_robot_arm, target_y, target_z,
-                                         target_pitch,
-                                         wait_takeout_suction_angle);
-        robot_arm_mark_reach_target(target_y, target_z, target_pitch);
-        g_last_target_index = index;
-        xTaskNotifyGive(arm_feedback_task_handle);
-        return;
+        /* 顶层无上层遮挡，直接到位，不走4步避障序列 */
+        if (g_robot_arm.layer_count == 2) {
+            /* fall through to direct move below */
+        } else {
+            float wait_takeout_suction_angle = g_arm_reach_target_joint[2];
+            robot_arm_start_takeout_sequence(&g_robot_arm, target_y, target_z,
+                                             target_pitch,
+                                             wait_takeout_suction_angle);
+            robot_arm_mark_reach_target(target_y, target_z, target_pitch);
+            g_last_target_index = index;
+            xTaskNotifyGive(arm_feedback_task_handle);
+            return;
+        }
     }
 
     robot_arm_mark_reach_target(target_y, target_z, target_pitch);
@@ -802,9 +810,11 @@ static void arm_pump_place_check(bool publish_result) {
         if (pump_read_adc_filtered(&adc_val)) {
             if (adc_val > PUMP_ADC_READY_HIGH) {
                 log_message(LOG_INFO, "ARM_PLACE Success, adc=%d", adc_val);
-                /* 放置完成：已放置数量+1，上限3 */
-                if (g_layer_count < 3) g_layer_count++;
+                /* 放置完成：已放置数量+1 */
+                g_layer_count++;
+#if USE_FLASH
                 arm_flash_save();
+#endif
                 if (publish_result) {
                     control_dispatch_publish(2);
                 }
@@ -814,9 +824,11 @@ static void arm_pump_place_check(bool publish_result) {
 #endif
 #if ARM_PUMP_PLACE_TIMEOUT_ENABLE
         if (HAL_GetTick() - wait_start_tick >= 2000U) {
-            /* 超时也算放置完成：已放置数量+1，上限3 */
-            if (g_layer_count < 3) g_layer_count++;
+            /* 超时也算放置完成：已放置数量+1 */
+            g_layer_count++;
+#if USE_FLASH
             arm_flash_save();
+#endif
             if (publish_result) {
                 control_dispatch_publish(2);
             }
@@ -889,12 +901,12 @@ static uint8_t pump_read_adc_filtered(uint16_t *out_value) {
 
 /* 按键 → 状态索引 映射表，按需增删改 */
 static const uint8_t g_arm_key_index_map[][2] = {
-    {10, 1},  /* READY_1     */
-    {11, 3},  /* READY_3     */
-    {12, 4},  /* READY_4     */
-    {13, 5},  /* CATCH   */
-    {14, 8},  /* TAKEOUT_1   */
-    {15, 9},  /* TAKEOUT_2   */
+    {10, 3},  /* READY_3     */
+    {11, 4},  /* READY_4     */
+    {12, 5},  /* CATCH       */
+    {13, 8},  /* TAKEOUT_1   */
+    {14, 7},  /* WAIT_TAKEOUT   */
+    {15, 9},  /* TAKEOUT_2       */
     {16, 11}, /* PUMP_CLOSE  */
 };
 #define ARM_KEY_MAP_COUNT                                                      \
