@@ -9,6 +9,8 @@
 #include "includes.h"
 #include "arm_ctrl.h"
 #include "ws2812/ws2812.h"
+#include "vl53l1/vl53l1_apply.h"
+#include "microros_ctrl.h"
 static void log_task_stack_usage(TaskHandle_t task_handle,
                                  const char *task_name,
                                  configSTACK_DEPTH_TYPE stack_words);
@@ -19,7 +21,10 @@ void start_task(void *pvParameters);
 
 static TaskHandle_t task1_handle;
 void task1(void *pvParameters);
-                                  
+
+static TaskHandle_t task2_handle;
+void task2(void *pvParameters);
+
 static TaskHandle_t microros_task_handle;
 void microros_task(void *pvParameters);
 
@@ -71,6 +76,10 @@ void start_task(void *pvParameters) {
         log_message(LOG_ERROR, "start_task: task1 create failed");
         Error_Handler();
     }
+    // if (xTaskCreate(task2, "task2", 256, NULL, 2, &task2_handle) != pdPASS) {
+    //     log_message(LOG_ERROR, "start_task: task2 create failed");
+    //     Error_Handler();
+    // }
 
     vTaskDelete(NULL);
 }
@@ -88,8 +97,8 @@ void task1(void *pvParameters) {
         LED0_TOGGLE();
 
         /* PA1 下降沿检测：层数加1 */
-        uint8_t pa1_now = (uint8_t)HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1);
-        if (pa1_last == 1 && pa1_now == 0) {
+        uint8_t pa1_now = (uint8_t)HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1);
+        if (pa1_last == 0 && pa1_now == 1) {
             uint8_t layer = robot_arm_get_layer_count();
             layer = (layer + 1) % 4;
             robot_arm_set_layer_count(layer);
@@ -121,6 +130,21 @@ void task1(void *pvParameters) {
     }
 }
 
+uint16_t g_vl53l1_dist_mm = 0;
+uint16_t g_vl53l1_dist_mm4 = 0;
+
+void task2(void *pvParameters) {
+    UNUSED(pvParameters);
+    vl53l1_apply_start_measurement(g_vl53l1_handle4);
+    vl53l1_apply_start_measurement(g_vl53l1_handle);
+    while (1) {
+        vl53l1_apply_get_distance_mm(&g_vl53l1_dist_mm4, g_vl53l1_handle4);
+        vl53l1_apply_get_distance_mm(&g_vl53l1_dist_mm, g_vl53l1_handle);
+        // log_data(LOG_CHASSIS, nav_sub_pram.linear_x, nav_sub_pram.linear_y,
+        //      nav_sub_pram.angular_z);
+        vTaskDelay(20);
+    }
+}
 static void log_task_stack_usage(TaskHandle_t task_handle,
                                  const char *task_name,
                                  configSTACK_DEPTH_TYPE stack_words) {

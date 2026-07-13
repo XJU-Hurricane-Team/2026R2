@@ -2,18 +2,19 @@
 #include "./iic/iic.h"                // I2C1
 #include "./iic/iic2.h"               // I2C2
 #include "./iic/iic3.h"               // I2C3
+#include "./iic/iic4.h"               // I2C4
 #include "./core_delay/core_delay.h"  // 延时函数
 
 /* ========== I2C 总线选择辅助宏 ========== */
 /* 根据 Dev->i2c_bus_id 分发到对应 I2C 总线的函数调用 */
 
-#define IIC_SELECT_START(bus)   do { if ((bus)==0) iic_start();  else if ((bus)==1) iic2_start();  else iic3_start();  } while(0)
-#define IIC_SELECT_STOP(bus)    do { if ((bus)==0) iic_stop();   else if ((bus)==1) iic2_stop();   else iic3_stop();   } while(0)
-#define IIC_SELECT_ACK(bus)     do { if ((bus)==0) iic_ack();    else if ((bus)==1) iic2_ack();    else iic3_ack();    } while(0)
-#define IIC_SELECT_NACK(bus)    do { if ((bus)==0) iic_nack();   else if ((bus)==1) iic2_nack();   else iic3_nack();   } while(0)
-#define IIC_SELECT_WAIT_ACK(bus) do { if ((bus)==0) iic_wait_ack(); else if ((bus)==1) iic2_wait_ack(); else iic3_wait_ack(); } while(0)
-#define IIC_SELECT_SEND(bus, d)  do { if ((bus)==0) iic_send_byte(d); else if ((bus)==1) iic2_send_byte(d); else iic3_send_byte(d); } while(0)
-#define IIC_SELECT_READ(bus, a)  ((bus)==0 ? iic_read_byte(a) : ((bus)==1 ? iic2_read_byte(a) : iic3_read_byte(a)))
+#define IIC_SELECT_START(bus)   do { if ((bus)==0) iic_start();  else if ((bus)==1) iic2_start();  else if ((bus)==2) iic3_start();  else iic4_start();  } while(0)
+#define IIC_SELECT_STOP(bus)    do { if ((bus)==0) iic_stop();   else if ((bus)==1) iic2_stop();   else if ((bus)==2) iic3_stop();   else iic4_stop();   } while(0)
+#define IIC_SELECT_ACK(bus)     do { if ((bus)==0) iic_ack();    else if ((bus)==1) iic2_ack();    else if ((bus)==2) iic3_ack();    else iic4_ack();    } while(0)
+#define IIC_SELECT_NACK(bus)    do { if ((bus)==0) iic_nack();   else if ((bus)==1) iic2_nack();   else if ((bus)==2) iic3_nack();   else iic4_nack();   } while(0)
+#define IIC_SELECT_WAIT_ACK(bus) do { if ((bus)==0) iic_wait_ack(); else if ((bus)==1) iic2_wait_ack(); else if ((bus)==2) iic3_wait_ack(); else iic4_wait_ack(); } while(0)
+#define IIC_SELECT_SEND(bus, d)  do { if ((bus)==0) iic_send_byte(d); else if ((bus)==1) iic2_send_byte(d); else if ((bus)==2) iic3_send_byte(d); else iic4_send_byte(d); } while(0)
+#define IIC_SELECT_READ(bus, a)  ((bus)==0 ? iic_read_byte(a) : ((bus)==1 ? iic2_read_byte(a) : ((bus)==2 ? iic3_read_byte(a) : iic4_read_byte(a))))
 
 /**
  * @brief 连续写多个字节
