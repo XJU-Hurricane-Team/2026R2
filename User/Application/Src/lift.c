@@ -42,7 +42,7 @@
 #define LIFT_CATCH_ENABLE_PIN    GPIO_PIN_2
 //2.7498
 #define LIFT_TARGET_CATCH_DEG    2.40f      //2.6049 - 2.50 = 0.
-#define LIFT_TARGET_DEG_UP_MAX   1.6f      //最初5.42
+#define LIFT_TARGET_DEG_UP_MAX   1.60f      //最初5.42
 #define LIFT_TARGET_DEG_DOWN_MAX 12.275f
 #define LIFT_TARGET_DEG_UP_SEQ   0.0f
 #define LIFT_TARGET_DEG_DOWN_SEQ 12.275f
@@ -52,10 +52,11 @@
 #define LIFT_TARGET_SPEED_LOW    7.0f       //抬升慢速
 #define LIFT_TARGET_SPEED        10.0f
 
-#define LIFT_2006_HIGH_SPEED     6250.0f
-#define LIFT_2006_LOW_SPEED      2750.0f
+#define LIFT_2006_HIGH_SPEED     6550.0f
+#define LIFT_2006_LOW_SPEED      2600.0f
 #define TIME_DURATION_FRONT      0.4f
-#define TIME_DURATION_REAR       1.37f   
+
+#define TIME_DURATION_REAR       1.28f   
 
 typedef enum {
     LIFT_STATE_NORMAL = 0,
@@ -449,7 +450,7 @@ static void lift_bottom_init(void) {
 
     for (int i = 0; i < 2; i++) {
         pid_init(&dji_2006_pid[i], 16384.0f, 500.0f, 2.0f, 15000.0f, POSITION_PID,
-                 3.65f, 0.001f, 0.00f);
+                 3.85f, 0.001f, 0.00f);
     }
 }
 
@@ -504,7 +505,7 @@ static void lift_seq_start(uint8_t action) {
         s_last_vl53l1_dist_mm = 0;
         s_vl53l1_has_last = false;
         vl53l1_apply_start_measurement(g_vl53l1_handle);
-        vl53l1_apply_start_measurement(g_vl53l1_handle3);
+       
     }
 
     if (lift_sequence_task_handle != NULL) {
@@ -774,7 +775,6 @@ static void lift_finish_sequence(void) {
 
     /* 序列结束，停止 VL53L1 测距 */
     vl53l1_apply_stop_measurement(g_vl53l1_handle);
-    vl53l1_apply_stop_measurement(g_vl53l1_handle3);
     s_vl53l1_has_last = false;
 }
 
@@ -926,15 +926,8 @@ static void lift_up_step_wait_up_arrived_and_finish(void) {
 
 // 下降步骤1：等待后光电下降沿 或 VL53L1(handle3) 距离 >= 150mm
 static void lift_down_step_wait_rear_release(void) {
-    bool vl53l1_triggered = false;
-    uint16_t cur_dist_mm = 0;
-    if (vl53l1_apply_get_distance_mm(&cur_dist_mm, g_vl53l1_handle3)) {
-        if (cur_dist_mm >= 150) {
-            vl53l1_triggered = true;
-        }
-    }
 
-    if (get_rear_photoelectric_falling_edge() || vl53l1_triggered) {
+    if (get_rear_photoelectric_falling_edge()) {
         log_message(LOG_INFO, "chassis down");
         lift_publish_if_auto(0);
         g_lift_handle.lift_fsm.step = 1;
