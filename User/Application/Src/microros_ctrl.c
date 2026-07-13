@@ -180,9 +180,9 @@ void microros_task(void *pvParameters) {
     UNUSED(pvParameters);
 
     nav_module_init();
-    vTaskDelay(1000); // 初始化缓冲
+    vTaskDelay(2000); // 初始化缓冲
     control_dispatch_init();
-    vTaskDelay(1000); // 初始化缓冲
+    vTaskDelay(2000); // 初始化缓冲
 
     while (1) {
         if (microros_rcl_mutex != NULL &&
@@ -319,7 +319,7 @@ void control_dispatch_init(void) {
 void control_dispatch_publish(int8_t status) {
     control_dispatch_pub_pram.data = status;
     if (microros_rcl_mutex != NULL &&
-        xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(20)) == pdTRUE) {
         rcl_ret_t pub_ret = rcl_publish(&control_dispatch_publisher,
                                         &control_dispatch_pub_pram, NULL);
         if (pub_ret != RCL_RET_OK) {

@@ -61,10 +61,10 @@ void Error_Handler(void);
 #define LED0_GPIO_Port GPIOE
 #define KEY2_Pin GPIO_PIN_13
 #define KEY2_GPIO_Port GPIOC
+#define KEY_Pin GPIO_PIN_1
+#define KEY_GPIO_Port GPIOC
 #define WKUP_Pin GPIO_PIN_0
 #define WKUP_GPIO_Port GPIOA
-#define KEY_Pin GPIO_PIN_1
-#define KEY_GPIO_Port GPIOA
 #define PUMP_Pin GPIO_PIN_4
 #define PUMP_GPIO_Port GPIOA
 #define KEY0_Pin GPIO_PIN_4

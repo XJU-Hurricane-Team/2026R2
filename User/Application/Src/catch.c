@@ -223,7 +223,7 @@ static void catch_feedback_task(void *pvParameters) {
             
             vTaskDelay(pdMS_TO_TICKS(10));
         }
-        log_message(LOG_INFO, "Catch State %d reached target", current_state);
+        log_message(LOG_INFO, "Catch State %d ", current_state);
 
         if (catch_state != current_state) {
             continue; // 状态已被打断，重新等待新通知
@@ -264,26 +264,27 @@ static void catch_feedback_task(void *pvParameters) {
             case CATCH_STATE_CHECK:
                 // 检测抓取是否成功。
                 {
-                    uint16_t dist = 0;
-                    uint32_t total_dist = 0;
-                    uint8_t valid_count = 0;
-                    VL53L1_StartMeasurement(g_vl53l1_handle);
-                    for (int i = 0; i < 3; i++) {
-                        if (vl53l1_apply_get_distance_mm(&dist,
-                                                         g_vl53l1_handle)) {
-                            total_dist += dist;
-                            valid_count++;
-                        }
-                        vTaskDelay(pdMS_TO_TICKS(30));
-                    }
-                    dist = total_dist / valid_count;
-                    if (total_dist > 0 && valid_count > 0 && dist <= 200) {
-                        control_dispatch_publish(1); // 成功抓取
-                    } else {
-                        control_dispatch_publish(1); // 抓取失败
-                    }
-                     VL53L1_StopMeasurement(g_vl53l1_handle);
-                    log_message(LOG_INFO, "Check! dist = %d", dist);
+                     control_dispatch_publish(1); // 成功抓取
+                    // uint16_t dist = 0;
+                    // uint32_t total_dist = 0;
+                    // uint8_t valid_count = 0;
+                    // VL53L1_StartMeasurement(g_vl53l1_handle);
+                    // for (int i = 0; i < 3; i++) {
+                    //     if (vl53l1_apply_get_distance_mm(&dist,
+                    //                                      g_vl53l1_handle)) {
+                    //         total_dist += dist;
+                    //         valid_count++;
+                    //     }
+                    //     vTaskDelay(pdMS_TO_TICKS(30));
+                    // }
+                    // dist = total_dist / valid_count;
+                    // if (total_dist > 0 && valid_count > 0 && dist <= 200) {
+                    //     control_dispatch_publish(1); // 成功抓取
+                    // } else {
+                    //     control_dispatch_publish(1); // 抓取失败
+                    // }
+                    //  VL53L1_StopMeasurement(g_vl53l1_handle);
+                    // log_message(LOG_INFO, "Check! dist = %d", dist);
                 }
                 break;
 

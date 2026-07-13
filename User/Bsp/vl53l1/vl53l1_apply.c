@@ -2,6 +2,7 @@
 #include "iic/iic.h"
 #include "iic/iic2.h"
 #include "iic/iic3.h"
+#include "iic/iic4.h"
 #include "FreeRTOS.h"
 #include "task.h"
 
@@ -17,11 +18,14 @@
 #define VL53L1_2_XSHUT_GPIO_PIN           GPIO_PIN_7
 #define VL53L1_3_XSHUT_GPIO_PORT          GPIOD
 #define VL53L1_3_XSHUT_GPIO_PIN           GPIO_PIN_11
+#define VL53L1_4_XSHUT_GPIO_PORT          GPIOC
+#define VL53L1_4_XSHUT_GPIO_PIN           GPIO_PIN_12
 
 /* ========== 每个传感器绑定的软件 I2C 总线 ID ========== */
-#define VL53L1_1_I2C_BUS_ID               0  /* I2C1: PC6/PC7 */
-#define VL53L1_2_I2C_BUS_ID               1  /* I2C2: PB6/PB7 */
-#define VL53L1_3_I2C_BUS_ID               2  /* I2C3: PB8/PB9 */
+#define VL53L1_1_I2C_BUS_ID               0  /* I2C1: PC8/PC9 */
+#define VL53L1_2_I2C_BUS_ID               1  /* I2C2: PC6/PC7 */
+#define VL53L1_3_I2C_BUS_ID               2  /* I2C3: PD9/PD8 */
+#define VL53L1_4_I2C_BUS_ID               3  /* I2C4: PC10/PC11 */
 
 /* ========== 设备句柄 ========== */
 VL53L1_Dev_t g_vl53l1_dev;
@@ -33,14 +37,18 @@ VL53L1_DEV g_vl53l1_handle2 = &g_vl53l1_dev2;
 VL53L1_Dev_t g_vl53l1_dev3;
 VL53L1_DEV g_vl53l1_handle3 = &g_vl53l1_dev3;
 
+VL53L1_Dev_t g_vl53l1_dev4;
+VL53L1_DEV g_vl53l1_handle4 = &g_vl53l1_dev4;
+
 /* ========== 每个设备独立的就绪标志 ========== */
-static bool g_vl53l1_ready[3] = {true, true, true};
+static bool g_vl53l1_ready[4] = {true, true, true, true};
 
 /* ---- 辅助：根据句柄获取就绪标志 ---- */
 static bool *vl53l1_get_ready_ptr(VL53L1_DEV handle) {
     if (handle == g_vl53l1_handle)  return &g_vl53l1_ready[0];
     if (handle == g_vl53l1_handle2) return &g_vl53l1_ready[1];
     if (handle == g_vl53l1_handle3) return &g_vl53l1_ready[2];
+    if (handle == g_vl53l1_handle4) return &g_vl53l1_ready[3];
     return NULL;
 }
 
@@ -98,6 +106,7 @@ void vl53l1_apply_init(void) {
     iic_init();
     iic2_init();
     iic3_init();
+    iic4_init();
 
     /* ---- 2. 预设各设备句柄的 I2C 地址和总线 ID ---- */
     g_vl53l1_handle->I2cDevAddr  = VL53L1_APPLY_I2C_ADDR;
@@ -108,6 +117,9 @@ void vl53l1_apply_init(void) {
 
     g_vl53l1_handle3->I2cDevAddr = VL53L1_APPLY_I2C_ADDR;
     g_vl53l1_handle3->i2c_bus_id = VL53L1_3_I2C_BUS_ID;
+
+    g_vl53l1_handle4->I2cDevAddr = VL53L1_APPLY_I2C_ADDR;
+    g_vl53l1_handle4->i2c_bus_id = VL53L1_4_I2C_BUS_ID;
 
     /* ---- 3. 配置 XSHUT 引脚为输出模式（CubeMX 默认可能为模拟） ---- */
     {
@@ -122,12 +134,15 @@ void vl53l1_apply_init(void) {
         HAL_GPIO_Init(VL53L1_2_XSHUT_GPIO_PORT, &gpio);
         gpio.Pin = VL53L1_3_XSHUT_GPIO_PIN;
         HAL_GPIO_Init(VL53L1_3_XSHUT_GPIO_PORT, &gpio);
+        gpio.Pin = VL53L1_4_XSHUT_GPIO_PIN;
+        HAL_GPIO_Init(VL53L1_4_XSHUT_GPIO_PORT, &gpio);
     }
 
     /* ---- 4. 全部 XSHUT 拉低复位 ---- */
     HAL_GPIO_WritePin(VL53L1_1_XSHUT_GPIO_PORT, VL53L1_1_XSHUT_GPIO_PIN, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(VL53L1_2_XSHUT_GPIO_PORT, VL53L1_2_XSHUT_GPIO_PIN, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(VL53L1_3_XSHUT_GPIO_PORT, VL53L1_3_XSHUT_GPIO_PIN, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(VL53L1_4_XSHUT_GPIO_PORT, VL53L1_4_XSHUT_GPIO_PIN, GPIO_PIN_RESET);
     vTaskDelay(pdMS_TO_TICKS(10));
 
     /* ---- 5. 逐一初始化各传感器 ---- */
@@ -137,11 +152,14 @@ void vl53l1_apply_init(void) {
                             VL53L1_2_XSHUT_GPIO_PORT, VL53L1_2_XSHUT_GPIO_PIN);
     g_vl53l1_ready[2] = vl53l1_apply_init_single(g_vl53l1_handle3,
                             VL53L1_3_XSHUT_GPIO_PORT, VL53L1_3_XSHUT_GPIO_PIN);
+    g_vl53l1_ready[3] = vl53l1_apply_init_single(g_vl53l1_handle4,
+                            VL53L1_4_XSHUT_GPIO_PORT, VL53L1_4_XSHUT_GPIO_PIN);
 
     /* ---- 6. 初始化后默认关闭测距 ---- */
     vl53l1_apply_stop_measurement(g_vl53l1_handle);
     vl53l1_apply_stop_measurement(g_vl53l1_handle2);
     vl53l1_apply_stop_measurement(g_vl53l1_handle3);
+    vl53l1_apply_stop_measurement(g_vl53l1_handle4);
 }
 
 /**
@@ -154,7 +172,7 @@ bool vl53l1_apply_get_distance_mm(uint16_t *distance_mm, VL53L1_DEV handle) {
     uint8_t data_ready = 0;
     VL53L1_RangingMeasurementData_t ranging_data;
     bool *ready;
-    static uint8_t err_count[3] = {0, 0, 0}; /* 三个传感器的连续错误计数 */
+    static uint8_t err_count[4] = {0, 0, 0, 0}; /* 四个传感器的连续错误计数 */
     uint8_t *err_p;
 
     if (distance_mm == NULL || handle == NULL) return false;
@@ -166,7 +184,8 @@ bool vl53l1_apply_get_distance_mm(uint16_t *distance_mm, VL53L1_DEV handle) {
     /* 获取对应错误计数器指针 */
     if (handle == g_vl53l1_handle)  err_p = &err_count[0];
     else if (handle == g_vl53l1_handle2) err_p = &err_count[1];
-    else err_p = &err_count[2];
+    else if (handle == g_vl53l1_handle3) err_p = &err_count[2];
+    else err_p = &err_count[3];
 
     /* 查询数据是否准备好 */
     if (VL53L1_GetMeasurementDataReady(handle, &data_ready) != VL53L1_ERROR_NONE) {
@@ -227,4 +246,15 @@ void vl53l1_apply_stop_measurement(VL53L1_DEV handle) {
     bool *ready = vl53l1_get_ready_ptr(handle);
     if (ready == NULL || !(*ready)) return;
     VL53L1_StopMeasurement(handle);
+}
+
+/**
+ * @brief 清除残留中断标志并重启测距
+ * @note  解决 StopMeasurement/StartMeasurement 之间可能残留的 data_ready 标志，
+ *        避免新序列读到上次留存的距离数据导致误触发。
+ */
+void vl53l1_apply_clear_and_restart(VL53L1_DEV handle) {
+    bool *ready = vl53l1_get_ready_ptr(handle);
+    if (ready == NULL || !(*ready)) return;
+    VL53L1_ClearInterruptAndStartMeasurement(handle);
 }

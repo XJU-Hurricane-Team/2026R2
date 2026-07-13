@@ -500,12 +500,21 @@ static void lift_seq_start(uint8_t action) {
     g_lift_handle.lift_fsm.action = action;
     g_lift_handle.lift_fsm.step = 0;
 
+     /* 上升序列启动时，启动 VL53L1 测距并重置距离跟踪 */
+    if (action == 1) {
+        s_last_vl53l1_dist_mm = 0;
+        s_vl53l1_has_last = false;
+        vl53l1_apply_start_measurement(g_vl53l1_handle4);
+        vl53l1_apply_clear_and_restart(g_vl53l1_handle4);
+    }
     /* 下降序列启动时，启动 VL53L1 测距并重置距离跟踪 */
     if (action == 2) {
         s_last_vl53l1_dist_mm = 0;
         s_vl53l1_has_last = false;
         vl53l1_apply_start_measurement(g_vl53l1_handle);
-       
+        vl53l1_apply_clear_and_restart(g_vl53l1_handle);
+        vl53l1_apply_start_measurement(g_vl53l1_handle4);
+        vl53l1_apply_clear_and_restart(g_vl53l1_handle4);
     }
 
     if (lift_sequence_task_handle != NULL) {
@@ -673,7 +682,7 @@ static bool photoelectric_get_stable_state(photoelectric_debounce_t *debounce,
     if (elapsed_ms >= debounce->debounce_ms) {
         // 保存上一次的稳定状态，然后更新当前稳定状态
         debounce->prev_stable_state = debounce->last_stable_state;
-        debounce->last_stable_state = raw_state;
+        debounce->last_stable_state = raw_state;  
     }
 
     return debounce->last_stable_state;
@@ -775,6 +784,7 @@ static void lift_finish_sequence(void) {
 
     /* 序列结束，停止 VL53L1 测距 */
     vl53l1_apply_stop_measurement(g_vl53l1_handle);
+    vl53l1_apply_stop_measurement(g_vl53l1_handle4);
     s_vl53l1_has_last = false;
 }
 
@@ -791,6 +801,7 @@ static void lift_seq_emergency_stop(void) {
 
     /* 紧急停止也关 VL53L1 */
     vl53l1_apply_stop_measurement(g_vl53l1_handle);
+    vl53l1_apply_stop_measurement(g_vl53l1_handle4);
     s_vl53l1_has_last = false;
 
     log_message(LOG_INFO,
@@ -895,9 +906,20 @@ static void lift_up_step_drive_2006_forward(void) {
     } else {
         g_lift_handle.target_2006_rpm = LIFT_2006_LOW_SPEED;
     }
-
+    /* ---- VL53L1 距离检测：距离 <= 150mm 时触发 ---- */
+    bool vl53l1_triggered = false;
+    uint16_t cur_dist_mm = 0;
+    if (vl53l1_apply_get_distance_mm(&cur_dist_mm, g_vl53l1_handle4)) {
+        if (cur_dist_mm <= 150) {
+            vl53l1_triggered = true;
+            LED3_ON();
+        }
+    }
     // 检查后光电的上升沿（false -> true）
-    if (get_rear_photoelectric_rising_edge()) {
+    if (get_rear_photoelectric_rising_edge() || vl53l1_triggered) {
+        if(vl53l1_triggered) {
+            log_message(LOG_INFO, "vl53l1 triggered");
+        }
         step4_start_tick = 0;
         g_lift_handle.target_2006_rpm = 0.0f;
         if(up_R1_flag) {
@@ -927,7 +949,20 @@ static void lift_up_step_wait_up_arrived_and_finish(void) {
 // 下降步骤1：等待后光电下降沿 或 VL53L1(handle3) 距离 >= 150mm
 static void lift_down_step_wait_rear_release(void) {
 
-    if (get_rear_photoelectric_falling_edge()) {
+    /* ---- VL53L1 距离检测：距离 >= 150mm 时触发 ---- */
+    bool vl53l1_triggered = false;
+    uint16_t cur_dist_mm = 0;
+    if (vl53l1_apply_get_distance_mm(&cur_dist_mm, g_vl53l1_handle4)) {
+        if (cur_dist_mm >= 150) {
+            vl53l1_triggered = true;
+            LED3_ON();
+        }
+    }
+
+    if (get_rear_photoelectric_falling_edge() || vl53l1_triggered) {
+        if(vl53l1_triggered) {
+            log_message(LOG_INFO, "vl53l1 triggered");
+        }
         log_message(LOG_INFO, "chassis down");
         lift_publish_if_auto(0);
         g_lift_handle.lift_fsm.step = 1;
@@ -985,6 +1020,9 @@ static void lift_down_step_drive_2006_backward(void) {
     /* 检查中光电的下降沿 或 VL53L1 距离 >= 150mm，完成时清除开始 tick 并前进步骤 */
     if (get_middle_photoelectric_falling_edge() || vl53l1_triggered){
     // if ( vl53l1_triggered) 
+        if(vl53l1_triggered) {
+            log_message(LOG_INFO, "vl53l1 triggered");
+        }
         /* 记录本次耗时供调试（可选） */
         float total_time = elapsed_sec;
         g_lift_handle.step3_last_duration = total_time;
