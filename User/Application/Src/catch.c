@@ -215,12 +215,16 @@ static void catch_feedback_task(void *pvParameters) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
         catch_state_t current_state = catch_state;
+        uint32_t timeout_cnt = CATCH_HEAD_DM_TIMEOUT_MS / 10;
         while (!catch_head_is_target_reached()) {
             // ·ÀÖ¹×´Ì¬Í»È»¸Ä±ä
             if (catch_state != current_state) {
                 break;
             }
-            
+            if (--timeout_cnt == 0) {
+                log_message(LOG_INFO, "DM timeout", current_state);
+                break;
+            }
             vTaskDelay(pdMS_TO_TICKS(10));
         }
         log_message(LOG_INFO, "Catch State %d ", current_state);
