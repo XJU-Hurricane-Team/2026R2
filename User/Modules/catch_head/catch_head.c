@@ -13,7 +13,7 @@
 static dm_handle_t g_dm_motor;
 static catch_head_dm_joint_t g_dm_joint = {
 	.motor_handle = &g_dm_motor,
-	.target_position_rad = {0.00f, 1.52f , 3.08f},
+	.target_position_rad = {0.00f, 1.50f , 3.08f},
 	.target_index = 0,
 };
 
