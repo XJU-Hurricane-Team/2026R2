@@ -91,6 +91,7 @@ typedef struct {
 static bool g_auto_lift_target_pending = false;
 static float g_auto_lift_target_degree = 0.0f;
 bool up_R1_flag = false;
+bool only_vl53l1_flag = false;
 
 static lift_handle_t g_lift_handle = {
     .is_auto_mode = false,
@@ -1023,13 +1024,32 @@ static void lift_down_step_drive_2006_backward(void) {
         }
     }
 
-    /* ---- 中光电下降沿：启动 100ms 延时，期间保持稳定再触发 ---- */
+    /* only_vl53l1_flag 为 true 时，仅使用 VL53L1 测距模块触发 */
+    if (only_vl53l1_flag) {
+        if (vl53l1_triggered) {
+            log_message(LOG_INFO, "vl53l1 triggered (only_vl53l1)");
+            only_vl53l1_flag = false;
+            s_pe_delay_start_tick = 0;
+
+            float total_time = elapsed_sec;
+            g_lift_handle.step3_last_duration = total_time;
+            g_lift_handle.step3_start_tick = 0;
+
+            g_lift_handle.target_2006_rpm = 0.0f;
+            g_lift_handle.lift_state = LIFT_STATE_UP;
+            lift_set_target(LIFT_TARGET_DEG_UP_SEQ);
+            g_lift_handle.lift_fsm.step = 4;
+        }
+        return;
+    }
+
+    /* ---- 中光电下降沿：启动 90ms 延时，期间保持稳定再触发 ---- */
     bool pe_falling = get_middle_photoelectric_falling_edge();
     if (pe_falling && s_pe_delay_start_tick == 0) {
         s_pe_delay_start_tick = xTaskGetTickCount();
     }
 
-    /* 光电延时到期（100ms） 或 VL53L1 立即触发 */
+    /* 光电延时到期（90ms） 或 VL53L1 立即触发 */
     bool pe_delay_done = (s_pe_delay_start_tick != 0) &&
         ((xTaskGetTickCount() - s_pe_delay_start_tick) * portTICK_PERIOD_MS >= 90);
 
