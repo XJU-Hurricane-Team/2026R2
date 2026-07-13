@@ -29,7 +29,7 @@
     1               /**< 放置态气泵超时检测使能 (0:禁用, 1:启用) */
 #define ARM_PUMP_CATCH_TIMEOUT_ENABLE                                          \
     0 /**< 抓取/待取态纯超时使能 (电机到位后等2秒自动抓取, 0:原ADC重试逻辑) */
-#define USE_FLASH 1 /**< 是否使用Flash存储层数 (0:禁用, 1:启用) */
+#define USE_FLASH 0 /**< 是否使用Flash存储层数 (0:禁用, 1:启用) */
 
 #define CATCH_READY_2_ANGEL                                                    \
     -0.893f /**< READY_2 吸盘关节相对于水平面旋转角度 (rad) */
