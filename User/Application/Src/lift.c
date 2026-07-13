@@ -42,7 +42,7 @@
 #define LIFT_CATCH_ENABLE_PIN    GPIO_PIN_2
 //2.7498
 #define LIFT_TARGET_CATCH_DEG    2.40f      //2.6049 - 2.50 = 0.
-#define LIFT_TARGET_DEG_UP_MAX   2.0f      //最初5.42
+#define LIFT_TARGET_DEG_UP_MAX   1.60f      //最初5.42
 #define LIFT_TARGET_DEG_DOWN_MAX 12.275f
 #define LIFT_TARGET_DEG_UP_SEQ   0.0f
 #define LIFT_TARGET_DEG_DOWN_SEQ 12.275f

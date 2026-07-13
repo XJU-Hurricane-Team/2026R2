@@ -23,7 +23,7 @@
 #define PUMP_ADC_READY_HIGH     4000U /**< 释放成功判定的高压阈值 */
 
 #define ARM_USE_VL53L1_CATCH    1     /**< 是否使用VL53L1测距判定抓取成功 (1:VL53L1测距, 0:原有ADC/超时) */
-#define ARM_VL53L1_CATCH_DISTANCE_MM 60U /**< VL53L1抓取成功距离阈值 (mm) */
+#define ARM_VL53L1_CATCH_DISTANCE_MM 64U /**< VL53L1抓取成功距离阈值 (mm) */
 
 #define ARM_PUMP_PLACE_TIMEOUT_ENABLE                                          \
     1               /**< 放置态气泵超时检测使能 (0:禁用, 1:启用) */
