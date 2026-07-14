@@ -456,6 +456,9 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 lift_set_target(-LIFT_TARGET_UP_R1_DEG);
                 up_R1_flag = true;
                 break;
+            case 6:
+                only_vl53l1_flag = true;
+                break;
             default:
                 break;
         }
