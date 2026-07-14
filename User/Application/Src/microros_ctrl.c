@@ -265,6 +265,13 @@ void nav_publish(int8_t status) {
  */
 void nav_sub_callback(const void *msgin) {
     nav_sub_pram = *(const custom_msg__msg__SpeedHeading *)msgin;
+
+    static TickType_t last_toggle_tick = 0;
+    TickType_t now = xTaskGetTickCount();
+    if ((now - last_toggle_tick) >= pdMS_TO_TICKS(500)) {
+        LED3_TOGGLE();
+        last_toggle_tick = now;
+    }
 }
 
 /** @} */
