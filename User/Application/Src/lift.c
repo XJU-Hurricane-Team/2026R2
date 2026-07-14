@@ -893,6 +893,7 @@ static void lift_up_step_drive_2006_forward(void) {
         step4_start_tick = xTaskGetTickCount();
     }
 
+
     /* 计算自 step4 开始经过的秒数 */
     uint32_t now_tick = xTaskGetTickCount();
     float elapsed_sec = (now_tick - step4_start_tick) *
@@ -919,8 +920,11 @@ static void lift_up_step_drive_2006_forward(void) {
         }
     }
     // 检查后光电的上升沿（false -> true）
-    if (get_rear_photoelectric_rising_edge() || vl53l1_triggered) {
-        if(vl53l1_triggered) {
+    // up_R1_flag 为真时仅用上升沿，否则上升沿与 VL53L1 或门触发
+    bool rear_rising = get_rear_photoelectric_rising_edge();
+    bool vl53l1_valid = (!up_R1_flag && vl53l1_triggered);
+    if (rear_rising || vl53l1_valid) {
+        if(vl53l1_valid) {
             log_message(LOG_INFO, "vl53l1 triggered");
         }
         step4_start_tick = 0;
