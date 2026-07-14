@@ -48,11 +48,11 @@
 #define LIFT_TARGET_DEG_DOWN_SEQ 12.275f
 #define LIFT_TARGET_DEG_STEP     0.025f
 #define LIFT_TARGET_SPEED_UP_R1  5.0f  
-#define LIFT_TARGET_SPEED_HIGH   30.0f      //抬升快速
+#define LIFT_TARGET_SPEED_HIGH   25.0f      //抬升快速
 #define LIFT_TARGET_SPEED_LOW    7.0f       //抬升慢速
 #define LIFT_TARGET_SPEED        10.0f
 
-#define LIFT_2006_HIGH_SPEED     6250.0f
+#define LIFT_2006_HIGH_SPEED     5850.0f
 #define LIFT_2006_LOW_SPEED      2130.0f
 #define TIME_DURATION_FRONT      0.4f
 
@@ -91,6 +91,7 @@ typedef struct {
 static bool g_auto_lift_target_pending = false;
 static float g_auto_lift_target_degree = 0.0f;
 bool up_R1_flag = false;
+bool only_vl53l1_flag = false;
 
 static lift_handle_t g_lift_handle = {
     .is_auto_mode = false,
@@ -850,7 +851,7 @@ static float lift_select_target_speed(float target_degree, float real_degree) {
        前 1/5(~2.455) 低速起步，中间 3/5 高速，后 1/5(~2.455) 低速收尾 */
     float target_error = fabsf(fabsf(target_degree) - fabsf(real_degree));
     float one_fifth = LIFT_TARGET_DEG_DOWN_SEQ / 5.0f;
-    if (target_error <= one_fifth || target_error >= 4.0f * one_fifth) {
+    if (target_error <= (1.5f * one_fifth) || target_error >= 4.0f * one_fifth) {
         return LIFT_TARGET_SPEED_LOW;
     }
     return LIFT_TARGET_SPEED_HIGH;
@@ -892,6 +893,7 @@ static void lift_up_step_drive_2006_forward(void) {
         step4_start_tick = xTaskGetTickCount();
     }
 
+
     /* 计算自 step4 开始经过的秒数 */
     uint32_t now_tick = xTaskGetTickCount();
     float elapsed_sec = (now_tick - step4_start_tick) *
@@ -918,8 +920,11 @@ static void lift_up_step_drive_2006_forward(void) {
         }
     }
     // 检查后光电的上升沿（false -> true）
-    if (get_rear_photoelectric_rising_edge() || vl53l1_triggered) {
-        if(vl53l1_triggered) {
+    // up_R1_flag 为真时仅用上升沿，否则上升沿与 VL53L1 或门触发
+    bool rear_rising = get_rear_photoelectric_rising_edge();
+    bool vl53l1_valid = (!up_R1_flag && vl53l1_triggered);
+    if (rear_rising || vl53l1_valid) {
+        if(vl53l1_valid) {
             log_message(LOG_INFO, "vl53l1 triggered");
         }
         step4_start_tick = 0;
@@ -1023,13 +1028,32 @@ static void lift_down_step_drive_2006_backward(void) {
         }
     }
 
-    /* ---- 中光电下降沿：启动 100ms 延时，期间保持稳定再触发 ---- */
+    /* only_vl53l1_flag 为 true 时，仅使用 VL53L1 测距模块触发 */
+    if (only_vl53l1_flag) {
+        if (vl53l1_triggered) {
+            log_message(LOG_INFO, "vl53l1 triggered (only_vl53l1)");
+            only_vl53l1_flag = false;
+            s_pe_delay_start_tick = 0;
+
+            float total_time = elapsed_sec;
+            g_lift_handle.step3_last_duration = total_time;
+            g_lift_handle.step3_start_tick = 0;
+
+            g_lift_handle.target_2006_rpm = 0.0f;
+            g_lift_handle.lift_state = LIFT_STATE_UP;
+            lift_set_target(LIFT_TARGET_DEG_UP_SEQ);
+            g_lift_handle.lift_fsm.step = 4;
+        }
+        return;
+    }
+
+    /* ---- 中光电下降沿：启动 90ms 延时，期间保持稳定再触发 ---- */
     bool pe_falling = get_middle_photoelectric_falling_edge();
     if (pe_falling && s_pe_delay_start_tick == 0) {
         s_pe_delay_start_tick = xTaskGetTickCount();
     }
 
-    /* 光电延时到期（100ms） 或 VL53L1 立即触发 */
+    /* 光电延时到期（90ms） 或 VL53L1 立即触发 */
     bool pe_delay_done = (s_pe_delay_start_tick != 0) &&
         ((xTaskGetTickCount() - s_pe_delay_start_tick) * portTICK_PERIOD_MS >= 90);
 
