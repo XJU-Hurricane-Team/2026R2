@@ -48,11 +48,11 @@
 #define LIFT_TARGET_DEG_DOWN_SEQ 12.275f
 #define LIFT_TARGET_DEG_STEP     0.025f
 #define LIFT_TARGET_SPEED_UP_R1  5.0f  
-#define LIFT_TARGET_SPEED_HIGH   30.0f      //抬升快速
+#define LIFT_TARGET_SPEED_HIGH   25.0f      //抬升快速
 #define LIFT_TARGET_SPEED_LOW    7.0f       //抬升慢速
 #define LIFT_TARGET_SPEED        10.0f
 
-#define LIFT_2006_HIGH_SPEED     6250.0f
+#define LIFT_2006_HIGH_SPEED     5850.0f
 #define LIFT_2006_LOW_SPEED      2130.0f
 #define TIME_DURATION_FRONT      0.4f
 
@@ -851,7 +851,7 @@ static float lift_select_target_speed(float target_degree, float real_degree) {
        前 1/5(~2.455) 低速起步，中间 3/5 高速，后 1/5(~2.455) 低速收尾 */
     float target_error = fabsf(fabsf(target_degree) - fabsf(real_degree));
     float one_fifth = LIFT_TARGET_DEG_DOWN_SEQ / 5.0f;
-    if (target_error <= one_fifth || target_error >= 4.0f * one_fifth) {
+    if (target_error <= (1.5f * one_fifth) || target_error >= 4.0f * one_fifth) {
         return LIFT_TARGET_SPEED_LOW;
     }
     return LIFT_TARGET_SPEED_HIGH;
