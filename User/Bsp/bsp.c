@@ -15,7 +15,7 @@
 void bsp_init(void) {
     uart_ex_init(&huart1);
     uart_ex_init(&huart2);
-    uart_ex_init(&huart4);
+    
 }
 
 #ifdef USE_FULL_ASSERT

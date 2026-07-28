@@ -7,7 +7,10 @@
  */
 
 #include "includes.h"
-#include "VL53L1/vl53l1_apply.h"
+#include "arm_ctrl.h"
+#include "ws2812/ws2812.h"
+#include "vl53l1/vl53l1_apply.h"
+#include "microros_ctrl.h"
 static void log_task_stack_usage(TaskHandle_t task_handle,
                                  const char *task_name,
                                  configSTACK_DEPTH_TYPE stack_words);
@@ -18,7 +21,10 @@ void start_task(void *pvParameters);
 
 static TaskHandle_t task1_handle;
 void task1(void *pvParameters);
-                                  
+
+// static TaskHandle_t task2_handle;
+// void task2(void *pvParameters);
+
 static TaskHandle_t microros_task_handle;
 void microros_task(void *pvParameters);
 
@@ -42,7 +48,7 @@ void freertos_start(void) {
 void start_task(void *pvParameters) {
     UNUSED(pvParameters);
 
-    // log_init(LOG_DEBUG);
+    log_init(LOG_DEBUG);
     can_list_add_can(can1_selected, 4, 4);
     can_list_add_can(can2_selected, 4, 4);
     can_list_add_can(can3_selected, 4, 4);
@@ -70,66 +76,75 @@ void start_task(void *pvParameters) {
         log_message(LOG_ERROR, "start_task: task1 create failed");
         Error_Handler();
     }
+    // if (xTaskCreate(task2, "task2", 256, NULL, 2, &task2_handle) != pdPASS) {
+    //     log_message(LOG_ERROR, "start_task: task2 create failed");
+    //     Error_Handler();
+    // }
 
     vTaskDelete(NULL);
 }
-// uint16_t dist1 = 0;
-// uint16_t dist2 = 0;
-
-/* VL53L1 距离跳变测试——统计 15~30cm 跳变次数 */
-// static uint16_t s_test_last_dist_mm = 0;
-// static bool     s_test_has_last = false;
-// static uint32_t s_test_delta_trigger_count = 0;  /* 触发次数计数器 */
-// uint16_t cur_dist_mm2 = 0;
-// uint16_t cur_dist_mm = 0;
 /**
- * @brief Task1: VL53L1 距离跳变测试 + LED 指示
- *
- * @param pvParameters Start parameters.
+ * @brief Task1: PA1 层数切换 + WS2812 层数反馈
  */
 void task1(void *pvParameters) {
     UNUSED(pvParameters);
     LED0_OFF();
 
+    uint8_t last_layer = 0xFF; /* 上一次显示的层数，用于减少WS2812刷新 */
+    uint8_t pa1_last = 1;      /* PA1 上一次电平（上拉默认高） */
+
     while (1) {
         LED0_TOGGLE();
 
-        // /* ---- 读取 VL53L1 距离 ---- */
-        // vl53l1_apply_get_distance_mm(&cur_dist_mm2, g_vl53l1_handle2);
-        // vl53l1_apply_get_distance_mm(&cur_dist_mm, g_vl53l1_handle);
-        // if (vl53l1_apply_get_distance_mm(&cur_dist_mm, g_vl53l1_handle2)) {
-        //     /* 距离跳变检测：delta ∈ [150, 300] mm 时计数 */
-        //     if (s_test_has_last && s_test_last_dist_mm > 0) {
-        //         uint16_t delta;
-        //         if (cur_dist_mm > s_test_last_dist_mm) {
-        //             delta = cur_dist_mm - s_test_last_dist_mm;
-        //         } else {
-        //             delta = s_test_last_dist_mm - cur_dist_mm;
-        //         }
-        //         if (delta >= 150 && delta <= 300) {
-        //             s_test_delta_trigger_count++;
-        //         }
-        //     }
-        //     s_test_last_dist_mm = cur_dist_mm;
-        //     s_test_has_last = true;
+        /* PA1 下降沿检测：层数加1 */
+        uint8_t pa1_now = (uint8_t)HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_1);
+        if (pa1_last == 0 && pa1_now == 1) {
+            uint8_t layer = robot_arm_get_layer_count();
+            layer = (layer + 1) % 4;
+            robot_arm_set_layer_count(layer);
+        }
+        pa1_last = pa1_now;
 
-            /* LED3: 距离 >= 150mm 亮灯 */
-            // if (cur_dist_mm >= 150) {
-            //     LED3_ON();
-            // } else {
-            //     LED3_OFF();
-            // }
-            // if (cur_dist_mm2 >= 150) {
-            //     LED2_ON();
-            // } else {
-            //     LED2_OFF();
-            // }
-        //}
+        /* WS2812 灯带反馈当前已放置数量 */
+        uint8_t layer = robot_arm_get_layer_count();
+        if (layer != last_layer) {
+            last_layer = layer;
+            uint8_t led_count = layer * 7; /* 0→0, 1→7, 2→14, 3→21 */
+            uint32_t color;
+            if (layer == 0) {
+                color = COLOR_OFF;
+            } else if (layer == 1) {
+                color = COLOR_GREEN;
+            } else if (layer == 2) {
+                color = COLOR_YELLOW;
+            } else {
+                color = COLOR_RED;
+            }
+            for (int i = 0; i < NUM_LEDS; i++) {
+                WS2812_SetColor(i, (i < led_count) ? color : COLOR_OFF);
+            }
+            WS2812_Send();
+        }
 
-        vTaskDelay(1000);
+        vTaskDelay(50);
     }
 }
 
+// uint16_t g_vl53l1_dist_mm = 0;
+// uint16_t g_vl53l1_dist_mm4 = 0;
+
+// void task2(void *pvParameters) {
+//     UNUSED(pvParameters);
+//     vl53l1_apply_start_measurement(g_vl53l1_handle4);
+//     vl53l1_apply_start_measurement(g_vl53l1_handle);
+//     while (1) {
+//         vl53l1_apply_get_distance_mm(&g_vl53l1_dist_mm4, g_vl53l1_handle4);
+//         vl53l1_apply_get_distance_mm(&g_vl53l1_dist_mm, g_vl53l1_handle);
+//         // log_data(LOG_CHASSIS, nav_sub_pram.linear_x, nav_sub_pram.linear_y,
+//         //      nav_sub_pram.angular_z);
+//         vTaskDelay(20);
+//     }
+// }
 static void log_task_stack_usage(TaskHandle_t task_handle,
                                  const char *task_name,
                                  configSTACK_DEPTH_TYPE stack_words) {

@@ -1,40 +1,46 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "build",
-            "type": "shell",
-            "command": "${command:eide.project.build}",
-            "group": "build",
-            "problemMatcher": []
-        },
-        {
-            "label": "flash",
-            "type": "shell",
-            "command": "${command:eide.project.uploadToDevice}",
-            "group": "build",
-            "problemMatcher": []
-        },
-        {
-            "label": "build and flash",
-            "type": "shell",
-            "command": "${command:eide.project.buildAndFlash}",
-            "group": "build",
-            "problemMatcher": []
-        },
-        {
-            "label": "rebuild",
-            "type": "shell",
-            "command": "${command:eide.project.rebuild}",
-            "group": "build",
-            "problemMatcher": []
-        },
-        {
-            "label": "clean",
-            "type": "shell",
-            "command": "${command:eide.project.clean}",
-            "group": "build",
-            "problemMatcher": []
-        }
-    ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build",
+			"type": "shell",
+			"command": "${command:eide.project.build}",
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "flash",
+			"type": "shell",
+			"command": "${command:eide.project.uploadToDevice}",
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "build and flash",
+			"type": "shell",
+			"command": "${command:eide.project.buildAndFlash}",
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "rebuild",
+			"type": "shell",
+			"command": "${command:eide.project.rebuild}",
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "clean",
+			"type": "shell",
+			"command": "${command:eide.project.clean}",
+			"group": "build",
+			"problemMatcher": []
+		},
+		{
+			"label": "build-vl53l1",
+			"type": "shell",
+			"command": "arm-none-eabi-gcc.exe -c -xc -std=c11 -I. -IUser/Bsp -IUser/Application/Inc -IUser/Utils -IUser/Middlewares/FreeRTOS/include -IUser/Middlewares/FreeRTOS/portable/GCC/ARM_CM4F -ICubeMX/Core/Inc -ICubeMX/Drivers/STM32G4xx_HAL_Driver/Inc -ICubeMX/Drivers/CMSIS/Include -ICubeMX/Drivers/CMSIS/Device/ST/STM32G4xx/Include -IUser/Modules -IUser/Middlewares/microros_humble/extra_sources -IUser/Middlewares/microros_humble/libmicroros/microros_include -IUser/Middlewares/CMSIS_DSP/1.16.2/Include -D\"USE_HAL_DRIVER\" -D\"DEBUG\" -D\"STM32G474xx\" -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -O0 -Wall -g -ffunction-sections -fdata-sections -funsigned-char --specs=nano.specs --specs=nosys.specs -o ./Build/Debug/.obj/User/Application/Src/lift.o -MMD ./User/Application/Src/lift.c",
+			"group": "build"
+		}
+	]
 }

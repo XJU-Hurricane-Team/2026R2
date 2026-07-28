@@ -36,15 +36,19 @@
 // #define ARM_J8006_CMD_SPEED_BASE 0.24f /**< 基础运动速度 (rad/s) */
 // #define ARM_J8006_CMD_SPEED_MAX  0.55f /**< 绝对最大允许速度 (rad/s) */
 #define ARM_J8006_CMD_SPEED_BASE 0.60f /**< 基础运动速度 (rad/s) */
-#define ARM_J8006_CMD_SPEED_MAX  1.6f /**< 绝对最大允许速度 (rad/s) */
+#define ARM_J8006_CMD_SPEED_MAX  1.6f  /**< 绝对最大允许速度 (rad/s) */
 #define ARM_J8006_FILTER_ALPHA                                                 \
     0.99f /**< 低通滤波平滑系数 (越小越平滑但延迟大) */
 #define ARM_J8006_CMD_RATE_LIMIT                                               \
     1.80f /**< 指令变化率限制 (rad/s)，防止阶跃信号 */
 #define ARM_J8006_NEAR_ERR_RAD   0.08f /**< 接近目标时的减速触发阈值 (rad) */
 #define ARM_J8006_FINE_ERR_RAD   0.03f /**< 微调阶段的误差阈值 (rad) */
-#define ARM_J8006_NEAR_SPEED_MAX 0.90f /**< 接近阶段的最大速度限制 (rad/s) */
-#define ARM_J8006_FINE_SPEED_MAX 0.80f /**< 微调阶段的最大速度限制 (rad/s) */
+#define ARM_J8006_NEAR_SPEED_MAX 0.6f  /**< 接近阶段的最大速度限制 (rad/s) */
+#define ARM_J8006_FINE_SPEED_MAX 0.05f /**< 微调阶段的最大速度限制 (rad/s) */
+#define ARM_J8006_BRAKE_SPEED_MAX                                              \
+    0.08f /**< 过冲刹车时的最大速度限制 (rad/s)，防止反向震颤 */
+#define ARM_J8006_DEADBAND_RAD                                                 \
+    0.02f /**< 大臂到位死区 (rad)，误差小于此值时速度置零 */
 #define ARM_J8006_PHASE2_Q2TOQ1_SPEED_MAX                                      \
     0.6f /**< 象限翻转阶段的限速 (rad/s) */
 
@@ -82,46 +86,49 @@
 #define ARM_SUCTION_PLACE_BRAKE_SPEED_MAX 0.16f /**< 刹车阶段最大速度 */
 #define ARM_PLACE_SUCTION_OFFSET_RAD      -0.0f /**< 放置下压预紧力 */
 
-#define ARM_SUCTION_WAIT_HOLD_SPEED       1.20f  /**< 吸盘锁死保持速度 */
+#define ARM_SUCTION_WAIT_HOLD_SPEED       1.20f /**< 吸盘锁死保持速度 */
 #define ARM_SUCTION_WAIT_TIMEOUT_MS       1000U /**< 吸盘等待超时时间 (ms) */
 #define ARM_TAKEOUT_WAIT_TIMEOUT_MS       4000U /**< 取出动作超时时间 (ms) */
 #define ARM_SMALL_WAIT_HOLD_SPEED         1.80f /**< 小臂锁死保持速度 */
-#define ARM_SMALL_SPEED_DEADBAND_RAD      0.05f /**< 速度模式下小臂到位死区 (rad) */
+#define ARM_SMALL_SPEED_DEADBAND_RAD 0.05f /**< 速度模式下小臂到位死区 (rad) */
 
 /* ================== 俯瞰态速度参数 ================== */
-#define ARM_OVERLOOK_BIG_SPEED            1.00f /**< 俯瞰态大臂速度 (rad/s) */
-#define ARM_OVERLOOK_SMALL_SPEED          3.00f /**< 俯瞰态小臂速度 (rad/s) */
-#define ARM_OVERLOOK_SUCTION_SPEED        2.20f /**< 俯瞰态吸盘速度 (rad/s) */
+#define ARM_OVERLOOK_BIG_SPEED       1.00f /**< 俯瞰态大臂速度 (rad/s) */
+#define ARM_OVERLOOK_SMALL_SPEED     3.00f /**< 俯瞰态小臂速度 (rad/s) */
+#define ARM_OVERLOOK_SUCTION_SPEED   2.20f /**< 俯瞰态吸盘速度 (rad/s) */
 
 /* ================== 取出动作序列参数 ================== */
 #define ARM_TAKEOUT_SEQ_BIG_ARM_STEP_RAD                                       \
     0.3746f /**< 取出时大臂预移动步长 (rad) */
 #define ARM_TAKEOUT_SEQ_SMALL_ARM_STEP_RAD                                     \
-    0.80f /**< 取出底层时小臂预移动步长 (rad) */
+    1.00f /**< 取出底层时小臂预移动步长 (rad) */
 #define ARM_TAKEOUT_SEQ_SMALL_ARM_STEP_RAD_LAYER2                              \
-    0.10f /**< 取出二层时小臂预移动步长 (rad) */
-#define ARM_TAKEOUT_SEQ_LAYER0_SMALL_LOCK_RAD                                  \
-    4.0f /**< 取出第一层时小臂中间锁定角度 (rad)，到达后等大臂到位再继续 */
-#define ARM_TAKEOUT_START_LAYER            0    /**< 取出序列起始层数 (0~2)，逐层递减 */
+    0.50f /**< 取出二层时小臂预移动步长 (rad) */
+
+#define ARM_PLACE_START_LAYER   1 /**< 起始层数 (0~2)，放置逐层递增，取出逐层递减 */
+
 #define ARM_TAKEOUT_SEQ_ERR_TOLERANCE_RAD                                      \
     0.12f /**< 序列步骤到位误差阈值 (rad) */
-
+#define ARM_TAKEOUT_SEQ_SUCTION_SMALL_SPEED_MAX                                \
+    0.80f /**< 取出序列最终协同阶段小臂限速 (rad/s) */
+#define ARM_TAKEOUT_SEQ_SUCTION_SMALL_SPEED_KP                                 \
+    1.20f /**< 取出序列最终协同阶段小臂比例增益 */
 
 /**
  * @brief 机械臂工作状态枚举
  */
 typedef enum {
-    ARM_STATE_INIT = 0,    /**< 初始状态 */
-    ARM_STATE_READY_1 = 1, /**< 就绪态1 (从下往上看) */
-    ARM_STATE_READY_2 = 2, /**< 就绪态2 (从上往下看) */
-    ARM_STATE_READY_3 = 3, /* 就绪态3 (向上40cm处，准备抓取) */
-    ARM_STATE_READY_4 = 4, /**< 就绪态4 (从平面看，准备放置) */
+    ARM_STATE_INIT = 0,         /**< 初始状态 */
+    ARM_STATE_READY_1 = 1,      /**< 就绪态1 (从下往上看) */
+    ARM_STATE_READY_2 = 2,      /**< 就绪态2 (从上往下看) */
+    ARM_STATE_READY_3 = 3,      /* 就绪态3 (向上40cm处，准备抓取) */
+    ARM_STATE_READY_4 = 4,      /**< 就绪态4 (从平面看，准备放置) */
     ARM_STATE_CATCH = 5,        /**< 抓取动作执行状态 */
     ARM_STATE_PLACE = 6,        /**< 放置动作执行状态 */
     ARM_STATE_WAIT_TAKEOUT = 7, /**< 待取出动作执行状态 */
     ARM_STATE_TAKEOUT_1 = 8,    /**< 取出动作执行状态 (放置二层) */
     ARM_STATE_TAKEOUT_2 = 9,    /**< 取出动作执行状态 (放置三层)*/
-    ARM_STATE_OVERLOOK = 10,     /**< 俯瞰态 */
+    ARM_STATE_OVERLOOK = 10,    /**< 俯瞰态 */
     ARM_STATE_CLOSE_PUMP = 11   /**< 关闭气泵状态 (特殊状态，用于反馈任务) */
 } arm_status_t;
 
@@ -148,8 +155,8 @@ typedef enum {
     ARM_MOTION_STATE_PLACE_BIG_RECOVER,   /**< 放置态：大臂回位阶段 */
     ARM_MOTION_STATE_TAKEOUT_SEQ_BIG,     /**< 取出序列: 大臂过冲 */
     ARM_MOTION_STATE_TAKEOUT_SEQ_SMALL,   /**< 取出序列: 小臂旋转 */
-    ARM_MOTION_STATE_TAKEOUT_SEQ_FINAL,   /**< 取出序列: 大臂回位 */
-    ARM_MOTION_STATE_TAKEOUT_SEQ_SUCTION, /**< 取出序列: 小臂吸盘协同 */
+    ARM_MOTION_STATE_TAKEOUT_SEQ_FINAL,   /**< @deprecated 取出序列: 大臂回位 (已删除，保留枚举值兼容) */
+    ARM_MOTION_STATE_TAKEOUT_SEQ_SUCTION, /**< 取出序列: 三关节协同 */
 } arm_motion_state_t;
 
 /**
@@ -165,7 +172,7 @@ typedef enum {
     ARM_LATCH_PLACE_BIG_RECOVER, /**< 放置态大臂回位阶段：大臂回位，小臂吸盘锁死 */
     ARM_LATCH_SEQ_BIG_ARM_ONLY,   /**< 取出序列：仅大臂运动，小臂和吸盘锁定 */
     ARM_LATCH_SEQ_SMALL_ARM_ONLY, /**< 取出序列：仅小臂运动，大臂和吸盘锁定 */
-    ARM_LATCH_SEQ_BIG_LOCKED,     /**< 取出序列Step3：大臂锁定，小臂+吸盘协同运动 */
+    ARM_LATCH_SEQ_BIG_LOCKED, /**< @deprecated 取出序列Step3大臂锁定 (已删除) */
 } arm_latch_type_t;
 
 /**
@@ -223,10 +230,13 @@ typedef struct {
     arm_motion_state_t motion_state; /**< 集中式运动状态机 */
 
     /* 取出动作序列控制 */
-    float takeout_seq_big_arm_target;   /**< 取出序列大臂目标（Step3/4: 最终角度） */
-    float takeout_seq_small_arm_target; /**< 取出序列小臂目标（Step4: 最终角度） */
-    float takeout_seq_suction_target;   /**< 取出序列吸盘目标（Step4: 最终角度） */
-    uint32_t takeout_wait_start_tick;   /**< 取出等待开始时间戳 */
+    float
+        takeout_seq_big_arm_target; /**< 取出序列大臂目标（Step3/4: 最终角度） */
+    float
+        takeout_seq_small_arm_target; /**< 取出序列小臂目标（Step4: 最终角度） */
+    float
+        takeout_seq_suction_target; /**< 取出序列吸盘目标（Step4: 最终角度） */
+    uint32_t takeout_wait_start_tick; /**< 取出等待开始时间戳 */
     float
         takeout_target_suction_angle; /**< 待取出态目标吸盘角度 (解算值，用于TAKEOUT切换时锁定) */
 
@@ -258,9 +268,8 @@ typedef struct {
         last_target_quadrant; /**< 上一次目标所处的象限 (1: 正向象限, -1: 反向象限) */
     int8_t flip_transition_dir; /**< 机械臂象限翻转的方向指示 */
 
-    /* 放置层数 (0=底层, 1=中层, 2=顶层) */
-    uint8_t place_layer;   /**< 当前放置目标层数，用于选择过渡点 */
-    uint8_t takeout_layer; /**< 当前取出层数 (0~2)，逐层递减，独立于放置 */
+    /* 层数计数 (0=底层, 1=中层, 2=顶层)，放置与取出共用 */
+    uint8_t layer_count;
 
     /* 位域压缩标志位 (节省内存，优化布尔变量存储) */
     struct {

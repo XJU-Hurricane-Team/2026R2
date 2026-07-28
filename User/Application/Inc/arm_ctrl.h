@@ -13,14 +13,23 @@
 
 /* ================== 应用层宏定义 ================== */
 #define ARM_USE_REMOTE_KEY                                                     \
-    1 /**< 是否使用遥控器按键切换状态位 (0:禁用, 1:启用) */
+    0 /**< 是否使用遥控器按键切换状态位 (0:禁用, 1:启用) */
 #define ARM_TASK_PERIOD_MS      10    /**< 机械臂控制任务周期 (毫秒) */
 #define ARM_REACH_POS_TOL_MM    5.0f  /**< 位置到位判定容差 (mm) */
 #define ARM_REACH_JOINT_TOL_RAD 0.10f /**< 关节角到位判定容差 (rad) */
 
-#define ARM_USE_PUMP_ADC_CHECK  1     /**< 是否使用气泵ADC压力检测 */
-#define PUMP_ADC_READY_LOW      3000U /**< 抓取成功判定的低压阈值 */
-#define PUMP_ADC_READY_HIGH     3900U /**< 释放成功判定的高压阈值 */
+#define ARM_USE_PUMP_ADC_CHECK  1     /**< 是否使用气泵ADC压力检测（放置判定使用，抓取判定在 VL53L1 关闭时使用） */
+#define PUMP_ADC_READY_LOW      3700U /**< 抓取成功判定的低压阈值（仅 ARM_USE_VL53L1_CATCH=0 时有效） */
+#define PUMP_ADC_READY_HIGH     4000U /**< 释放成功判定的高压阈值 */
+
+#define ARM_USE_VL53L1_CATCH    1     /**< 是否使用VL53L1测距判定抓取成功 (1:VL53L1测距, 0:原有ADC/超时) */
+#define ARM_VL53L1_CATCH_DISTANCE_MM 64U /**< VL53L1抓取成功距离阈值 (mm) */
+
+#define ARM_PUMP_PLACE_TIMEOUT_ENABLE                                          \
+    1               /**< 放置态气泵超时检测使能 (0:禁用, 1:启用) */
+#define ARM_PUMP_CATCH_TIMEOUT_ENABLE                                          \
+    0 /**< 抓取/待取态纯超时使能 (电机到位后等2秒自动抓取, 0:原ADC重试逻辑) */
+#define USE_FLASH 1 /**< 是否使用Flash存储层数 (0:禁用, 1:启用) */
 
 #define CATCH_READY_2_ANGEL                                                    \
     -0.893f /**< READY_2 吸盘关节相对于水平面旋转角度 (rad) */
@@ -65,7 +74,7 @@ void robot_arm_set_dynamic_catch_target_up(float y, float x, float z);
 void robot_arm_set_dynamic_catch_target_down(float y, float x, float z);
 void robot_arm_set_dynamic_catch_target_up2(float y, float x, float z);
 void robot_arm_set_dynamic_catch_target_down2(float y, float x, float z);
-void robot_arm_set_place_index(uint8_t place_idx);
-void robot_arm_set_wait_takeout_index(uint8_t takeout_idx);
+uint8_t robot_arm_get_layer_count(void);
+void robot_arm_set_layer_count(uint8_t count);
 
 #endif /* __ARM_CTRL_H */
