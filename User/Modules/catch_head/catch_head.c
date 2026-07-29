@@ -34,7 +34,7 @@ static void catch_head_apply_default_targets(void);
  * @note 使用 TIM1 CH1 作为舵机输出通道，并配置上下限脉宽
  */
 void catch_head_servo_init(void) {
-	servo_init(&g_gripper_servo, &htim4, TIM_CHANNEL_2, 2500, 1600);
+	servo_init(&g_gripper_servo, &htim4, TIM_CHANNEL_2, 1900, 1100);
 }
 
 /**
@@ -143,7 +143,10 @@ bool catch_head_is_target_reached(void) {
 
 	uint8_t dm_ok = (uint8_t)(dm_err_rad <= CATCH_HEAD_DM_POS_TOL_RAD);
 	uint8_t servo_ok = 1; 
-	if(dm_ok && servo_ok)
-	LED3_TOGGLE();
+	if(dm_ok && servo_ok){
+		// LED3_TOGGLE();
+		log_message(LOG_INFO, "dm_arrived:");
+	}
+	
 	return (bool)(dm_ok && servo_ok);
 }

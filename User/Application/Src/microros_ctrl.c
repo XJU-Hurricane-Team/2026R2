@@ -180,9 +180,9 @@ void microros_task(void *pvParameters) {
     UNUSED(pvParameters);
 
     nav_module_init();
-    vTaskDelay(1000); // 初始化缓冲
+    vTaskDelay(2000); // 初始化缓冲
     control_dispatch_init();
-    vTaskDelay(1000); // 初始化缓冲
+    vTaskDelay(2000); // 初始化缓冲
 
     while (1) {
         if (microros_rcl_mutex != NULL &&
@@ -265,6 +265,13 @@ void nav_publish(int8_t status) {
  */
 void nav_sub_callback(const void *msgin) {
     nav_sub_pram = *(const custom_msg__msg__SpeedHeading *)msgin;
+
+    static TickType_t last_toggle_tick = 0;
+    TickType_t now = xTaskGetTickCount();
+    if ((now - last_toggle_tick) >= pdMS_TO_TICKS(500)) {
+        LED3_TOGGLE();
+        last_toggle_tick = now;
+    }
 }
 
 /** @} */
@@ -319,7 +326,7 @@ void control_dispatch_init(void) {
 void control_dispatch_publish(int8_t status) {
     control_dispatch_pub_pram.data = status;
     if (microros_rcl_mutex != NULL &&
-        xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        xSemaphoreTake(microros_rcl_mutex, pdMS_TO_TICKS(20)) == pdTRUE) {
         rcl_ret_t pub_ret = rcl_publish(&control_dispatch_publisher,
                                         &control_dispatch_pub_pram, NULL);
         if (pub_ret != RCL_RET_OK) {
@@ -368,7 +375,7 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
         }
 
     } else if (req_in->event == 1) {
-        arm_return_enabel = req_in->is_return;
+        arm_return_enabel = true;
         switch (req_in->command_mode) {
             case 0:
                 robot_arm_set_state_index(0); // 初始化
@@ -382,7 +389,7 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 last_command_mode = 2;
                 break;
             case 3:
-                pump_set_state(1); // 提前开气泵
+                // pump_set_state(1); // 提前开气泵
                 robot_arm_set_state_index(3); // 准备（40cm的向上抓取）
                 last_command_mode = 3;
                 break;
@@ -436,6 +443,7 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
         switch (req_in->command_mode) {
             case 0:
                 lift_set_stair_mode(1); // 上台阶
+                log_message(LOG_INFO, "receive 2,0");
                 break;
             case 1:
                 lift_set_stair_mode(2); // 下台阶
@@ -454,6 +462,9 @@ void control_dispatch_callback(const void *request_msg, void *response_msg) {
                 // auto_lift_set_target(LIFT_TARGET_UP_R1_DEG);
                 lift_set_target(-LIFT_TARGET_UP_R1_DEG);
                 up_R1_flag = true;
+                break;
+            case 6:
+                only_vl53l1_flag = true;
                 break;
             default:
                 break;

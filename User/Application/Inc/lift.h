@@ -17,6 +17,7 @@
 #define LIFT_TARGET_UP_RAMP_DEG  2.37f
 
 extern bool up_R1_flag;
+extern bool only_vl53l1_flag;
 
 void lift_init(void);
 void lift_switch_mode(uint8_t key, remote_key_event_t event);

@@ -35,7 +35,7 @@ typedef struct {
 } chassis_handle_t;
 
 static chassis_handle_t chassis_handle = {
-    .mode = CHASSIS_MODE_MANUAL,
+    .mode = CHASSIS_MODE_AUTO,
     .chassis_speed =
         {
             .target_rpm = {0.0f, 0.0f, 0.0f, 0.0f},
@@ -75,7 +75,11 @@ void chassis_mode_task(void *pvParameters) {
         [CHASSIS_MODE_MANUAL] = chassis_mode_manual_update,
         [CHASSIS_MODE_AUTO] = chassis_mode_auto_update,
     };
-
+    if(chassis_handle.mode == CHASSIS_MODE_AUTO) {
+        LED1_ON();
+    } else {
+        LED1_OFF();
+    }
     while (1) {
         if ((uint8_t)chassis_handle.mode <
                 (sizeof(mode_handlers) / sizeof(mode_handlers[0])) &&

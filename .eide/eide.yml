@@ -25,6 +25,8 @@ virtualFolder:
         - path: User/Bsp/ws2812/ws2812.c
         - path: User/Bsp/iic/iic2.c
         - path: User/Bsp/iic/iic3.c
+        - path: User/Bsp/flash_store/flash_store.c
+        - path: User/Bsp/iic/iic4.c
       folders:
         - name: VL53L1
           files:
