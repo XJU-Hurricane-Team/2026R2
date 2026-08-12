@@ -3,7 +3,7 @@
  * @author  whyyy
  * @brief   MicroROS 控制模块.
  * @version 1.0
- * @date    2026-04-7
+ * @date    2026-08-12
  * * * @details 本文件包含 MicroROS 节点的核心控制逻辑，按功能划分为以下四大子模块：
  * 1. 【任务执行模块】 (MicroROS): 节点/执行器的初始化与 RTOS 轮询任务。
  * 2. 【导航控制模块】 (Nav): 处理底盘速度订阅与导航状态发布。
